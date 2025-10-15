@@ -4,6 +4,8 @@ let localStream = null;
 let peerConnection = null;
 let partnerId = null;
 let isInitiator = false;
+let autoReconnect = true; // لتفعيل إعادة البحث التلقائي
+let isStopped = false;    // لمعرفة إن المستخدم أوقف البحث يدوياً
 
 const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 
@@ -14,7 +16,6 @@ const startBtn = document.getElementById("startBtn");
 const skipBtn = document.getElementById("skipBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// utility to clean up peer connection
 function closePeerConnection() {
   try {
     if (peerConnection) {
@@ -27,8 +28,9 @@ function closePeerConnection() {
   remoteVideo.srcObject = null;
 }
 
-// start searching for partner (called when user clicks Start or after skip)
 async function startSearch() {
+  if (isStopped) return; // لا تبدأ البحث إذا المستخدم أوقفه
+
   statusText.textContent = "Requesting camera & microphone...";
   try {
     if (!localStream) {
@@ -41,31 +43,32 @@ async function startSearch() {
     return;
   }
 
-  // clean any old connection
   closePeerConnection();
   partnerId = null;
   isInitiator = false;
 
-  // tell server to find a partner
   socket.emit("find-partner");
   statusText.textContent = "Searching for partner...";
 }
 
-startBtn.onclick = startSearch;
+startBtn.onclick = () => {
+  isStopped = false;
+  autoReconnect = true;
+  startSearch();
+};
 
 skipBtn.onclick = () => {
   statusText.textContent = "Skipping...";
-  // notify server to skip; server will requeue you
   socket.emit("skip");
-  // close current peer connection locally and keep localStream to find new partner
   closePeerConnection();
 };
 
 stopBtn.onclick = () => {
   statusText.textContent = "Stopped.";
+  isStopped = true;
+  autoReconnect = false;
   socket.emit("stop");
   closePeerConnection();
-  // stop local tracks
   if (localStream) {
     localStream.getTracks().forEach(t => t.stop());
     localStream = null;
@@ -73,7 +76,7 @@ stopBtn.onclick = () => {
   }
 };
 
-// server messages
+// ======== SOCKET EVENTS ========
 socket.on("waiting", (msg) => {
   statusText.textContent = msg || "Waiting...";
 });
@@ -82,7 +85,6 @@ socket.on("partner-found", async (payload) => {
   partnerId = payload.id;
   isInitiator = !!payload.initiator;
   statusText.textContent = "Partner found! Connecting...";
-  // create peer connection and attach tracks
   createPeerConnection();
 
   if (isInitiator) {
@@ -96,14 +98,10 @@ socket.on("partner-found", async (payload) => {
   }
 });
 
-// forward signals from server
 socket.on("signal", async ({ from, data }) => {
-  // if no peerConnection, create it (non-initiator)
   if (!peerConnection) createPeerConnection();
-
   try {
     if (data.type === "offer") {
-      // remote sent offer
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
@@ -118,26 +116,30 @@ socket.on("signal", async ({ from, data }) => {
   }
 });
 
+// عند مغادرة الشريك
 socket.on("partner-disconnected", (info) => {
   statusText.textContent = "Partner disconnected.";
   closePeerConnection();
   partnerId = null;
   isInitiator = false;
-  // If partner disconnected unexpectedly, you may auto-search again or wait:
-  // Here, we'll stay waiting until user presses Start or Skip to re-find.
+
+  if (autoReconnect && !isStopped) {
+    statusText.textContent = "Searching for new partner...";
+    setTimeout(() => {
+      startSearch();
+    }, 3000);
+  }
 });
 
-// helper: create peer connection and attach local tracks
+// ======== PEER CONNECTION ========
 function createPeerConnection() {
   peerConnection = new RTCPeerConnection(servers);
 
-  // add local tracks
   if (localStream) {
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
   }
 
   peerConnection.ontrack = (event) => {
-    // show remote stream
     remoteVideo.srcObject = event.streams[0];
   };
 
@@ -150,11 +152,15 @@ function createPeerConnection() {
   peerConnection.onconnectionstatechange = () => {
     if (!peerConnection) return;
     const state = peerConnection.connectionState;
-    console.log("PC state:", state);
     if (state === "connected") {
       statusText.textContent = "Connected!";
-    } else if (state === "disconnected" || state === "failed" || state === "closed") {
+    } else if (["disconnected", "failed", "closed"].includes(state)) {
       statusText.textContent = "Connection closed.";
+      closePeerConnection();
+      if (autoReconnect && !isStopped) {
+        statusText.textContent = "Reconnecting...";
+        setTimeout(() => startSearch(), 3000);
+      }
     }
   };
 }
