@@ -1,11 +1,12 @@
+// script.js
 const socket = io();
-let localStream;
-let peerConnection;
-let partnerId;
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
+let isInitiator = false;
+let connected = false;
 
-const servers = {
-  iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }]
-};
+const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
@@ -14,55 +15,33 @@ const startBtn = document.getElementById("startBtn");
 const skipBtn = document.getElementById("skipBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-startBtn.onclick = async () => {
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localVideo.srcObject = localStream;
-  statusText.textContent = "Searching for partner...";
-};
+function logStatus(text) {
+  statusText.textContent = text;
+  console.log(text);
+}
 
-socket.on("waiting", (msg) => {
-  statusText.textContent = msg;
-});
-
-socket.on("partner-found", async (id) => {
-  partnerId = id;
-  statusText.textContent = "Partner found! Connecting...";
-  createPeerConnection();
-
-  // إذا كان أنت المبادر
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  socket.emit("signal", offer);
-});
-
-socket.on("signal", async ({ from, data }) => {
-  if (!peerConnection) createPeerConnection();
-  if (data.type === "offer") {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    socket.emit("signal", answer);
-  } else if (data.type === "answer") {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-  } else if (data.candidate) {
+// جلب الميكروفون والكاميرا (مرة واحدة)
+async function initMedia() {
+  if (!localStream) {
     try {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
     } catch (err) {
-      console.error("Error adding ICE candidate:", err);
+      console.error("getUserMedia error:", err);
+      alert("يرجى السماح بالوصول إلى الكاميرا والميكروفون.");
+      throw err;
     }
   }
-});
+}
 
-socket.on("partner-disconnected", () => {
-  statusText.textContent = "Partner disconnected.";
-  remoteVideo.srcObject = null;
-  if (peerConnection) peerConnection.close();
-});
-
+// انشاء RTCPeerConnection وتوصيل المسارات
 function createPeerConnection() {
   peerConnection = new RTCPeerConnection(servers);
 
-  localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  // إضافة المسارات المحلية
+  if (localStream) {
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  }
 
   peerConnection.ontrack = (event) => {
     remoteVideo.srcObject = event.streams[0];
@@ -70,7 +49,23 @@ function createPeerConnection() {
 
   peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
-      socket.emit("signal", { candidate: event.candidate });
+      socket.emit("signal", { data: { candidate: event.candidate } });
+    }
+  };
+
+  peerConnection.onconnectionstatechange = () => {
+    console.log("PC state:", peerConnection.connectionState);
+    if (peerConnection.connectionState === "connected") {
+      connected = true;
+      logStatus("Connected with partner.");
+    } else if (peerConnection.connectionState === "disconnected" || peerConnection.connectionState === "failed" || peerConnection.connectionState === "closed") {
+      connected = false;
+      logStatus("Peer connection closed/disconnected.");
     }
   };
 }
+
+// ابدأ البحث عن شريك
+startBtn.addEventListener("click", async () => {
+  try {
+    await initMedia
