@@ -1,3 +1,5 @@
+[file name]: index.html
+[file content begin]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,18 +9,49 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>🎥 Random Video Chat</h1>
-  <div class="videos">
-    <video id="localVideo" autoplay muted></video>
-    <video id="remoteVideo" autoplay></video>
+  <div class="container">
+    <h1>🎥 Random Video Chat</h1>
+    
+    <div class="main-content">
+      <div class="videos">
+        <div class="video-container">
+          <div class="video-label">You</div>
+          <video id="localVideo" autoplay muted></video>
+        </div>
+        <div class="video-container">
+          <div class="video-label">Stranger</div>
+          <video id="remoteVideo" autoplay></video>
+        </div>
+      </div>
+      
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <div class="system-message">You are now connected with a stranger. Say hi!</div>
+        </div>
+        <div class="chat-input-container">
+          <input type="text" id="chatInput" placeholder="Send a message..." disabled>
+          <button id="sendBtn" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="skipBtn" disabled>Skip</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+    
+    <div class="status-container">
+      <div id="status">Click "Start" to begin.</div>
+      <div class="loading" id="loading" style="display: none;">
+        <div class="spinner"></div>
+        <span>Searching for stranger...</span>
+      </div>
+    </div>
   </div>
-  <div class="controls">
-    <button id="startBtn">Start</button>
-    <button id="skipBtn">Skip</button>
-    <button id="stopBtn">Stop</button>
-  </div>
-  <p id="status">Click “Start” to begin.</p>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
+[file content end]
