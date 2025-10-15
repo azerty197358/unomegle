@@ -4,23 +4,60 @@ let localStream = null;
 let peerConnection = null;
 let partnerId = null;
 let isInitiator = false;
-let autoReconnect = true; // لتفعيل إعادة البحث التلقائي
-let isStopped = false;    // لمعرفة إن المستخدم أوقف البحث يدوياً
+let autoReconnect = true;
+let isStopped = false;
 
 const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 
+// DOM Elements
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const statusText = document.getElementById("status");
+const loadingIndicator = document.getElementById("loading");
 const startBtn = document.getElementById("startBtn");
 const skipBtn = document.getElementById("skipBtn");
 const stopBtn = document.getElementById("stopBtn");
+const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("sendBtn");
+const chatMessages = document.getElementById("chatMessages");
+
+function showLoading(show) {
+  loadingIndicator.style.display = show ? "flex" : "none";
+}
+
+function addMessage(message, type = "system") {
+  const messageDiv = document.createElement("div");
+  
+  if (type === "system") {
+    messageDiv.className = "system-message";
+    messageDiv.textContent = message;
+  } else {
+    messageDiv.className = `message ${type}`;
+    messageDiv.textContent = message;
+  }
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function enableChat() {
+  chatInput.disabled = false;
+  sendBtn.disabled = false;
+  chatInput.focus();
+}
+
+function disableChat() {
+  chatInput.disabled = true;
+  sendBtn.disabled = true;
+  chatInput.value = "";
+}
 
 function closePeerConnection() {
   try {
     if (peerConnection) {
       peerConnection.ontrack = null;
       peerConnection.onicecandidate = null;
+      peerConnection.onconnectionstatechange = null;
       peerConnection.close();
     }
   } catch (e) { console.warn(e); }
@@ -28,10 +65,20 @@ function closePeerConnection() {
   remoteVideo.srcObject = null;
 }
 
+function resetUI() {
+  disableChat();
+  addMessage("Disconnected. Click 'Start' to find a new stranger.", "system");
+  skipBtn.disabled = true;
+  stopBtn.disabled = true;
+  startBtn.disabled = false;
+}
+
 async function startSearch() {
-  if (isStopped) return; // لا تبدأ البحث إذا المستخدم أوقفه
+  if (isStopped) return;
 
   statusText.textContent = "Requesting camera & microphone...";
+  showLoading(true);
+  
   try {
     if (!localStream) {
       localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -39,6 +86,7 @@ async function startSearch() {
     }
   } catch (err) {
     statusText.textContent = "Camera/mic access denied.";
+    showLoading(false);
     console.error(err);
     return;
   }
@@ -46,11 +94,16 @@ async function startSearch() {
   closePeerConnection();
   partnerId = null;
   isInitiator = false;
+  chatMessages.innerHTML = '';
 
   socket.emit("find-partner");
-  statusText.textContent = "Searching for partner...";
+  statusText.textContent = "Searching for stranger...";
+  skipBtn.disabled = false;
+  stopBtn.disabled = false;
+  startBtn.disabled = true;
 }
 
+// Event Listeners
 startBtn.onclick = () => {
   isStopped = false;
   autoReconnect = true;
@@ -58,9 +111,11 @@ startBtn.onclick = () => {
 };
 
 skipBtn.onclick = () => {
-  statusText.textContent = "Skipping...";
+  statusText.textContent = "Skipping stranger...";
   socket.emit("skip");
   closePeerConnection();
+  disableChat();
+  addMessage("You skipped the stranger.", "system");
 };
 
 stopBtn.onclick = () => {
@@ -69,6 +124,9 @@ stopBtn.onclick = () => {
   autoReconnect = false;
   socket.emit("stop");
   closePeerConnection();
+  resetUI();
+  showLoading(false);
+  
   if (localStream) {
     localStream.getTracks().forEach(t => t.stop());
     localStream = null;
@@ -76,15 +134,35 @@ stopBtn.onclick = () => {
   }
 };
 
-// ======== SOCKET EVENTS ========
+sendBtn.onclick = sendMessage;
+chatInput.onkeypress = (e) => {
+  if (e.key === "Enter") sendMessage();
+};
+
+function sendMessage() {
+  const message = chatInput.value.trim();
+  if (!message || !partnerId) return;
+  
+  // Add message to chat
+  addMessage(message, "you");
+  
+  // Send message to partner
+  socket.emit("chat-message", { to: partnerId, message });
+  
+  // Clear input
+  chatInput.value = "";
+}
+
+// Socket Events
 socket.on("waiting", (msg) => {
-  statusText.textContent = msg || "Waiting...";
+  statusText.textContent = msg || "Waiting for stranger...";
 });
 
 socket.on("partner-found", async (payload) => {
   partnerId = payload.id;
   isInitiator = !!payload.initiator;
-  statusText.textContent = "Partner found! Connecting...";
+  statusText.textContent = "Stranger found! Connecting...";
+  showLoading(false);
   createPeerConnection();
 
   if (isInitiator) {
@@ -116,22 +194,31 @@ socket.on("signal", async ({ from, data }) => {
   }
 });
 
-// عند مغادرة الشريك
+socket.on("chat-message", ({ from, message }) => {
+  addMessage(message, "stranger");
+});
+
 socket.on("partner-disconnected", (info) => {
-  statusText.textContent = "Partner disconnected.";
+  statusText.textContent = "Stranger disconnected.";
   closePeerConnection();
+  disableChat();
+  addMessage("Stranger disconnected.", "system");
   partnerId = null;
   isInitiator = false;
 
   if (autoReconnect && !isStopped) {
-    statusText.textContent = "Searching for new partner...";
+    statusText.textContent = "Searching for new stranger...";
+    showLoading(true);
     setTimeout(() => {
       startSearch();
     }, 3000);
+  } else {
+    resetUI();
+    showLoading(false);
   }
 });
 
-// ======== PEER CONNECTION ========
+// Peer Connection
 function createPeerConnection() {
   peerConnection = new RTCPeerConnection(servers);
 
@@ -141,6 +228,9 @@ function createPeerConnection() {
 
   peerConnection.ontrack = (event) => {
     remoteVideo.srcObject = event.streams[0];
+    statusText.textContent = "Connected to stranger!";
+    enableChat();
+    addMessage("You are now connected with a stranger. Say hi!", "system");
   };
 
   peerConnection.onicecandidate = (event) => {
@@ -152,14 +242,23 @@ function createPeerConnection() {
   peerConnection.onconnectionstatechange = () => {
     if (!peerConnection) return;
     const state = peerConnection.connectionState;
+    
     if (state === "connected") {
-      statusText.textContent = "Connected!";
+      statusText.textContent = "Connected to stranger!";
+      showLoading(false);
     } else if (["disconnected", "failed", "closed"].includes(state)) {
-      statusText.textContent = "Connection closed.";
+      statusText.textContent = "Connection lost.";
       closePeerConnection();
+      disableChat();
+      addMessage("Connection lost.", "system");
+      
       if (autoReconnect && !isStopped) {
         statusText.textContent = "Reconnecting...";
+        showLoading(true);
         setTimeout(() => startSearch(), 3000);
+      } else {
+        resetUI();
+        showLoading(false);
       }
     }
   };
