@@ -3,16 +3,15 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
-app.use(express.static("public"));
+app.use(express.static(__dirname)); // يخدم كل الملفات من نفس المجلد
 
 let waitingUser = null;
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // عند الانضمام إلى الدردشة
+  // عند دخول مستخدم
   if (waitingUser) {
-    // ربط المستخدمين معًا
     const partner = waitingUser;
     waitingUser = null;
 
@@ -26,7 +25,7 @@ io.on("connection", (socket) => {
     socket.emit("waiting", "Looking for a partner...");
   }
 
-  // استقبال وإرسال إشارات WebRTC
+  // استقبال إشارات WebRTC
   socket.on("signal", (data) => {
     if (socket.partner) io.to(socket.partner).emit("signal", { from: socket.id, data });
   });
