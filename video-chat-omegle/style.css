@@ -13,7 +13,7 @@ body {
   color: #000;
   text-align: center;
   font-family: Arial, sans-serif;
-  overflow: hidden; /* يمنع التمرير على الشاشات الكبيرة */
+  overflow: hidden; /* يمنع التمرير */
 }
 
 .container {
@@ -53,7 +53,7 @@ h1 {
 .video-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 4 / 3; /* نفس أبعاد Omegle */
   background: #000;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -95,7 +95,6 @@ video {
   padding: 15px;
   overflow-y: auto;
   text-align: left;
-  max-height: calc(100vh - 200px); /* تجعل الرسائل تظهر على الجوال */
 }
 
 .message {
@@ -223,21 +222,14 @@ video {
   100% { transform: rotate(360deg); }
 }
 
-/* تحسين العرض على الجوال */
+/* Responsive design */
 @media (max-width: 768px) {
-  body {
-    overflow: auto; /* للسماح بالتمرير على الجوال */
-  }
-
   .main-content {
     flex-direction: column;
-    overflow-y: auto;
   }
 
   .videos {
     flex-direction: column;
-    width: 100%;
-    height: auto;
   }
 
   .video-container {
@@ -245,19 +237,11 @@ video {
     aspect-ratio: 4 / 3;
   }
 
-  .chat-container {
-    width: 100%;
+  video {
     height: auto;
-    min-height: 300px;
   }
 
-  .chat-messages {
-    max-height: 300px;
-  }
-
-  .controls button {
-    width: 90%;
-    font-size: 14px;
-    padding: 10px;
+  body {
+    overflow-y: auto;
   }
 }
