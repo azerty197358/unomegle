@@ -1,4 +1,4 @@
-/* style.css — Updated for stacked videos on the left and responsive layout */
+/* style.css — Updated for fixed stacked videos on the left */
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -20,23 +20,25 @@ h1 {
   color: #00bcd4;
 }
 
-/* main layout: left column (videos stacked) + right column (chat & controls) */
+/* main layout: fixed left column (videos stacked) + right column (chat & controls) */
 .main-content {
   display: flex;
   gap: 20px;
   align-items: flex-start;
 }
 
-/* LEFT: videos column (stacked) */
+/* LEFT: fixed videos column (stacked) */
 .videos {
   display: flex;
-  flex-direction: column; /* stacked vertically */
+  flex-direction: column;
   gap: 18px;
-  width: 60%; /* takes left side on wide screens */
-  min-width: 280px;
+  width: 320px; /* fixed width */
+  position: sticky;
+  top: 20px;
+  flex-shrink: 0;
 }
 
-/* each video box */
+/* each video box - fixed sizes */
 .video-container {
   position: relative;
   background: #000;
@@ -60,7 +62,7 @@ h1 {
   z-index: 5;
 }
 
-/* video element responsive sizing */
+/* video element fixed sizing */
 .video-container video {
   width: 100%;
   height: 100%;
@@ -68,23 +70,17 @@ h1 {
   display: block;
 }
 
-/* heights: adjust by aspect ratio with viewport width fallback */
+/* fixed heights for videos */
 .video-container.small {
-  /* local (small) video — shorter */
-  height: calc(20vw + 80px);
-  min-height: 120px;
-  max-height: 220px;
+  height: 180px; /* fixed height for local video */
 }
 .video-container.large {
-  /* remote (large) video — taller */
-  height: calc(36vw + 120px);
-  min-height: 260px;
-  max-height: 560px;
+  height: 340px; /* fixed height for remote video */
 }
 
-/* RIGHT: chat column */
+/* RIGHT: chat column - takes remaining space */
 .chat-container {
-  width: 38%;
+  flex: 1;
   min-width: 260px;
   background: #111827;
   border-radius: 10px;
@@ -156,7 +152,7 @@ h1 {
   cursor: pointer;
 }
 
-/* controls under layout (or inside chat) */
+/* controls under layout */
 .controls {
   display: flex;
   gap: 10px;
@@ -201,6 +197,7 @@ h1 {
   }
   .videos {
     width: 100%;
+    position: static;
     order: 0;
   }
   .chat-container {
