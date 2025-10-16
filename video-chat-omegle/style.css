@@ -32,32 +32,32 @@ h1 {
 
 .main-content {
   display: flex;
-  flex: 1;
   justify-content: center;
   align-items: center;
   gap: 20px;
+  flex: 1;
   overflow: hidden;
 }
 
 .videos {
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* عرض الفيديوهات جنبًا إلى جنب */
   justify-content: center;
   align-items: center;
   gap: 20px;
   flex: 1;
-  min-width: 300px;
   height: 100%;
 }
 
 .video-container {
   position: relative;
-  width: 100%;
+  flex: 1;
   aspect-ratio: 4 / 3; /* نفس أبعاد Omegle */
   background: #000;
   border: 1px solid #ccc;
   border-radius: 5px;
   overflow: hidden;
+  max-width: 50%; /* يجعل الفيديوهات متساوية */
 }
 
 .video-label {
@@ -224,20 +224,22 @@ video {
 
 /* Responsive design */
 @media (max-width: 768px) {
+  body {
+    overflow-y: auto;
+  }
+
   .main-content {
     flex-direction: column;
   }
 
   .videos {
     flex-direction: column;
+    gap: 10px;
   }
 
   .video-container {
     width: 100%;
     aspect-ratio: 4 / 3;
-  }
-
-  video {
-    height: auto;
+    max-width: 100%;
   }
 }
