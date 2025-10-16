@@ -1,219 +1,264 @@
-/* style.css — Updated for fixed stacked videos on the left */
+/* style.css - Omegle-like design with fixed videos and bottom messages */
 * { box-sizing: border-box; }
 body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
   background: #0f1720;
   color: #fff;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .container {
-  max-width: 1200px;
-  margin: 12px auto;
-  padding: 12px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* header */
-h1 {
-  text-align: center;
-  margin: 6px 0 18px;
-  color: #00bcd4;
-}
-
-/* main layout: fixed left column (videos stacked) + right column (chat & controls) */
-.main-content {
+.header {
+  background: #111827;
+  padding: 10px 20px;
+  border-bottom: 1px solid #2d3748;
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
-}
-
-/* LEFT: fixed videos column (stacked) */
-.videos {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  width: 320px; /* fixed width */
-  position: sticky;
-  top: 20px;
+  justify-content: space-between;
+  align-items: center;
   flex-shrink: 0;
 }
 
-/* each video box - fixed sizes */
-.video-container {
-  position: relative;
+h1 {
+  margin: 0;
+  color: #00bcd4;
+  font-size: 20px;
+}
+
+/* main video area - fixed at top */
+.video-area {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
   background: #000;
-  border-radius: 10px;
+  position: relative;
+  min-height: 0;
+}
+
+/* video containers - fixed sizes like Omegle */
+.video-container {
+  flex: 1;
+  background: #000;
+  border-radius: 8px;
   overflow: hidden;
-  border: 2px solid rgba(0,188,212,0.12);
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 200px;
 }
 
-/* You label */
+.video-container.remote {
+  border: 2px solid #00bcd4;
+}
+
+.video-container.local {
+  border: 2px solid #4a5568;
+  max-width: 300px;
+}
+
+/* video labels */
 .video-label {
   position: absolute;
   left: 10px;
   top: 10px;
-  background: rgba(0,0,0,0.6);
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 14px;
-  z-index: 5;
+  background: rgba(0,0,0,0.7);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
 }
 
-/* video element fixed sizing */
 .video-container video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
 
-/* fixed heights for videos */
-.video-container.small {
-  height: 180px; /* fixed height for local video */
-}
-.video-container.large {
-  height: 340px; /* fixed height for remote video */
-}
-
-/* RIGHT: chat column - takes remaining space */
-.chat-container {
-  flex: 1;
-  min-width: 260px;
+/* chat area - fixed at bottom */
+.chat-area {
+  height: 250px;
   background: #111827;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.02);
+  border-top: 1px solid #2d3748;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding: 12px;
+  flex-shrink: 0;
 }
 
-/* messages area */
 .chat-messages {
   flex: 1;
-  padding: 8px;
+  padding: 10px;
   overflow-y: auto;
-  background: rgba(0,0,0,0.08);
-  border-radius: 6px;
-  margin-bottom: 10px;
-  text-align: left;
+  background: #0b1220;
 }
 
 /* message styles */
 .message {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   padding: 8px 12px;
-  border-radius: 12px;
-  max-width: 78%;
+  border-radius: 8px;
+  max-width: 70%;
   word-wrap: break-word;
-  display: inline-block;
+  font-size: 14px;
 }
+
 .message.you {
   background: #00bcd4;
   color: #000;
   margin-left: auto;
+  text-align: left;
 }
+
 .message.stranger {
-  background: #1f2937;
+  background: #2d3748;
   color: #fff;
   margin-right: auto;
 }
+
 .system-message {
   text-align: center;
   color: #9ca3af;
   font-style: italic;
-  margin: 8px 0;
+  margin: 5px 0;
+  font-size: 12px;
 }
 
-/* input row */
+/* chat input */
 .chat-input-container {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  padding: 10px;
+  background: #111827;
+  border-top: 1px solid #2d3748;
 }
+
 #chatInput {
   flex: 1;
   padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #2b3036;
+  border-radius: 6px;
+  border: 1px solid #2d3748;
   background: #0b1220;
   color: #fff;
+  font-size: 14px;
 }
+
 #sendBtn {
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 10px 20px;
+  border-radius: 6px;
   border: none;
   background: #00bcd4;
   color: #000;
-  font-weight: 700;
+  font-weight: bold;
   cursor: pointer;
+  font-size: 14px;
 }
 
-/* controls under layout */
+/* controls */
 .controls {
   display: flex;
   gap: 10px;
+  padding: 10px;
+  background: #111827;
+  border-top: 1px solid #2d3748;
   justify-content: center;
-  margin-top: 14px;
 }
+
 .controls button {
-  padding: 10px 18px;
-  border-radius: 8px;
+  padding: 12px 24px;
+  border-radius: 6px;
   border: none;
   background: #00bcd4;
   color: #000;
+  font-weight: bold;
   cursor: pointer;
-  font-weight: 700;
+  font-size: 14px;
 }
+
 .controls button:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* status & spinner */
+/* status */
 .status-container {
-  margin-top: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 0 10px;
+  font-size: 14px;
 }
-#status { color: #d1d5db; font-size: 15px; }
-.loading { display:flex; align-items:center; gap:10px; }
+
+#status { color: #9ca3af; }
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .spinner {
-  width:18px; height:18px; border-radius:50%;
-  border:3px solid rgba(255,255,255,0.08);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
   border-top-color: #00bcd4;
   animation: spin 1s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
-/* small screens / mobile: stack everything */
-@media (max-width: 900px) {
-  .main-content {
-    flex-direction: column;
-  }
-  .videos {
-    width: 100%;
-    position: static;
-    order: 0;
-  }
-  .chat-container {
-    width: 100%;
-    order: 1;
-    margin-top: 10px;
-  }
-  .video-container.large { height: 260px; }
-  .video-container.small { height: 140px; }
-  .container { padding: 10px; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-/* very small phones: tweak sizes */
-@media (max-width: 420px) {
-  .video-container.large { height: 220px; }
-  .video-container.small { height: 120px; }
-  .controls { flex-direction: column; }
-  .controls button { width: 100%; }
+/* responsive design */
+@media (max-width: 768px) {
+  .video-area {
+    flex-direction: column;
+  }
+  
+  .video-container.local {
+    max-width: 150px;
+    position: absolute;
+    bottom: 270px;
+    right: 10px;
+    z-index: 10;
+  }
+  
+  .chat-area {
+    height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 8px 10px;
+  }
+  
+  h1 {
+    font-size: 18px;
+  }
+  
+  .video-container.local {
+    max-width: 120px;
+    bottom: 220px;
+  }
+  
+  .chat-area {
+    height: 180px;
+  }
+  
+  .controls {
+    flex-direction: column;
+  }
+  
+  .controls button {
+    width: 100%;
+  }
 }
