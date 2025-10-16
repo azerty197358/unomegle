@@ -9,11 +9,11 @@ html, body {
 }
 
 body {
-  background: #fff;
+  background: #e5e5e5; /* خلفية رمادية مثل Omegle */
   color: #000;
   text-align: center;
   font-family: Arial, sans-serif;
-  overflow: hidden; /* يمنع التمرير */
+  overflow: hidden;
 }
 
 .container {
@@ -37,11 +37,12 @@ h1 {
   gap: 20px;
   flex: 1;
   overflow: hidden;
+  padding: 10px;
 }
 
 .videos {
   display: flex;
-  flex-direction: row; /* عرض الفيديوهات جنبًا إلى جنب */
+  flex-direction: row; /* جنبًا إلى جنب في الكمبيوتر */
   justify-content: center;
   align-items: center;
   gap: 20px;
@@ -57,7 +58,7 @@ h1 {
   border: 1px solid #ccc;
   border-radius: 5px;
   overflow: hidden;
-  max-width: 50%; /* يجعل الفيديوهات متساوية */
+  max-width: 50%;
 }
 
 .video-label {
@@ -222,14 +223,14 @@ video {
   100% { transform: rotate(360deg); }
 }
 
-/* Responsive design */
+/* التصميم المتجاوب للجوال */
 @media (max-width: 768px) {
   body {
     overflow-y: auto;
   }
 
   .main-content {
-    flex-direction: column;
+    flex-direction: column; /* فوق بعض مثل Omegle في الهاتف */
   }
 
   .videos {
@@ -241,5 +242,9 @@ video {
     width: 100%;
     aspect-ratio: 4 / 3;
     max-width: 100%;
+  }
+
+  .chat-container {
+    margin-top: 10px;
   }
 }
