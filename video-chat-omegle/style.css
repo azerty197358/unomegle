@@ -13,7 +13,7 @@ body {
   color: #000;
   text-align: center;
   font-family: Arial, sans-serif;
-  overflow: hidden; /* يمنع التمرير */
+  overflow: hidden; /* يمنع التمرير في الكمبيوتر */
 }
 
 .container {
@@ -222,14 +222,16 @@ video {
   100% { transform: rotate(360deg); }
 }
 
-/* Responsive design */
+/* ===================== تصميم الجوال ===================== */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
+    gap: 10px;
   }
 
   .videos {
     flex-direction: column;
+    width: 100%;
   }
 
   .video-container {
@@ -242,6 +244,21 @@ video {
   }
 
   body {
-    overflow-y: auto;
+    overflow-y: auto; /* ✅ السماح بالتمرير في الجوال */
+    overflow-x: hidden;
+  }
+
+  .chat-container {
+    width: 100%;
+    height: auto; /* ✅ حتى تتمدد الرسائل للأسفل */
+  }
+
+  .chat-messages {
+    max-height: 60vh; /* ✅ الرسائل قابلة للتمرير */
+  }
+
+  .chat-input-container {
+    position: sticky;
+    bottom: 0;
   }
 }
