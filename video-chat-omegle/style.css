@@ -53,7 +53,7 @@ h1 {
 .video-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3; /* نفس أبعاد Omegle */
+  aspect-ratio: 4 / 3;
   background: #000;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -222,7 +222,7 @@ video {
   100% { transform: rotate(360deg); }
 }
 
-/* ===================== تصميم الجوال ===================== */
+/* ===== تصميم الجوال ===== */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
@@ -244,13 +244,13 @@ video {
   }
 
   body {
-    overflow-y: auto; /* ✅ السماح بالتمرير في الجوال */
+    overflow-y: auto; /* ✅ يسمح بالتمرير في الجوال */
     overflow-x: hidden;
   }
 
   .chat-container {
     width: 100%;
-    height: auto; /* ✅ حتى تتمدد الرسائل للأسفل */
+    height: auto; /* ✅ تسمح بظهور الرسائل كاملة */
   }
 
   .chat-messages {
