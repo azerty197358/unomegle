@@ -1,60 +1,61 @@
-<DOCUMENT filename="style.css">
 * {
   box-sizing: border-box;
 }
 
 html, body {
-  height: 100vh;
+  height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+}
+
+body {
   background: #fff;
   color: #000;
-  font-family: Arial, sans-serif;
   text-align: center;
+  font-family: Arial, sans-serif;
+  overflow: hidden; /* يمنع التمرير */
 }
 
 .container {
-  height: 100vh;
   max-width: 1200px;
   margin: 0 auto;
+  height: 100vh; /* ملء الشاشة بالكامل */
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
 }
 
 h1 {
   color: #f60;
   margin: 10px 0;
-  flex-shrink: 0;
 }
 
 .main-content {
   display: flex;
-  gap: 0;
+  gap: 20px;
   flex: 1;
-  height: calc(100vh - 60px); /* Adjust for h1 height */
   overflow: hidden;
 }
 
 .videos {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 0;
   flex: 1;
-  min-width: 0;
+  min-width: 300px;
+  justify-content: space-between;
 }
 
 .video-container {
   position: relative;
   flex: 1;
-  height: 100%;
 }
 
 .video-label {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.7);
   padding: 5px 10px;
   border-radius: 5px;
   font-size: 14px;
@@ -67,7 +68,7 @@ video {
   height: 100%;
   background: #333;
   border-radius: 0;
-  border: none;
+  border: 1px solid #ccc;
   object-fit: cover;
 }
 
@@ -76,50 +77,43 @@ video {
   min-width: 300px;
   background: #fff;
   border-radius: 0;
-  border-left: 1px solid #ccc;
+  border: 1px solid #ccc;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  max-width: 400px; /* Limit chat width like Omegle */
+  height: 100%;
 }
 
 .chat-messages {
   flex: 1;
-  padding: 10px;
+  padding: 15px;
   overflow-y: auto;
   text-align: left;
-  display: flex;
-  flex-direction: column;
 }
 
 .message {
   margin-bottom: 5px;
-  padding: 5px 0;
+  padding: 0;
   border-radius: 0;
   max-width: 100%;
   word-wrap: break-word;
   background: none;
-  font-size: 14px;
 }
 
 .message.you {
   color: #f00;
-  align-self: flex-end;
-  text-align: right;
+  text-align: left;
 }
 
 .message.stranger {
   color: #00f;
-  align-self: flex-start;
 }
 
 .system-message {
-  text-align: center;
+  text-align: left;
   color: #888;
-  font-style: italic;
+  font-style: normal;
   margin: 10px 0;
   padding: 5px;
-  align-self: center;
 }
 
 .chat-input-container {
@@ -127,21 +121,22 @@ video {
   padding: 10px;
   border-top: 1px solid #ccc;
   gap: 10px;
-  flex-shrink: 0;
   background: #fff;
+  position: sticky;
+  bottom: 0;
 }
 
 #chatInput {
   flex: 1;
   padding: 10px;
   border: 1px solid #ccc;
-  border-radius: 20px;
+  border-radius: 5px;
   background: #fff;
   color: #000;
-  outline: none;
 }
 
 #chatInput:focus {
+  outline: none;
   border-color: #f60;
 }
 
@@ -150,10 +145,8 @@ video {
   background: #f60;
   border: none;
   color: white;
-  border-radius: 20px;
+  border-radius: 5px;
   cursor: pointer;
-  font-weight: bold;
-  flex-shrink: 0;
 }
 
 #sendBtn:hover:not(:disabled) {
@@ -166,45 +159,39 @@ video {
 }
 
 .controls {
-  margin: 0;
-  padding: 10px;
-  flex-shrink: 0;
-  background: #f9f9f9;
-  border-top: 1px solid #ccc;
+  margin: 10px 0;
 }
 
 .controls button {
   margin: 5px;
-  padding: 8px 16px;
+  padding: 12px 25px;
   background: #f60;
   border: none;
   color: white;
-  border-radius: 20px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   transition: all 0.3s;
 }
 
 .controls button:hover:not(:disabled) {
   background: #e55;
+  transform: translateY(-2px);
 }
 
 .controls button:disabled {
   background: #ccc;
   cursor: not-allowed;
+  transform: none;
 }
 
 .status-container {
-  margin: 0;
-  padding: 5px;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: #666;
+  margin: 10px 0;
 }
 
 #status {
-  font-size: 12px;
-  margin: 0;
+  font-size: 16px;
+  margin-bottom: 10px;
   color: #000;
 }
 
@@ -213,7 +200,6 @@ video {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 100%;
 }
 
 .spinner {
@@ -234,23 +220,13 @@ video {
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
-    height: 100vh;
   }
-  
+
   .videos {
-    flex-direction: row;
-    height: 70vh;
+    flex-direction: column;
   }
-  
-  .chat-container {
-    height: 30vh;
-    max-width: none;
-    border-left: none;
-    border-top: 1px solid #ccc;
-  }
-  
-  .chat-messages {
-    max-height: none;
+
+  video {
+    height: auto;
   }
 }
-</DOCUMENT>
