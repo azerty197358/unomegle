@@ -226,10 +226,13 @@ video {
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
+    overflow-y: auto;
   }
 
   .videos {
     flex-direction: column;
+    height: auto;
+    flex: 0 0 auto;
   }
 
   .video-container {
