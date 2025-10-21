@@ -65,9 +65,10 @@
 
     // تمرير تلقائي عند إضافة رسالة (محسن للجوال)
     function scrollToBottom() {
-      setTimeout(() => {
+      // استخدام requestAnimationFrame لتحسين الأداء وضمان تحديث الـ DOM
+      requestAnimationFrame(() => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
-      }, 100); // تأخير قصير لضمان تحديث الـ DOM
+      });
     }
 
     // إرسال الرسالة
@@ -75,9 +76,11 @@
       if (chatInput.value.trim() === "") return;
       const msg = document.createElement("div");
       msg.textContent = chatInput.value;
-      msg.className = "message you"; // استخدام الكلاس الموجود
+      msg.className = "message you";
       chatMessages.appendChild(msg);
       chatInput.value = "";
+      // يجب أن يتم إرسال الرسالة عبر socket.io هنا
+
       scrollToBottom();
     }
 
@@ -86,26 +89,29 @@
     // الضغط على Enter للإرسال
     chatInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
+        e.preventDefault(); // منع الإجراء الافتراضي لـ Enter (مثل إرسال نموذج)
         sendMessage();
       }
     });
 
-    // إظهار / إخفاء قائمة الإيموجيات (محسن للجوال)
+    // إظهار / إخفاء قائمة الإيموجيات (المشكلة الأصلية هنا)
     emojiBtn.addEventListener("click", (e) => {
-      e.stopPropagation(); // منع الانتشار لتجنب إغلاق فوري
+      e.stopPropagation(); 
       const isVisible = emojiPicker.style.display === "block";
       emojiPicker.style.display = isVisible ? "none" : "block";
       if (!isVisible) {
-        emojiPicker.scrollTop = 0; // إعادة التمرير إلى الأعلى عند الفتح
+        emojiPicker.scrollTop = 0; 
       }
+      chatInput.focus(); // إبقاء التركيز على مربع الإدخال
     });
 
     // عند اختيار إيموجي
     emojiPicker.addEventListener("click", (e) => {
       if (e.target.classList.contains("emoji")) {
         chatInput.value += e.target.textContent;
+        // لا تغلق القائمة فورًا، يمكن للمستخدم إضافة أكثر من إيموجي
+        // emojiPicker.style.display = "none"; 
         chatInput.focus();
-        emojiPicker.style.display = "none"; // إغلاق بعد الاختيار
       }
     });
 
@@ -121,28 +127,33 @@
       .map(group => group.split("").map(e => `<span class="emoji">${e}</span>`).join(""))
       .join("");
 
-    // زر القلم للجوال
+    // زر القلم للجوال (لحل مشكلة التركيز والتمرير)
     const pen = document.getElementById("mobilePen");
     pen.addEventListener("click", () => {
-      chatInput.scrollIntoView({ behavior: "smooth" });
+      // إجبار التمرير إلى مربع الإدخال والتركيز عليه
+      chatInput.scrollIntoView({ behavior: "smooth", block: "end" });
       chatInput.focus();
     });
 
     // إخفاء الإيموجي عند النقر خارجها
     document.addEventListener("click", (e) => {
+      // شرط الإغلاق: النقر في أي مكان *غير* زر الإيموجي و *غير* قائمة الإيموجي
       if (!emojiBtn.contains(e.target) && !emojiPicker.contains(e.target)) {
         emojiPicker.style.display = "none";
       }
     });
 
-    // التعامل مع الرسائل الواردة من الخادم (مثال - أضف هذا إلى script.js إذا لزم)
-    // function addIncomingMessage(text) {
-    //   const msg = document.createElement("div");
-    //   msg.textContent = text;
-    //   msg.className = "message stranger";
-    //   chatMessages.appendChild(msg);
-    //   scrollToBottom();
-    // }
+    // **دالة مساعدة لعرض الرسائل الواردة (كمثال للتكامل)**
+    function addIncomingMessage(text) {
+      const msg = document.createElement("div");
+      msg.textContent = text;
+      msg.className = "message stranger"; // استخدام كلاس "stranger"
+      chatMessages.appendChild(msg);
+      scrollToBottom();
+    }
+
+    // مثال للاستخدام (يمكنك إزالته لاحقًا)
+    // setTimeout(() => addIncomingMessage("أهلاً، كيف حالك؟"), 2000);
   </script>
 </body>
 </html>
