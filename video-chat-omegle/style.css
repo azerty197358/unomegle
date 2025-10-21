@@ -6,175 +6,350 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: Arial, sans-serif;
-  background-color: #e5e5e5;
 }
 
-/* الحاوية الرئيسية */
+body {
+  background: #fff;
+  color: #000;
+  text-align: center;
+  font-family: Arial, sans-serif;
+  overflow: hidden; /* يمنع التمرير في الكمبيوتر */
+  direction: rtl; /* دعم اللغة العربية */
+}
+
 .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+}
+
+h1 {
+  color: #f60;
+  margin: 10px 0;
+}
+
+/* ====================== */
+.main-content {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 30px;
+  overflow: hidden;
+  padding: 10px 20px;
+}
+
+/* الشاشتان بخلفية وظل */
+.videos {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 320px;
   height: 100%;
-  max-width: 700px;
-  margin: auto;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transform: translateX(-10px);
+  background: #f5f5f5;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border: 1px solid #ccc;
+  border-radius: 5px;
   overflow: hidden;
 }
 
-/* قسم الفيديو */
-.video-section {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.video-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  z-index: 10;
+  color: #000;
+}
+
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #333;
+  border: none;
+}
+
+/* الرسائل بخلفية وظل (موحدة) */
+.chat-container {
   flex: 1;
-  background: #f2f2f2;
-  padding: 10px;
-  border-bottom: 2px solid #ccc;
-}
-
-.video {
-  width: 48%;
-  height: 200px;
-  background: #999;
-  margin: 1%;
+  min-width: 340px;
+  background: #f5f5f5;
+  border: 1px solid #ccc;
   border-radius: 10px;
-  box-shadow: 0 0 8px rgba(0,0,0,0.2);
-}
-
-/* صندوق الدردشة */
-.chat-box {
   display: flex;
   flex-direction: column;
-  background: #f9f9f9;
-  padding: 10px;
-  height: 300px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  border-top: 2px solid #ccc;
+  height: 100%;
+  transform: translateX(10px);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 /* الرسائل */
-.message {
+.chat-messages {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  text-align: right; /* للعربية */
+  scrollbar-width: thin;
+  scrollbar-color: #f60 #f5f5f5;
   background: #fff;
+  scroll-behavior: smooth;
+}
+
+/* إظهار شريط تمرير في الجوال أيضًا */
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: #f60;
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background-color: #f5f5f5;
+}
+
+.message {
+  margin-bottom: 5px;
   padding: 8px 12px;
-  margin: 6px 0;
   border-radius: 8px;
   max-width: 80%;
   word-wrap: break-word;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  background: #e9e9e9;
 }
 
-.message.user {
-  align-self: flex-end;
-  background: #dcf8c6;
+.message.you {
+  background: #f60;
+  color: white;
+  margin-left: auto;
 }
 
-.message.remote {
-  align-self: flex-start;
-  background: #fff;
+.message.stranger {
+  background: #007bff;
+  color: white;
+  margin-right: auto;
 }
 
-/* صندوق الإدخال */
+.system-message {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  margin: 10px 0;
+  padding: 5px;
+  background: none;
+}
+
+/* منطقة الكتابة الموحدة */
 .input-area {
   display: flex;
   align-items: center;
+  background: #f1f1f1;
   padding: 10px;
-  border-top: 1px solid #ddd;
-  background: #fff;
+  border-top: 1px solid #ccc;
+  gap: 10px;
 }
 
-input[type="text"] {
+.input-area input {
   flex: 1;
   padding: 10px;
-  border-radius: 8px;
   border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fff;
+  color: #000;
   outline: none;
-  font-size: 15px;
 }
 
-button {
-  margin-left: 10px;
-  padding: 10px 15px;
+.input-area input:focus {
+  border-color: #f60;
+}
+
+.send-btn, .emoji-btn {
+  background: none;
   border: none;
-  background: #4CAF50;
-  color: white;
-  border-radius: 8px;
+  font-size: 20px;
   cursor: pointer;
-  font-size: 15px;
+  padding: 10px;
+  border-radius: 5px;
+  transition: background 0.2s;
 }
 
-button:hover {
-  background: #45a049;
+.send-btn:hover:not(:disabled), .emoji-btn:hover {
+  background: #f60;
+  color: white;
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* قائمة الإيموجي */
+.emoji-picker {
+  display: none;
+  position: absolute;
+  bottom: 60px;
+  left: 10px;
+  right: 10px;
+  height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  z-index: 10;
+  scrollbar-width: thin;
+}
+
+.emoji {
+  font-size: 22px;
+  cursor: pointer;
+  padding: 5px;
+  display: inline-block;
+  transition: 0.2s;
+  margin: 2px;
+}
+
+.emoji:hover {
+  background: #eaeaea;
+  border-radius: 6px;
+}
+
+/* الأزرار أسفل الرسائل */
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+}
+
+.controls button {
+  padding: 12px 25px;
+  background: #f60;
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s;
+}
+
+.controls button:hover:not(:disabled) {
+  background: #e55;
+  transform: translateY(-2px);
+}
+
+.controls button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* زر القلم للجوال */
-.pen-button {
+#mobilePen {
+  display: none;
   position: fixed;
   bottom: 80px;
   right: 20px;
-  background: #4CAF50;
-  color: #fff;
+  background: #f60;
+  color: white;
   border: none;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  font-size: 22px;
-  display: none;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-}
-
-.pen-button:active {
-  transform: scale(0.95);
-}
-
-/* قائمة الإيموجيات */
-.emoji-panel {
-  display: none;
-  flex-wrap: wrap;
-  background: #fff;
-  border-top: 1px solid #ccc;
-  max-height: 150px;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.emoji-panel span {
-  font-size: 22px;
-  margin: 5px;
+  width: 55px;
+  height: 55px;
+  font-size: 24px;
   cursor: pointer;
-  transition: transform 0.1s;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  z-index: 1000;
 }
 
-.emoji-panel span:hover {
-  transform: scale(1.2);
+/* حالة التحميل */
+.status-container {
+  padding: 10px;
 }
 
-/* للجوال */
-@media (max-width: 600px) {
-  .container {
-    height: 100vh;
-    border-radius: 0;
-  }
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
 
-  .video-section {
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ccc;
+  border-top: 2px solid #f60;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ===================== الجوال ===================== */
+@media (max-width: 768px) {
+  .main-content {
     flex-direction: column;
-    height: auto;
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-start;
   }
 
-  .video {
-    width: 90%;
-    height: 180px;
+  .videos {
+    transform: none;
+    width: 100%;
   }
 
-  .chat-box {
-    height: 250px;
+  .chat-container {
+    transform: none;
+    width: 100%;
   }
 
-  .pen-button {
+  .chat-messages {
+    max-height: 55vh;
+    overflow-y: scroll;
+  }
+
+  body {
+    overflow-y: auto;
+  }
+
+  /* إظهار القلم فقط في الجوال */
+  #mobilePen {
     display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .emoji-picker {
+    position: fixed;
+    bottom: 120px;
+    left: 5%;
+    right: 5%;
+    width: 90%;
   }
 }
