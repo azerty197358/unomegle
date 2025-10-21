@@ -33,7 +33,7 @@ h1 {
 .main-content {
   display: flex;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start; /* يضع المحتوى في أقصى اليسار */
   align-items: center;
   gap: 20px;
   overflow: hidden;
@@ -227,6 +227,7 @@ video {
   .main-content {
     flex-direction: column;
     gap: 10px;
+    justify-content: flex-start; /* يحافظ على اليسار في الجوال */
   }
 
   .videos {
