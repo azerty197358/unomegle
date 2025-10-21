@@ -56,20 +56,22 @@
   <script src="script.js"></script>
   
   <script>
-    // سكريبت الدردشة الموحد (مع الإيموجي والتمرير)
+    // سكريبت الدردشة الموحد (مع الإيموجي والتمرير المحسن)
     const chatMessages = document.getElementById("chatMessages");
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
     const emojiBtn = document.getElementById("emojiBtn");
     const emojiPicker = document.getElementById("emojiPicker");
 
-    // تمرير تلقائي عند إضافة رسالة
+    // تمرير تلقائي عند إضافة رسالة (محسن للجوال)
     function scrollToBottom() {
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }, 100); // تأخير قصير لضمان تحديث الـ DOM
     }
 
     // إرسال الرسالة
-    sendBtn.addEventListener("click", () => {
+    function sendMessage() {
       if (chatInput.value.trim() === "") return;
       const msg = document.createElement("div");
       msg.textContent = chatInput.value;
@@ -77,18 +79,25 @@
       chatMessages.appendChild(msg);
       chatInput.value = "";
       scrollToBottom();
-    });
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
 
     // الضغط على Enter للإرسال
     chatInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
-        sendBtn.click();
+        sendMessage();
       }
     });
 
-    // إظهار / إخفاء قائمة الإيموجيات
-    emojiBtn.addEventListener("click", () => {
-      emojiPicker.style.display = emojiPicker.style.display === "block" ? "none" : "block";
+    // إظهار / إخفاء قائمة الإيموجيات (محسن للجوال)
+    emojiBtn.addEventListener("click", (e) => {
+      e.stopPropagation(); // منع الانتشار لتجنب إغلاق فوري
+      const isVisible = emojiPicker.style.display === "block";
+      emojiPicker.style.display = isVisible ? "none" : "block";
+      if (!isVisible) {
+        emojiPicker.scrollTop = 0; // إعادة التمرير إلى الأعلى عند الفتح
+      }
     });
 
     // عند اختيار إيموجي
@@ -96,6 +105,7 @@
       if (e.target.classList.contains("emoji")) {
         chatInput.value += e.target.textContent;
         chatInput.focus();
+        emojiPicker.style.display = "none"; // إغلاق بعد الاختيار
       }
     });
 
@@ -124,6 +134,15 @@
         emojiPicker.style.display = "none";
       }
     });
+
+    // التعامل مع الرسائل الواردة من الخادم (مثال - أضف هذا إلى script.js إذا لزم)
+    // function addIncomingMessage(text) {
+    //   const msg = document.createElement("div");
+    //   msg.textContent = text;
+    //   msg.className = "message stranger";
+    //   chatMessages.appendChild(msg);
+    //   scrollToBottom();
+    // }
   </script>
 </body>
 </html>
