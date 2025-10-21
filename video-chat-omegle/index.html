@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Video Chat</title>
+  <title>🎥 Random Video Chat</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,92 +21,32 @@
           <video id="remoteVideo" autoplay></video>
         </div>
       </div>
-      
+
+      <!-- ✅ المحادثة -->
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <div class="system-message">You are now connected with a stranger. Say hi!</div>
         </div>
-        <div class="chat-input-container">
-          <input type="text" id="chatInput" placeholder="Send a message..." disabled>
-          <button id="sendBtn" disabled>Send</button>
+
+        <div class="input-area">
+          <button class="emoji-btn" id="emojiBtn">😊</button>
+          <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled>
+          <button class="send-btn" id="sendBtn" disabled>📨</button>
         </div>
+
+        <div class="emoji-picker" id="emojiPicker"></div>
       </div>
     </div>
-    
+
+    <!-- ✅ الأزرار -->
     <div class="controls">
       <button id="startBtn">Start</button>
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
+
+    <!-- ✅ زر القلم للجوال -->
     <button id="mobilePen">✏️</button>
-<div class="chat-container">
-  <div class="messages" id="messages"></div>
-
-  <div class="input-area">
-    <button class="emoji-btn" id="emojiBtn">😊</button>
-    <input type="text" id="messageInput" placeholder="اكتب رسالة..." />
-    <button class="send-btn" id="sendBtn">📨</button>
-  </div>
-
-  <div class="emoji-picker" id="emojiPicker"></div>
-</div>
-<script>
-const messages = document.getElementById("messages");
-const input = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
-const emojiBtn = document.getElementById("emojiBtn");
-const emojiPicker = document.getElementById("emojiPicker");
-
-// تمرير تلقائي عند إضافة رسالة
-function scrollToBottom() {
-  messages.scrollTop = messages.scrollHeight;
-}
-
-// إرسال الرسالة
-sendBtn.addEventListener("click", () => {
-  if (input.value.trim() === "") return;
-  const msg = document.createElement("div");
-  msg.textContent = input.value;
-  msg.className = "msg";
-  messages.appendChild(msg);
-  input.value = "";
-  scrollToBottom();
-});
-
-// إظهار / إخفاء قائمة الإيموجيات
-emojiBtn.addEventListener("click", () => {
-  emojiPicker.style.display =
-    emojiPicker.style.display === "block" ? "none" : "block";
-});
-
-// عند اختيار إيموجي
-emojiPicker.addEventListener("click", (e) => {
-  if (e.target.classList.contains("emoji")) {
-    input.value += e.target.textContent;
-  }
-});
-
-// قائمة ضخمة من الإيموجيات + أعلام الدول
-const emojis = [
-  "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫😴😌🤤😛😜😝🤪🤓🧐🤠",
-  "😺😸😹😻😼😽🙀😿😾",
-  "👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇☝👍👎✊👊🤛🤜👏🙌🫶👐🤲",
-  "❤️🧡💛💚💙💜🖤🤍🤎💔💖💗💓💞💕💘💝💟",
-  "🏳️🏴🏁🚩🏳️‍🌈🏳️‍⚧️🇩🇿🇸🇦🇪🇬🇲🇦🇹🇳🇫🇷🇪🇸🇮🇹🇩🇪🇺🇸🇬🇧🇹🇷🇯🇵🇨🇳🇷🇺🇧🇷🇨🇦🇮🇳🇰🇷"
-];
-
-emojiPicker.innerHTML = emojis
-  .map(group => group.split("").map(e => `<span class="emoji">${e}</span>`).join(""))
-  .join("");
-
-<script>
-  const pen = document.getElementById("mobilePen");
-  const input = document.getElementById("chatInput");
-  pen.addEventListener("click", () => {
-    input.scrollIntoView({ behavior: "smooth" });
-    input.focus();
-  });
-</script>
 
     <div class="status-container">
       <div id="status">Click "Start" to begin.</div>
@@ -116,6 +56,68 @@ emojiPicker.innerHTML = emojis
       </div>
     </div>
   </div>
+
+  <!-- ✅ سكربت الإيموجيات والتمرير التلقائي -->
+  <script>
+    const messages = document.getElementById("chatMessages");
+    const input = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const emojiBtn = document.getElementById("emojiBtn");
+    const emojiPicker = document.getElementById("emojiPicker");
+    const mobilePen = document.getElementById("mobilePen");
+
+    // ✅ تمرير تلقائي للرسائل
+    function scrollToBottom() {
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    // ✅ إرسال الرسائل
+    sendBtn.addEventListener("click", () => {
+      if (input.value.trim() === "") return;
+      const msg = document.createElement("div");
+      msg.textContent = input.value;
+      msg.className = "message you";
+      messages.appendChild(msg);
+      input.value = "";
+      scrollToBottom();
+    });
+
+    // ✅ فتح / إغلاق الإيموجيات
+    emojiBtn.addEventListener("click", () => {
+      emojiPicker.style.display =
+        emojiPicker.style.display === "block" ? "none" : "block";
+    });
+
+    // ✅ عند الضغط على إيموجي
+    emojiPicker.addEventListener("click", (e) => {
+      if (e.target.classList.contains("emoji")) {
+        input.value += e.target.textContent;
+      }
+    });
+
+    // ✅ قائمة الإيموجيات + الأعلام
+    const emojis = [
+      "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫😴😌🤤😛😜😝🤪🤓🧐🤠",
+      "😺😸😹😻😼😽🙀😿😾",
+      "👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇☝👍👎✊👊🤛🤜👏🙌🫶👐🤲",
+      "❤️🧡💛💚💙💜🖤🤍🤎💔💖💗💓💞💕💘💝💟",
+      "🏳️🏴🏁🚩🏳️‍🌈🏳️‍⚧️🇩🇿🇸🇦🇪🇬🇲🇦🇹🇳🇫🇷🇪🇸🇮🇹🇩🇪🇺🇸🇬🇧🇹🇷🇯🇵🇨🇳🇷🇺🇧🇷🇨🇦🇮🇳🇰🇷"
+    ];
+    emojiPicker.innerHTML = emojis
+      .map(group => group.split("").map(e => `<span class="emoji">${e}</span>`).join(""))
+      .join("");
+
+    // ✅ زر القلم في الجوال
+    mobilePen.addEventListener("click", () => {
+      input.disabled = false;
+      input.scrollIntoView({ behavior: "smooth" });
+      input.focus();
+    });
+
+    // ✅ تمرير تلقائي عند إضافة رسالة جديدة
+    const observer = new MutationObserver(scrollToBottom);
+    observer.observe(messages, { childList: true });
+  </script>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
