@@ -50,6 +50,54 @@
 
   <div class="emoji-picker" id="emojiPicker"></div>
 </div>
+<script>
+const messages = document.getElementById("messages");
+const input = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
+const emojiBtn = document.getElementById("emojiBtn");
+const emojiPicker = document.getElementById("emojiPicker");
+
+// تمرير تلقائي عند إضافة رسالة
+function scrollToBottom() {
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// إرسال الرسالة
+sendBtn.addEventListener("click", () => {
+  if (input.value.trim() === "") return;
+  const msg = document.createElement("div");
+  msg.textContent = input.value;
+  msg.className = "msg";
+  messages.appendChild(msg);
+  input.value = "";
+  scrollToBottom();
+});
+
+// إظهار / إخفاء قائمة الإيموجيات
+emojiBtn.addEventListener("click", () => {
+  emojiPicker.style.display =
+    emojiPicker.style.display === "block" ? "none" : "block";
+});
+
+// عند اختيار إيموجي
+emojiPicker.addEventListener("click", (e) => {
+  if (e.target.classList.contains("emoji")) {
+    input.value += e.target.textContent;
+  }
+});
+
+// قائمة ضخمة من الإيموجيات + أعلام الدول
+const emojis = [
+  "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫😴😌🤤😛😜😝🤪🤓🧐🤠",
+  "😺😸😹😻😼😽🙀😿😾",
+  "👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇☝👍👎✊👊🤛🤜👏🙌🫶👐🤲",
+  "❤️🧡💛💚💙💜🖤🤍🤎💔💖💗💓💞💕💘💝💟",
+  "🏳️🏴🏁🚩🏳️‍🌈🏳️‍⚧️🇩🇿🇸🇦🇪🇬🇲🇦🇹🇳🇫🇷🇪🇸🇮🇹🇩🇪🇺🇸🇬🇧🇹🇷🇯🇵🇨🇳🇷🇺🇧🇷🇨🇦🇮🇳🇰🇷"
+];
+
+emojiPicker.innerHTML = emojis
+  .map(group => group.split("").map(e => `<span class="emoji">${e}</span>`).join(""))
+  .join("");
 
 <script>
   const pen = document.getElementById("mobilePen");
