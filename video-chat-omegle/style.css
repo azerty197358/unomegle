@@ -341,13 +341,14 @@ video {
   .chat-container {
     transform: none;
     width: 100%;
-    position: relative; /* تأكيد */
+    position: relative; 
   }
 
   .chat-messages {
-    max-height: 55vh;
+    /* زيادة الارتفاع لظهور المزيد من الرسائل قبل التمرير */
+    max-height: 60vh; 
     overflow-y: scroll;
-    -webkit-overflow-scrolling: touch; /* تمرير سلس */
+    -webkit-overflow-scrolling: touch; 
   }
 
   body {
@@ -361,19 +362,22 @@ video {
     justify-content: center;
   }
 
-  .emoji-picker {
-    position: fixed; /* تغيير إلى fixed للجوال لتجنب التمرير */
-    bottom: 120px;
-    left: 5%;
-    right: 5%;
-    width: 90%;
-    z-index: 1000; /* أعلى للظهور */
-    max-height: 40vh; /* حد أقصى للارتفاع في الجوال */
-  }
-
   .input-area {
+    /* تم تثبيته في مكانه لسهولة الاستخدام */
     position: sticky;
     bottom: 0;
     z-index: 50;
+  }
+  
+  /* تعديل موضع الإيموجي ليظهر أعلى منطقة الإدخال المثبتة */
+  .emoji-picker {
+    position: fixed; 
+    /* تم تعديل القيمة من 120px إلى قيمة أصغر تتناسب مع ارتفاع الـ input-area */
+    bottom: 80px; 
+    left: 5%;
+    right: 5%;
+    width: 90%;
+    z-index: 1000; 
+    max-height: 40vh; 
   }
 }
