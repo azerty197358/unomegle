@@ -33,26 +33,27 @@ h1 {
 .main-content {
   display: flex;
   flex: 1;
-  justify-content: flex-start; /* يضع المحتوى في أقصى اليسار */
+  justify-content: flex-start; /* يزاح الشاشتين إلى أقصى اليسار */
   align-items: center;
   gap: 20px;
   overflow: hidden;
+  padding-left: 20px; /* إضافة مسافة إضافية من اليسار للإزاحة */
 }
 
 .videos {
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* تغيير إلى row للكمبيوتر لتكون الشاشتين جنباً إلى جنب */
   justify-content: center;
   align-items: center;
   gap: 20px;
   flex: 1;
-  min-width: 300px;
+  min-width: 600px; /* زيادة الحد الأدنى لاستيعاب شاشتين */
   height: 100%;
 }
 
 .video-container {
   position: relative;
-  width: 100%;
+  width: 45%; /* توزيع العرض بين الشاشتين */
   aspect-ratio: 4 / 3;
   background: #000;
   border: 1px solid #ccc;
@@ -80,7 +81,7 @@ video {
   border: none;
 }
 
-.chat-container {
+.chat-and-controls {
   flex: 1;
   min-width: 300px;
   background: #fff;
@@ -88,6 +89,7 @@ video {
   display: flex;
   flex-direction: column;
   height: 100%;
+  margin-left: auto; /* يدفع الحاوية إلى اليمين */
 }
 
 .chat-messages {
@@ -165,11 +167,15 @@ video {
 }
 
 .controls {
-  margin: 10px 0;
+  padding: 10px;
+  border-top: 1px solid #ccc;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
 
 .controls button {
-  margin: 5px;
   padding: 12px 25px;
   background: #f60;
   border: none;
@@ -178,6 +184,8 @@ video {
   cursor: pointer;
   font-size: 16px;
   transition: all 0.3s;
+  flex: 1;
+  max-width: 100px;
 }
 
 .controls button:hover:not(:disabled) {
@@ -227,16 +235,20 @@ video {
   .main-content {
     flex-direction: column;
     gap: 10px;
-    justify-content: flex-start; /* يحافظ على اليسار في الجوال */
+    justify-content: flex-start;
+    padding-left: 0; /* إزالة الإزاحة في الجوال */
+    padding-top: 10px;
   }
 
   .videos {
-    flex-direction: column;
+    flex-direction: row;
     width: 100%;
+    min-width: auto;
+    justify-content: space-around; /* توزيع الشاشتين في الجوال */
   }
 
   .video-container {
-    width: 100%;
+    width: 45%;
     aspect-ratio: 4 / 3;
   }
 
@@ -245,21 +257,29 @@ video {
   }
 
   body {
-    overflow-y: auto; /* ✅ يسمح بالتمرير في الجوال */
+    overflow-y: auto; /* يسمح بالتمرير في الجوال */
     overflow-x: hidden;
   }
 
-  .chat-container {
+  .chat-and-controls {
     width: 100%;
-    height: auto; /* ✅ تسمح بظهور الرسائل كاملة */
+    height: auto;
+    margin-left: 0;
+    order: 3; /* يضع الدردشة في الأسفل */
   }
 
   .chat-messages {
-    max-height: 60vh; /* ✅ الرسائل قابلة للتمرير */
+    max-height: 40vh; /* تقليل ارتفاع الرسائل للجوال */
+  }
+
+  .controls {
+    flex-direction: row;
+    order: 2; /* الأزرار فوق الرسائل */
   }
 
   .chat-input-container {
     position: sticky;
     bottom: 0;
+    order: 3;
   }
 }
