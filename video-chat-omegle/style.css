@@ -30,6 +30,7 @@ h1 {
   margin: 10px 0;
 }
 
+/* ====================== */
 .main-content {
   display: flex;
   flex: 1;
@@ -40,7 +41,7 @@ h1 {
   padding: 10px 20px;
 }
 
-/* ✅ جعل الشاشتين بمحاذاة أنيقة */
+/* ✅ الشاشتان بخلفية وظل */
 .videos {
   display: flex;
   flex-direction: column;
@@ -50,7 +51,11 @@ h1 {
   flex: 1;
   min-width: 320px;
   height: 100%;
-  transform: translateX(-10px); /* إزاحة بسيطة للشاشات لليسار */
+  transform: translateX(-10px);
+  background: #f5f5f5;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  padding: 15px;
 }
 
 .video-container {
@@ -83,23 +88,40 @@ video {
   border: none;
 }
 
+/* ✅ الرسائل بخلفية وظل */
 .chat-container {
   flex: 1;
   min-width: 340px;
-  background: #fff;
+  background: #f5f5f5;
   border: 1px solid #ccc;
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   height: 100%;
-  transform: translateX(10px); /* إزاحة طفيفة نحو اليمين */
+  transform: translateX(10px);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-/* ✅ الرسائل */
+/* الرسائل */
 .chat-messages {
   flex: 1;
   padding: 15px;
   overflow-y: auto;
   text-align: left;
+  scrollbar-width: thin;
+  scrollbar-color: #f60 #f5f5f5;
+}
+
+/* ✅ إظهار شريط تمرير في الجوال أيضًا */
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: #f60;
+  border-radius: 4px;
+}
+.chat-messages::-webkit-scrollbar-track {
+  background-color: #f5f5f5;
 }
 
 .message {
@@ -127,7 +149,7 @@ video {
   padding: 5px;
 }
 
-/* ✅ حاوية الكتابة + الأزرار مجتمعة */
+/* ✅ منطقة الكتابة + الأزرار */
 .chat-controls-wrapper {
   border-top: 1px solid #ccc;
   background: #fff;
@@ -137,7 +159,7 @@ video {
   gap: 10px;
 }
 
-/* صندوق الكتابة */
+/* إدخال الرسائل */
 .chat-input-container {
   display: flex;
   gap: 10px;
@@ -175,7 +197,7 @@ video {
   cursor: not-allowed;
 }
 
-/* ✅ الأزرار أسفل حاوية الرسائل */
+/* الأزرار أسفل الرسائل */
 .controls {
   display: flex;
   justify-content: center;
@@ -204,17 +226,25 @@ video {
   transform: none;
 }
 
-.status-container {
-  margin: 10px 0;
+/* ✅ زر القلم للجوال */
+#mobilePen {
+  display: none;
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  background: #f60;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 55px;
+  height: 55px;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  z-index: 1000;
 }
 
-#status {
-  font-size: 16px;
-  margin-bottom: 10px;
-  color: #000;
-}
-
-/* دوران التحميل */
+/* حالة التحميل */
 .loading {
   display: flex;
   align-items: center;
@@ -236,7 +266,7 @@ video {
   100% { transform: rotate(360deg); }
 }
 
-/* ✅ تصميم الجوال */
+/* ===================== الجوال ===================== */
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
@@ -257,6 +287,7 @@ video {
 
   .chat-messages {
     max-height: 55vh;
+    overflow-y: scroll;
   }
 
   body {
@@ -266,5 +297,12 @@ video {
   .chat-controls-wrapper {
     position: sticky;
     bottom: 0;
+  }
+
+  /* ✅ إظهار القلم فقط في الجوال */
+  #mobilePen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
