@@ -38,7 +38,17 @@
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
-    
+    <button id="mobilePen">✏️</button>
+
+<script>
+  const pen = document.getElementById("mobilePen");
+  const input = document.getElementById("chatInput");
+  pen.addEventListener("click", () => {
+    input.scrollIntoView({ behavior: "smooth" });
+    input.focus();
+  });
+</script>
+
     <div class="status-container">
       <div id="status">Click "Start" to begin.</div>
       <div class="loading" id="loading" style="display: none;">
