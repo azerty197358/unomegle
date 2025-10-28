@@ -240,8 +240,8 @@ socket.on("partner-disconnected", (info) => {
   if (autoReconnect && !isStopped) {
     statusText.textContent = "Searching for new stranger...";
     showLoading(true);
-    // إظهار الـ spinners أثناء إعادة الاتصال
-    showSpinners();
+    // إظهار الـ spinner فقط في شاشة الغريب أثناء إعادة الاتصال
+    showRemoteSpinner();
     setTimeout(() => {
       startSearch();
     }, 3000);
@@ -288,8 +288,8 @@ function createPeerConnection() {
       if (autoReconnect && !isStopped) {
         statusText.textContent = "Reconnecting...";
         showLoading(true);
-        // إظهار الـ spinners أثناء إعادة الاتصال
-        showSpinners();
+        // إظهار الـ spinner فقط في شاشة الغريب أثناء إعادة الاتصال
+        showRemoteSpinner();
         setTimeout(() => startSearch(), 3000);
       } else {
         resetUI();
