@@ -96,6 +96,33 @@
       border: none;
     }
 
+    /* Spinner داخل الشاشة */
+    .video-spinner {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      color: #f60;
+    }
+
+    .video-spinner .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid #f60;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .video-spinner span {
+      display: block;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #fff;
+    }
+
     /* الرسائل بخلفية وظل (موحدة) */
     .chat-container {
       flex: 1;
@@ -349,6 +376,13 @@
         bottom: 0;
         z-index: 50;
       }
+
+      /* تكبير الـ spinner في الجوال */
+      .video-spinner .spinner {
+        width: 30px;
+        height: 30px;
+        border-width: 3px;
+      }
     }
   </style>
 </head>
@@ -361,10 +395,18 @@
         <div class="video-container">
           <div class="video-label">أنت</div>
           <video id="localVideo" autoplay muted></video>
+          <div class="video-spinner" id="localSpinner">
+            <div class="spinner"></div>
+            <span>البحث...</span>
+          </div>
         </div>
         <div class="video-container">
           <div class="video-label">الغريب</div>
           <video id="remoteVideo" autoplay></video>
+          <div class="video-spinner" id="remoteSpinner">
+            <div class="spinner"></div>
+            <span>البحث...</span>
+          </div>
         </div>
       </div>
       
@@ -446,6 +488,59 @@
 
     // مثال للاستخدام (يمكنك إزالته لاحقًا)
     // setTimeout(() => addIncomingMessage("أهلاً، كيف حالك؟"), 2000);
+
+    // **التعديل الجديد: التعامل مع زر التخطي وإظهار الـ spinner داخل الشاشتين**
+    const skipBtn = document.getElementById("skipBtn");
+    const localSpinner = document.getElementById("localSpinner");
+    const remoteSpinner = document.getElementById("remoteSpinner");
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    // دالة لإظهار الـ spinner في الشاشتين
+    function showSpinners() {
+      localSpinner.style.display = "block";
+      remoteSpinner.style.display = "block";
+      // اختياري: إخفاء الفيديوهات أثناء البحث
+      localVideo.style.display = "none";
+      remoteVideo.style.display = "none";
+    }
+
+    // دالة لإخفاء الـ spinner وإظهار الفيديوهات
+    function hideSpinners() {
+      localSpinner.style.display = "none";
+      remoteSpinner.style.display = "none";
+      localVideo.style.display = "block";
+      remoteVideo.style.display = "block";
+    }
+
+    // حدث زر التخطي
+    skipBtn.addEventListener("click", function() {
+      if (skipBtn.disabled) return;
+      
+      // إظهار الـ spinner فورًا
+      showSpinners();
+      
+      // هنا يجب إرسال إشارة التخطي عبر socket.io (افتراضيًا)
+      // socket.emit('skip'); // أضف هذا في script.js إذا كان socket متاحًا
+      
+      // تمكين زر التخطي مرة أخرى أو تعطيله حسب الحاجة
+      skipBtn.disabled = true; // تعطيل مؤقتًا حتى الاقتران الجديد
+      
+      // مثال: بعد 3 ثوانٍ، نفترض الاقتران الجديد (استبدل بـ socket event)
+      setTimeout(() => {
+        hideSpinners();
+        // أضف رسالة نظامية
+        const systemMsg = document.createElement("div");
+        systemMsg.textContent = "تم الاتصال الآن بغريب جديد. قل مرحبا!";
+        systemMsg.className = "system-message";
+        chatMessages.appendChild(systemMsg);
+        scrollToBottom();
+        skipBtn.disabled = false; // إعادة تمكين
+      }, 3000);
+    });
+
+    // للتكامل مع socket.io: استمع للحدث عند الاقتران الجديد
+    // socket.on('paired', () => { hideSpinners(); /* باقي المنطق */ });
   </script>
 </body>
 </html>
