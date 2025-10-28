@@ -12,6 +12,8 @@ const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 // DOM Elements
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
+const localSpinner = document.getElementById("localSpinner");
+const remoteSpinner = document.getElementById("remoteSpinner");
 const statusText = document.getElementById("status");
 const loadingIndicator = document.getElementById("loading");
 const startBtn = document.getElementById("startBtn");
@@ -23,6 +25,26 @@ const chatMessages = document.getElementById("chatMessages");
 
 function showLoading(show) {
   loadingIndicator.style.display = show ? "flex" : "none";
+}
+
+function showSpinners() {
+  localSpinner.style.display = "block";
+  remoteSpinner.style.display = "block";
+  localVideo.style.display = "none";
+  remoteVideo.style.display = "none";
+}
+
+// دالة جديدة لإظهار الـ spinner فقط في شاشة الغريب
+function showRemoteSpinner() {
+  remoteSpinner.style.display = "block";
+  remoteVideo.style.display = "none";
+}
+
+function hideSpinners() {
+  localSpinner.style.display = "none";
+  remoteSpinner.style.display = "none";
+  localVideo.style.display = "block";
+  remoteVideo.style.display = "block";
 }
 
 function addMessage(message, type = "system") {
@@ -63,6 +85,7 @@ function closePeerConnection() {
   } catch (e) { console.warn(e); }
   peerConnection = null;
   remoteVideo.srcObject = null;
+  hideSpinners(); // إخفاء الـ spinners عند إغلاق الاتصال
 }
 
 function resetUI() {
@@ -71,6 +94,7 @@ function resetUI() {
   skipBtn.disabled = true;
   stopBtn.disabled = true;
   startBtn.disabled = false;
+  hideSpinners();
 }
 
 async function startSearch() {
@@ -96,6 +120,10 @@ async function startSearch() {
   isInitiator = false;
   chatMessages.innerHTML = '';
 
+  // إظهار الـ spinner في شاشة الغريب أثناء البحث
+  remoteSpinner.style.display = "block";
+  remoteVideo.style.display = "none";
+
   socket.emit("find-partner");
   statusText.textContent = "Searching for stranger...";
   skipBtn.disabled = false;
@@ -116,6 +144,8 @@ skipBtn.onclick = () => {
   closePeerConnection();
   disableChat();
   addMessage("You skipped the stranger.", "system");
+  // إظهار الـ spinner فقط في شاشة الغريب أثناء التخطي والبحث الجديد
+  showRemoteSpinner();
 };
 
 stopBtn.onclick = () => {
@@ -163,6 +193,7 @@ socket.on("partner-found", async (payload) => {
   isInitiator = !!payload.initiator;
   statusText.textContent = "Stranger found! Connecting...";
   showLoading(false);
+  hideSpinners(); // إخفاء الـ spinners عند العثور على شريك
   createPeerConnection();
 
   if (isInitiator) {
@@ -209,6 +240,8 @@ socket.on("partner-disconnected", (info) => {
   if (autoReconnect && !isStopped) {
     statusText.textContent = "Searching for new stranger...";
     showLoading(true);
+    // إظهار الـ spinners أثناء إعادة الاتصال
+    showSpinners();
     setTimeout(() => {
       startSearch();
     }, 3000);
@@ -255,6 +288,8 @@ function createPeerConnection() {
       if (autoReconnect && !isStopped) {
         statusText.textContent = "Reconnecting...";
         showLoading(true);
+        // إظهار الـ spinners أثناء إعادة الاتصال
+        showSpinners();
         setTimeout(() => startSearch(), 3000);
       } else {
         resetUI();
