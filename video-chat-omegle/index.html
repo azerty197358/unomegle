@@ -306,8 +306,8 @@
       .videos {
         transform: none;
         width: 100%;
-        flex-direction: row;
-        justify-content: space-around;
+        flex-direction: column; /* تغيير إلى عمودي ليكونا فوق بعضهما */
+        justify-content: flex-start;
         align-items: center;
         height: auto;
         padding: 10px;
@@ -315,8 +315,8 @@
       }
 
       .video-container {
-        width: 48%;
-        aspect-ratio: 16 / 9;
+        width: 80%; /* تقليل الحجم إلى 80% لتوفير مساحة أكبر للرسائل */
+        aspect-ratio: 16 / 9; /* الحفاظ على النسبة لكن مع عرض أقل */
       }
 
       .chat-container {
@@ -329,7 +329,7 @@
         /* زيادة الارتفاع لظهور المزيد من الرسائل قبل التمرير */
         flex: 1;
         max-height: none;
-        height: 50vh;
+        height: 40vh; /* تقليل إلى 40vh لتوفير مساحة للفيديوهات أعلاه، لكن مع ظهور أكثر */
         overflow-y: scroll;
         -webkit-overflow-scrolling: touch; 
       }
