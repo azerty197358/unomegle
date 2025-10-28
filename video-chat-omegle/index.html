@@ -4,11 +4,357 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>دردشة فيديو عشوائية</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #fff;
+      color: #000;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      overflow: hidden; /* يمنع التمرير في الكمبيوتر */
+      direction: rtl; /* دعم اللغة العربية */
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    h1 {
+      color: #f60;
+      margin: 10px 0;
+    }
+
+    /* ====================== */
+    .main-content {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 30px;
+      overflow: hidden;
+      padding: 10px 20px;
+    }
+
+    /* الشاشتان بخلفية وظل */
+    .videos {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 20px;
+      flex: 1;
+      min-width: 320px;
+      height: 100%;
+      transform: translateX(-10px);
+      background: #f5f5f5;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 15px;
+    }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .video-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+      color: #000;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #333;
+      border: none;
+    }
+
+    /* الرسائل بخلفية وظل (موحدة) */
+    .chat-container {
+      flex: 1;
+      min-width: 340px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      transform: translateX(10px);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      position: relative; /* لدعم position absolute للإيموجي */
+    }
+
+    /* الرسائل */
+    .chat-messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      text-align: right; /* للعربية */
+      scrollbar-width: thin;
+      scrollbar-color: #f60 #f5f5f5;
+      background: #fff;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch; /* تمرير سلس في iOS */
+    }
+
+    /* إظهار شريط تمرير في الجوال أيضًا */
+    .chat-messages::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background-color: #f60;
+      border-radius: 4px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+      background-color: #f5f5f5;
+    }
+
+    .message {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 18px;
+      max-width: 80%;
+      word-wrap: break-word;
+      background: #e9e9e9;
+      animation: fadeIn 0.3s ease-in; /* تأثير ظهور سلس */
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.you {
+      background: #f60;
+      color: white;
+      margin-left: auto;
+    }
+
+    .message.stranger {
+      background: #007bff;
+      color: white;
+      margin-right: auto;
+    }
+
+    .system-message {
+      text-align: center;
+      color: #888;
+      font-style: italic;
+      margin: 10px 0;
+      padding: 5px;
+      background: none;
+    }
+
+    /* منطقة الكتابة الموحدة */
+    .input-area {
+      display: flex;
+      align-items: center;
+      background: #f1f1f1;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      gap: 10px;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: #fff;
+      color: #000;
+      outline: none;
+    }
+
+    .input-area input:focus {
+      border-color: #f60;
+    }
+
+    .send-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 5px;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      background: #f60;
+      color: white;
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* الأزرار أسفل الرسائل */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .controls button {
+      padding: 12px 25px;
+      background: #f60;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .controls button:hover:not(:disabled) {
+      background: #e55;
+      transform: translateY(-2px);
+    }
+
+    .controls button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* زر القلم للجوال */
+    #mobilePen {
+      display: none;
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      background: #f60;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 55px;
+      height: 55px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+
+    /* حالة التحميل */
+    .status-container {
+      padding: 10px;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #ccc;
+      border-top: 2px solid #f60;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* ===================== الجوال ===================== */
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+        gap: 15px;
+        align-items: center;
+        justify-content: flex-start;
+      }
+
+      .videos {
+        transform: none;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        height: auto;
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .video-container {
+        width: 48%;
+        aspect-ratio: 16 / 9;
+      }
+
+      .chat-container {
+        transform: none;
+        width: 100%;
+        position: relative; 
+      }
+
+      .chat-messages {
+        /* زيادة الارتفاع لظهور المزيد من الرسائل قبل التمرير */
+        flex: 1;
+        max-height: none;
+        height: 50vh;
+        overflow-y: scroll;
+        -webkit-overflow-scrolling: touch; 
+      }
+
+      body {
+        overflow-y: auto;
+      }
+
+      /* إخفاء القلم لأنه غير مطلوب الآن */
+      #mobilePen {
+        display: none;
+      }
+
+      .input-area {
+        /* تم تثبيته في مكانه لسهولة الاستخدام */
+        position: sticky;
+        bottom: 0;
+        z-index: 50;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <h1>🎥 دردشة فيديو عشوائية</h1>
+    <h1>دردشة فيديو عشوائية</h1>
     
     <div class="main-content">
       <div class="videos">
@@ -28,9 +374,8 @@
         </div>
         <div class="input-area">
           <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled>
-          <button class="send-btn" id="sendBtn" disabled>📨</button>
+          <button class="send-btn" id="sendBtn" disabled>إرسال</button>
         </div>
-        <div class="emoji-picker" id="emojiPicker"></div>
       </div>
     </div>
     
@@ -54,12 +399,10 @@
   <script src="script.js"></script>
   
   <script>
-    // سكريبت الدردشة الموحد (مع الإيموجي والتمرير المحسن)
+    // سكريبت الدردشة الموحد (بدون الإيموجي والتمرير المحسن)
     const chatMessages = document.getElementById("chatMessages");
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
-    const emojiBtn = document.getElementById("emojiBtn");
-    const emojiPicker = document.getElementById("emojiPicker");
 
     // تمرير تلقائي عند إضافة رسالة (محسن للجوال)
     function scrollToBottom() {
@@ -89,55 +432,6 @@
       if (e.key === "Enter") {
         e.preventDefault(); // منع الإجراء الافتراضي لـ Enter (مثل إرسال نموذج)
         sendMessage();
-      }
-    });
-
-    // إظهار / إخفاء قائمة الإيموجيات (المشكلة الأصلية هنا)
-    emojiBtn.addEventListener("click", (e) => {
-      e.stopPropagation(); 
-      const isVisible = emojiPicker.style.display === "block";
-      emojiPicker.style.display = isVisible ? "none" : "block";
-      if (!isVisible) {
-        emojiPicker.scrollTop = 0; 
-      }
-      chatInput.focus(); // إبقاء التركيز على مربع الإدخال
-    });
-
-    // عند اختيار إيموجي
-    emojiPicker.addEventListener("click", (e) => {
-      if (e.target.classList.contains("emoji")) {
-        chatInput.value += e.target.textContent;
-        // لا تغلق القائمة فورًا، يمكن للمستخدم إضافة أكثر من إيموجي
-        // emojiPicker.style.display = "none"; 
-        chatInput.focus();
-      }
-    });
-
-    // قائمة الإيموجيات
-    const emojis = [
-      "😀😁😂🤣😃😄😅😆😉😊😋😎😍😘😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫😴😌🤤😛😜😝🤪🤓🧐🤠",
-      "😺😸😹😻😼😽🙀😿😾",
-      "👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇☝👍👎✊👊🤛🤜👏🙌🫶👐🤲",
-      "❤️🧡💛💚💙💜🖤🤍🤎💔💖💗💓💞💕💘💝💟",
-      "🏳️🏴🏁🚩🏳️‍🌈🏳️‍⚧️🇩🇿🇸🇦🇪🇬🇲🇦🇹🇳🇫🇷🇪🇸🇮🇹🇩🇪🇺🇸🇬🇧🇹🇷🇯🇵🇨🇳🇷🇺🇧🇷🇨🇦🇮🇳🇰🇷"
-    ];
-    emojiPicker.innerHTML = emojis
-      .map(group => group.split("").map(e => `<span class="emoji">${e}</span>`).join(""))
-      .join("");
-
-    // زر القلم للجوال (لحل مشكلة التركيز والتمرير)
-    const pen = document.getElementById("mobilePen");
-    pen.addEventListener("click", () => {
-      // إجبار التمرير إلى مربع الإدخال والتركيز عليه
-      chatInput.scrollIntoView({ behavior: "smooth", block: "end" });
-      chatInput.focus();
-    });
-
-    // إخفاء الإيموجي عند النقر خارجها
-    document.addEventListener("click", (e) => {
-      // شرط الإغلاق: النقر في أي مكان *غير* زر الإيموجي و *غير* قائمة الإيموجي
-      if (!emojiBtn.contains(e.target) && !emojiPicker.contains(e.target)) {
-        emojiPicker.style.display = "none";
       }
     });
 
