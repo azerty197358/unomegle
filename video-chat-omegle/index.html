@@ -412,7 +412,7 @@
       
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
-          <div class="system-message">تم الاتصال الآن بغريب. قل مرحبا!</div>
+          <!-- الرسائل ستُدار بواسطة script.js -->
         </div>
         <div class="input-area">
           <input type="text" id="chatInput" placeholder="اكتب رسالة..." disabled>
@@ -439,108 +439,5 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
-  
-  <script>
-    // سكريبت الدردشة الموحد (بدون الإيموجي والتمرير المحسن)
-    const chatMessages = document.getElementById("chatMessages");
-    const chatInput = document.getElementById("chatInput");
-    const sendBtn = document.getElementById("sendBtn");
-
-    // تمرير تلقائي عند إضافة رسالة (محسن للجوال)
-    function scrollToBottom() {
-      // استخدام requestAnimationFrame لتحسين الأداء وضمان تحديث الـ DOM
-      requestAnimationFrame(() => {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      });
-    }
-
-    // إرسال الرسالة
-    function sendMessage() {
-      if (chatInput.value.trim() === "") return;
-      const msg = document.createElement("div");
-      msg.textContent = chatInput.value;
-      msg.className = "message you";
-      chatMessages.appendChild(msg);
-      chatInput.value = "";
-      // يجب أن يتم إرسال الرسالة عبر socket.io هنا
-
-      scrollToBottom();
-    }
-
-    sendBtn.addEventListener("click", sendMessage);
-
-    // الضغط على Enter للإرسال
-    chatInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault(); // منع الإجراء الافتراضي لـ Enter (مثل إرسال نموذج)
-        sendMessage();
-      }
-    });
-
-    // **دالة مساعدة لعرض الرسائل الواردة (كمثال للتكامل)**
-    function addIncomingMessage(text) {
-      const msg = document.createElement("div");
-      msg.textContent = text;
-      msg.className = "message stranger"; // استخدام كلاس "stranger"
-      chatMessages.appendChild(msg);
-      scrollToBottom();
-    }
-
-    // مثال للاستخدام (يمكنك إزالته لاحقًا)
-    // setTimeout(() => addIncomingMessage("أهلاً، كيف حالك؟"), 2000);
-
-    // **التعديل الجديد: التعامل مع زر التخطي وإظهار الـ spinner داخل الشاشتين**
-    const skipBtn = document.getElementById("skipBtn");
-    const localSpinner = document.getElementById("localSpinner");
-    const remoteSpinner = document.getElementById("remoteSpinner");
-    const localVideo = document.getElementById("localVideo");
-    const remoteVideo = document.getElementById("remoteVideo");
-
-    // دالة لإظهار الـ spinner في الشاشتين
-    function showSpinners() {
-      localSpinner.style.display = "block";
-      remoteSpinner.style.display = "block";
-      // اختياري: إخفاء الفيديوهات أثناء البحث
-      localVideo.style.display = "none";
-      remoteVideo.style.display = "none";
-    }
-
-    // دالة لإخفاء الـ spinner وإظهار الفيديوهات
-    function hideSpinners() {
-      localSpinner.style.display = "none";
-      remoteSpinner.style.display = "none";
-      localVideo.style.display = "block";
-      remoteVideo.style.display = "block";
-    }
-
-    // حدث زر التخطي
-    skipBtn.addEventListener("click", function() {
-      if (skipBtn.disabled) return;
-      
-      // إظهار الـ spinner فورًا
-      showSpinners();
-      
-      // هنا يجب إرسال إشارة التخطي عبر socket.io (افتراضيًا)
-      // socket.emit('skip'); // أضف هذا في script.js إذا كان socket متاحًا
-      
-      // تمكين زر التخطي مرة أخرى أو تعطيله حسب الحاجة
-      skipBtn.disabled = true; // تعطيل مؤقتًا حتى الاقتران الجديد
-      
-      // مثال: بعد 3 ثوانٍ، نفترض الاقتران الجديد (استبدل بـ socket event)
-      setTimeout(() => {
-        hideSpinners();
-        // أضف رسالة نظامية
-        const systemMsg = document.createElement("div");
-        systemMsg.textContent = "تم الاتصال الآن بغريب جديد. قل مرحبا!";
-        systemMsg.className = "system-message";
-        chatMessages.appendChild(systemMsg);
-        scrollToBottom();
-        skipBtn.disabled = false; // إعادة تمكين
-      }, 3000);
-    });
-
-    // للتكامل مع socket.io: استمع للحدث عند الاقتران الجديد
-    // socket.on('paired', () => { hideSpinners(); /* باقي المنطق */ });
-  </script>
 </body>
 </html>
