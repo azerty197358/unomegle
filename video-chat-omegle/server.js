@@ -4,15 +4,19 @@ const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 app.use(express.static(__dirname));
 
+const nsfwjs = require('nsfwjs');
+const tf = require('@tensorflow/tfjs-node');
+
 const waitingQueue = [];
 const partners = new Map();
-
 // Banned IPs: Map<ip, expiration> where expiration is timestamp (ms) or Infinity for permanent
 const bannedIps = new Map();
 
+let model = null; // Lazy load the model
+
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.address.address;
-  
+ 
   // Check for ban
   const banExpire = bannedIps.get(clientIp);
   if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
@@ -20,13 +24,7 @@ io.on("connection", (socket) => {
     socket.disconnect(true);
     return;
   }
-
   console.log("Connected:", socket.id, "IP:", clientIp);
-
-  socket.on("joinAdmin", () => {
-    socket.join("admin");
-    console.log("Admin joined:", socket.id);
-  });
 
   socket.on("find-partner", () => {
     if (partners.has(socket.id)) return;
@@ -34,7 +32,7 @@ io.on("connection", (socket) => {
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
-     
+    
       if (!otherSocket) {
         socket.emit("waiting", "Looking for a stranger...");
         if (waitingQueue.length > 0) socket.emit("find-partner");
@@ -72,46 +70,70 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle report porn
-  socket.on("reportPorn", (payload) => {
+  // Handle report porn with automatic analysis
+  socket.on("reportPorn", async (payload) => {
     const { screenshot, timestamp, partnerId } = payload;
-    if (!partnerId) return;
+    if (!partnerId || !screenshot) return;
 
     const reportedSocket = io.sockets.sockets.get(partnerId);
     const reporterIp = clientIp;
     const reportedIp = reportedSocket ? reportedSocket.handshake.address.address : "Unknown";
 
-    const reportData = {
-      screenshot,
-      timestamp,
-      reportedIP: reportedIp,
-      reporterIP: reporterIp,
-      reporterSocketId: socket.id,
-      partnerId // For reference
-    };
+    if (reportedIp === "Unknown") {
+      socket.emit("reportHandled", { message: "Could not identify the reported user." });
+      return;
+    }
 
-    // Emit to admin room
-    io.to("admin").emit("newReport", reportData);
-    console.log("Porn report sent to admin:", reportedIp);
+    try {
+      // Lazy load the model if not already loaded
+      if (!model) {
+        console.log("Loading NSFW model...");
+        model = await nsfwjs.load();
+        console.log("NSFW model loaded.");
+      }
 
-    // Optionally, notify the reporter
-    socket.emit("reportSent", { message: "Report sent to admin!" });
-  });
+      // Extract base64 image data (remove data:image/png;base64, prefix)
+      const base64Data = screenshot.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+      const imageBuffer = Buffer.from(base64Data, 'base64');
 
-  // Handle ban IP from admin
-  socket.on("banIP", (payload) => {
-    const { ip, duration } = payload; // duration in ms, 0 for permanent
-    const expire = duration === 0 ? Infinity : Date.now() + duration;
-    bannedIps.set(ip, expire);
-    console.log(`Banned IP ${ip} until ${expire === Infinity ? 'permanent' : new Date(expire).toISOString()}`);
-    
-    // Optionally, notify admin of success
-    socket.emit("banSuccess", { ip, duration });
+      // Decode image to tensor
+      const image = await tf.node.decodeImage(imageBuffer, 3); // 3 channels for RGB
+
+      // Classify
+      const predictions = await model.classify(image);
+      image.dispose();
+
+      // Check for 'Porn' class with high probability (threshold 0.7)
+      const pornPrediction = predictions.find(p => p.className === 'Porn');
+      const isNudity = pornPrediction && pornPrediction.probability > 0.7;
+
+      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? 'Nudity detected (prob: ' + (pornPrediction?.probability || 0) + ')' : 'No nudity detected'}`);
+
+      if (isNudity) {
+        // Ban for 24 hours
+        const banDuration = 24 * 60 * 60 * 1000; // 24 hours in ms
+        bannedIps.set(reportedIp, Date.now() + banDuration);
+        console.log(`Banned IP ${reportedIp} for 24 hours due to nudity detection.`);
+
+        // Optionally, disconnect the reported user if online
+        if (reportedSocket) {
+          reportedSocket.emit("banned", { message: "You have been banned for 24 hours due to reported inappropriate content." });
+          reportedSocket.disconnect(true);
+        }
+
+        socket.emit("reportHandled", { message: "Nudity detected! User banned for 24 hours.", nudityDetected: true });
+      } else {
+        socket.emit("reportHandled", { message: "No nudity detected in the screenshot.", nudityDetected: false });
+      }
+    } catch (error) {
+      console.error("Error in NSFW analysis:", error);
+      socket.emit("reportHandled", { message: "Error analyzing the report. Please try again.", error: true });
+    }
   });
 
   socket.on("skip", () => {
     const partnerId = partners.get(socket.id);
-   
+  
     if (partnerId) {
       const partnerSocket = io.sockets.sockets.get(partnerId);
       if (partnerSocket) {
@@ -122,13 +144,13 @@ io.on("connection", (socket) => {
     }
     if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
     socket.emit("waiting", "Looking for a new stranger...");
-   
+  
     if (waitingQueue.length >= 2) {
       const first = waitingQueue.shift();
       const second = waitingQueue.shift();
       const s1 = io.sockets.sockets.get(first);
       const s2 = io.sockets.sockets.get(second);
-     
+    
       if (s1 && s2) {
         partners.set(first, second);
         partners.set(second, first);
