@@ -8,13 +8,11 @@
     * {
       box-sizing: border-box;
     }
-
     html, body {
       height: 100%;
       margin: 0;
       padding: 0;
     }
-
     body {
       background: #fff;
       color: #000;
@@ -23,7 +21,6 @@
       overflow: hidden; /* Prevents scrolling on desktop */
       direction: ltr; /* Support for English */
     }
-
     .container {
       max-width: 1200px;
       margin: 0 auto;
@@ -32,12 +29,10 @@
       flex-direction: column;
       justify-content: space-between;
     }
-
     h1 {
       color: #f60;
       margin: 10px 0;
     }
-
     /* ====================== */
     .main-content {
       display: flex;
@@ -48,7 +43,6 @@
       overflow: hidden;
       padding: 10px 20px;
     }
-
     /* The two screens with background and shadow */
     .videos {
       display: flex;
@@ -65,7 +59,6 @@
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       padding: 15px;
     }
-
     .video-container {
       position: relative;
       width: 100%;
@@ -75,7 +68,6 @@
       border-radius: 5px;
       overflow: hidden;
     }
-
     .video-label {
       position: absolute;
       top: 10px;
@@ -87,7 +79,6 @@
       z-index: 10;
       color: #000;
     }
-
     video {
       width: 100%;
       height: 100%;
@@ -95,7 +86,24 @@
       background: #333;
       border: none;
     }
-
+    /* Report button on remote video */
+    .report-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #ff0000;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      z-index: 10;
+      display: none; /* Show only when connected */
+    }
+    .report-btn:hover {
+      background: #cc0000;
+    }
     /* Spinner inside the screen */
     .video-spinner {
       display: none;
@@ -106,7 +114,6 @@
       z-index: 5;
       color: #f60;
     }
-
     .video-spinner .spinner {
       width: 40px;
       height: 40px;
@@ -115,14 +122,12 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-
     .video-spinner span {
       display: block;
       margin-top: 10px;
       font-size: 14px;
       color: #fff;
     }
-
     /* Messages with background and shadow (unified) */
     .chat-container {
       flex: 1;
@@ -138,7 +143,6 @@
       overflow: hidden;
       position: relative; /* To support absolute positioning for emoji */
     }
-
     /* Messages */
     .chat-messages {
       flex: 1;
@@ -153,21 +157,17 @@
       scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     }
-
     /* Show scrollbar on mobile too */
     .chat-messages::-webkit-scrollbar {
       width: 8px;
     }
-
     .chat-messages::-webkit-scrollbar-thumb {
       background-color: #f60;
       border-radius: 4px;
     }
-
     .chat-messages::-webkit-scrollbar-track {
       background-color: #f5f5f5;
     }
-
     .message {
       margin-bottom: 10px;
       padding: 8px 12px;
@@ -177,24 +177,20 @@
       background: #e9e9e9;
       animation: fadeIn 0.3s ease-in; /* Smooth appearance effect */
     }
-
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
     .message.you {
       background: #f60;
       color: white;
       align-self: flex-end;
     }
-
     .message.stranger {
       background: #007bff;
       color: white;
       align-self: flex-start;
     }
-
     .system-message {
       align-self: center;
       color: #888;
@@ -203,7 +199,6 @@
       padding: 5px;
       background: none;
     }
-
     /* Unified input area */
     .input-area {
       display: flex;
@@ -213,7 +208,6 @@
       border-top: 1px solid #ccc;
       gap: 10px;
     }
-
     .input-area input {
       flex: 1;
       padding: 10px;
@@ -223,11 +217,9 @@
       color: #000;
       outline: none;
     }
-
     .input-area input:focus {
       border-color: #f60;
     }
-
     .send-btn {
       background: none;
       border: none;
@@ -238,17 +230,14 @@
       transition: background 0.2s;
       flex-shrink: 0;
     }
-
     .send-btn:hover:not(:disabled) {
       background: #f60;
       color: white;
     }
-
     .send-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
-
     /* Buttons below messages */
     .controls {
       display: flex;
@@ -256,7 +245,6 @@
       gap: 10px;
       padding: 10px;
     }
-
     .controls button {
       padding: 12px 25px;
       background: #f60;
@@ -267,18 +255,15 @@
       font-size: 16px;
       transition: all 0.3s;
     }
-
     .controls button:hover:not(:disabled) {
       background: #e55;
       transform: translateY(-2px);
     }
-
     .controls button:disabled {
       background: #ccc;
       cursor: not-allowed;
       transform: none;
     }
-
     /* Pen button for mobile */
     #mobilePen {
       display: none;
@@ -296,19 +281,16 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       z-index: 1000;
     }
-
     /* Loading state */
     .status-container {
       padding: 10px;
     }
-
     .loading {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
     }
-
     .spinner {
       width: 20px;
       height: 20px;
@@ -317,12 +299,10 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
     /* ===================== Mobile ===================== */
     @media (max-width: 768px) {
       .main-content {
@@ -331,7 +311,6 @@
         align-items: center;
         justify-content: flex-start;
       }
-
       .videos {
         transform: none;
         width: 100%;
@@ -342,48 +321,48 @@
         padding: 10px;
         gap: 10px;
       }
-
       .video-container {
         width: 80%; /* Reduce size to 80% for more space for messages */
         aspect-ratio: 16 / 9; /* Maintain aspect ratio but with smaller width */
       }
-
       .chat-container {
         transform: none;
         width: 100%;
-        position: relative; 
+        position: relative;
       }
-
       .chat-messages {
         /* Increase height to show more messages before scrolling */
         flex: 1;
         max-height: none;
         height: 40vh; /* Reduce to 40vh to save space for videos above, but show more */
         overflow-y: scroll;
-        -webkit-overflow-scrolling: touch; 
+        -webkit-overflow-scrolling: touch;
       }
-
       body {
         overflow-y: auto;
       }
-
       /* Hide pen as it's not needed now */
       #mobilePen {
         display: none;
       }
-
       .input-area {
         /* Sticky positioned for easy use */
         position: sticky;
         bottom: 0;
         z-index: 50;
       }
-
       /* Enlarge spinner on mobile */
       .video-spinner .spinner {
         width: 30px;
         height: 30px;
         border-width: 3px;
+      }
+      /* Report button on mobile */
+      .report-btn {
+        top: 5px;
+        right: 5px;
+        padding: 3px 6px;
+        font-size: 10px;
       }
     }
   </style>
@@ -391,7 +370,7 @@
 <body>
   <div class="container">
     <h1>Random Video Chat</h1>
-    
+  
     <div class="main-content">
       <div class="videos">
         <div class="video-container">
@@ -404,6 +383,7 @@
         </div>
         <div class="video-container">
           <div class="video-label">Stranger</div>
+          <button class="report-btn" id="reportBtn">Report Porn</button>
           <video id="remoteVideo" autoplay></video>
           <div class="video-spinner" id="remoteSpinner">
             <div class="spinner"></div>
@@ -411,7 +391,7 @@
           </div>
         </div>
       </div>
-      
+    
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be managed by script.js -->
@@ -422,14 +402,14 @@
         </div>
       </div>
     </div>
-    
+  
     <div class="controls">
       <button id="startBtn">Start</button>
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
-    
-    
+  
+  
     <div class="status-container">
       <div id="status">Click "Start" to begin the chat.</div>
       <div class="loading" id="loading" style="display: none;">
@@ -438,8 +418,53 @@
       </div>
     </div>
   </div>
-
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
+  <script>
+    // Assuming script.js handles connection, here we add report functionality
+    // You need to integrate this into your script.js or add it there.
+    // For example, when connected to a peer, show the report button.
+    document.addEventListener('DOMContentLoaded', function() {
+      const reportBtn = document.getElementById('reportBtn');
+      const remoteVideoContainer = document.querySelector('.video-container:last-child');
+      
+      // Show report button when remote video is connected (you'll trigger this from script.js on peer connect)
+      // For demo, assume it's shown after start
+      // In script.js, add: socket.on('peerConnected', () => { reportBtn.style.display = 'block'; });
+      
+      reportBtn.addEventListener('click', function() {
+        reportBtn.disabled = true;
+        reportBtn.textContent = 'Reporting...';
+        
+        html2canvas(remoteVideoContainer, { 
+          backgroundColor: null,
+          scale: 1 
+        }).then(canvas => {
+          const dataUrl = canvas.toDataURL('image/png');
+          
+          // Emit to server with current room or socket ID for context
+          // Server will handle getting IPs and forwarding to admin
+          if (typeof socket !== 'undefined') {
+            socket.emit('reportPorn', {
+              screenshot: dataUrl,
+              timestamp: new Date().toISOString(),
+              room: window.currentRoom || 'unknown' // Assume you set this in script.js
+            });
+            
+            alert('Report sent to admin!'); // Or show toast
+          }
+          
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Report Porn';
+        }).catch(err => {
+          console.error('Screenshot failed:', err);
+          alert('Failed to take screenshot.');
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Report Porn';
+        });
+      });
+    });
+  </script>
 </body>
 </html>
