@@ -370,7 +370,7 @@
 <body>
   <div class="container">
     <h1>Random Video Chat</h1>
-  
+ 
     <div class="main-content">
       <div class="videos">
         <div class="video-container">
@@ -391,7 +391,7 @@
           </div>
         </div>
       </div>
-    
+   
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be managed by script.js -->
@@ -402,14 +402,14 @@
         </div>
       </div>
     </div>
-  
+ 
     <div class="controls">
       <button id="startBtn">Start</button>
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
-  
-  
+ 
+ 
     <div class="status-container">
       <div id="status">Click "Start" to begin the chat.</div>
       <div class="loading" id="loading" style="display: none;">
@@ -422,39 +422,54 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script>
-    // Assuming script.js handles connection, here we add report functionality
-    // You need to integrate this into your script.js or add it there.
-    // For example, when connected to a peer, show the report button.
+    // Report functionality integrated here to ensure it works independently of script.js
     document.addEventListener('DOMContentLoaded', function() {
       const reportBtn = document.getElementById('reportBtn');
       const remoteVideoContainer = document.querySelector('.video-container:last-child');
-      
-      // Show report button when remote video is connected (you'll trigger this from script.js on peer connect)
-      // For demo, assume it's shown after start
-      // In script.js, add: socket.on('peerConnected', () => { reportBtn.style.display = 'block'; });
-      
+     
+      // Listen for partner-found event to show the button and set partner ID
+      if (typeof socket !== 'undefined') {
+        socket.on('partner-found', function(data) {
+          reportBtn.style.display = 'block';
+          window.partnerId = data.id; // Store partner ID for reporting
+          console.log('Partner found, showing report button');
+        });
+
+        // Optionally, hide button on disconnect/skip/stop
+        socket.on('partner-disconnected', function() {
+          reportBtn.style.display = 'none';
+          window.partnerId = null;
+        });
+
+        socket.on('waiting', function() {
+          reportBtn.style.display = 'none';
+          window.partnerId = null;
+        });
+      }
+     
       reportBtn.addEventListener('click', function() {
+        if (!window.partnerId) {
+          alert('No active partner to report.');
+          return;
+        }
+
         reportBtn.disabled = true;
         reportBtn.textContent = 'Reporting...';
-        
-        html2canvas(remoteVideoContainer, { 
+       
+        html2canvas(remoteVideoContainer, {
           backgroundColor: null,
-          scale: 1 
+          scale: 1
         }).then(canvas => {
           const dataUrl = canvas.toDataURL('image/png');
-          
-          // Emit to server with current room or socket ID for context
-          // Server will handle getting IPs and forwarding to admin
-          if (typeof socket !== 'undefined') {
-            socket.emit('reportPorn', {
-              screenshot: dataUrl,
-              timestamp: new Date().toISOString(),
-              room: window.currentRoom || 'unknown' // Assume you set this in script.js
-            });
-            
-            alert('Report sent to admin!'); // Or show toast
-          }
-          
+         
+          // Emit to server with partner ID
+          socket.emit('reportPorn', {
+            screenshot: dataUrl,
+            timestamp: new Date().toISOString(),
+            partnerId: window.partnerId
+          });
+           
+          alert('Report sent to admin!'); // Or show toast
           reportBtn.disabled = false;
           reportBtn.textContent = 'Report Porn';
         }).catch(err => {
