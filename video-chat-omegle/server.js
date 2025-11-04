@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path"); // New: For absolute paths
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
@@ -9,7 +10,6 @@ const tf = require('@tensorflow/tfjs-node');
 
 const waitingQueue = [];
 const partners = new Map();
-// Banned IPs: Map<ip, expiration> where expiration is timestamp (ms) or Infinity for permanent
 const bannedIps = new Map();
 
 let model = null; // Lazy load the model
@@ -85,56 +85,56 @@ io.on("connection", (socket) => {
     }
 
     try {
-      // Lazy load the model if not already loaded (from local path with file:// prefix)
+      // Lazy load the model if not already loaded (local absolute path to model.json)
       if (!model) {
         console.log("Loading NSFW model from local path...");
-        model = await nsfwjs.load('file://./model/'); // Use file:// for local loading
+        const modelPath = path.join(__dirname, 'model/model.json');
+        model = await nsfwjs.load(`file://${modelPath}`);
         console.log("NSFW model loaded successfully.");
       }
 
-      // Extract base64 image data (remove data:image/png;base64, prefix)
+      // Extract base64 image data (remove prefix)
       const base64Data = screenshot.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
       const imageBuffer = Buffer.from(base64Data, 'base64');
 
       // Decode image to tensor
-      const image = await tf.node.decodeImage(imageBuffer, 3); // 3 channels for RGB
+      const image = await tf.node.decodeImage(imageBuffer, 3); // RGB channels
 
       // Classify
       const predictions = await model.classify(image);
       image.dispose();
 
-      // Check for 'Porn' or 'Hentai' class with high probability (threshold 0.7)
-      const pornPredictions = predictions.filter(p => ['Porn', 'Hentai'].includes(p.className));
-      const highestProb = pornPredictions.reduce((max, p) => p.probability > max ? p.probability : max, 0);
+      // Check for NSFW classes ('Porn', 'Hentai', etc.) with threshold > 0.7
+      const nsfwPredictions = predictions.filter(p => ['Porn', 'Hentai', 'Sexy'].includes(p.className));
+      const highestProb = nsfwPredictions.reduce((max, p) => Math.max(max, p.probability), 0);
       const isNudity = highestProb > 0.7;
 
-      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? `Nudity detected (prob: ${highestProb})` : 'No nudity detected'}`);
+      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? `Nudity detected (prob: ${highestProb.toFixed(2)})` : 'No nudity detected'}`);
 
       if (isNudity) {
         // Ban for 24 hours
-        const banDuration = 24 * 60 * 60 * 1000; // 24 hours in ms
+        const banDuration = 24 * 60 * 60 * 1000; // ms
         bannedIps.set(reportedIp, Date.now() + banDuration);
-        console.log(`Banned IP ${reportedIp} for 24 hours due to nudity detection.`);
+        console.log(`Banned IP ${reportedIp} for 24 hours.`);
 
-        // Optionally, disconnect the reported user if online
+        // Disconnect reported user
         if (reportedSocket) {
-          reportedSocket.emit("banned", { message: "You have been banned for 24 hours due to reported inappropriate content." });
+          reportedSocket.emit("banned", { message: "Banned for 24 hours due to inappropriate content." });
           reportedSocket.disconnect(true);
         }
 
         socket.emit("reportHandled", { message: "Nudity detected! User banned for 24 hours.", nudityDetected: true });
       } else {
-        socket.emit("reportHandled", { message: "No nudity detected in the screenshot.", nudityDetected: false });
+        socket.emit("reportHandled", { message: "No nudity detected.", nudityDetected: false });
       }
     } catch (error) {
       console.error("Error in NSFW analysis:", error);
-      socket.emit("reportHandled", { message: "Error analyzing the report. Please try again.", error: true });
+      socket.emit("reportHandled", { message: "Analysis error. Try again.", error: true });
     }
   });
 
   socket.on("skip", () => {
     const partnerId = partners.get(socket.id);
-  
     if (partnerId) {
       const partnerSocket = io.sockets.sockets.get(partnerId);
       if (partnerSocket) {
@@ -145,13 +145,12 @@ io.on("connection", (socket) => {
     }
     if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
     socket.emit("waiting", "Looking for a new stranger...");
-  
+    // Pair if queue has 2+
     if (waitingQueue.length >= 2) {
       const first = waitingQueue.shift();
       const second = waitingQueue.shift();
       const s1 = io.sockets.sockets.get(first);
       const s2 = io.sockets.sockets.get(second);
-    
       if (s1 && s2) {
         partners.set(first, second);
         partners.set(second, first);
