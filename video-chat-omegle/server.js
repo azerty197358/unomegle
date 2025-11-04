@@ -32,7 +32,7 @@ io.on("connection", (socket) => {
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
-    
+   
       if (!otherSocket) {
         socket.emit("waiting", "Looking for a stranger...");
         if (waitingQueue.length > 0) socket.emit("find-partner");
@@ -85,11 +85,11 @@ io.on("connection", (socket) => {
     }
 
     try {
-      // Lazy load the model if not already loaded
+      // Lazy load the model if not already loaded (from local path)
       if (!model) {
-        console.log("Loading NSFW model...");
-        model = await nsfwjs.load();
-        console.log("NSFW model loaded.");
+        console.log("Loading NSFW model from local path...");
+        model = await nsfwjs.load('./model/'); // Load from local ./model/ folder
+        console.log("NSFW model loaded successfully.");
       }
 
       // Extract base64 image data (remove data:image/png;base64, prefix)
@@ -103,11 +103,12 @@ io.on("connection", (socket) => {
       const predictions = await model.classify(image);
       image.dispose();
 
-      // Check for 'Porn' class with high probability (threshold 0.7)
-      const pornPrediction = predictions.find(p => p.className === 'Porn');
-      const isNudity = pornPrediction && pornPrediction.probability > 0.7;
+      // Check for 'Porn' or 'Hentai' class with high probability (threshold 0.7)
+      const pornPredictions = predictions.filter(p => ['Porn', 'Hentai'].includes(p.className));
+      const highestProb = pornPredictions.reduce((max, p) => p.probability > max ? p.probability : max, 0);
+      const isNudity = highestProb > 0.7;
 
-      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? 'Nudity detected (prob: ' + (pornPrediction?.probability || 0) + ')' : 'No nudity detected'}`);
+      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? `Nudity detected (prob: ${highestProb})` : 'No nudity detected'}`);
 
       if (isNudity) {
         // Ban for 24 hours
