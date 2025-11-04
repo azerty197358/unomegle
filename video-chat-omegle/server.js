@@ -32,7 +32,7 @@ io.on("connection", (socket) => {
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
-   
+    
       if (!otherSocket) {
         socket.emit("waiting", "Looking for a stranger...");
         if (waitingQueue.length > 0) socket.emit("find-partner");
@@ -85,10 +85,10 @@ io.on("connection", (socket) => {
     }
 
     try {
-      // Lazy load the model if not already loaded (from local path)
+      // Lazy load the model if not already loaded (from local path with file:// prefix)
       if (!model) {
         console.log("Loading NSFW model from local path...");
-        model = await nsfwjs.load('./model/'); // Load from local ./model/ folder
+        model = await nsfwjs.load('file://./model/'); // Use file:// for local loading
         console.log("NSFW model loaded successfully.");
       }
 
