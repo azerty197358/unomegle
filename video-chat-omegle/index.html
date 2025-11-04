@@ -370,7 +370,6 @@
 <body>
   <div class="container">
     <h1>Random Video Chat</h1>
- 
     <div class="main-content">
       <div class="videos">
         <div class="video-container">
@@ -391,7 +390,7 @@
           </div>
         </div>
       </div>
-   
+  
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be managed by script.js -->
@@ -402,14 +401,11 @@
         </div>
       </div>
     </div>
- 
     <div class="controls">
       <button id="startBtn">Start</button>
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
- 
- 
     <div class="status-container">
       <div id="status">Click "Start" to begin the chat.</div>
       <div class="loading" id="loading" style="display: none;">
@@ -426,7 +422,8 @@
     document.addEventListener('DOMContentLoaded', function() {
       const reportBtn = document.getElementById('reportBtn');
       const remoteVideoContainer = document.querySelector('.video-container:last-child');
-     
+      let isReporting = false; // Flag to prevent multiple reports
+    
       // Listen for partner-found event to show the button and set partner ID
       if (typeof socket !== 'undefined') {
         socket.on('partner-found', function(data) {
@@ -434,47 +431,58 @@
           window.partnerId = data.id; // Store partner ID for reporting
           console.log('Partner found, showing report button');
         });
-
         // Optionally, hide button on disconnect/skip/stop
         socket.on('partner-disconnected', function() {
           reportBtn.style.display = 'none';
           window.partnerId = null;
+          isReporting = false;
         });
-
         socket.on('waiting', function() {
           reportBtn.style.display = 'none';
           window.partnerId = null;
+          isReporting = false;
+        });
+
+        // Listen for reportHandled from server (automatic analysis result)
+        socket.on('reportHandled', function(data) {
+          if (!isReporting) return; // Ignore if not currently reporting
+          isReporting = false;
+          alert(data.message); // Show server response (nudity detected/banned, no nudity, or error)
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Report Porn';
         });
       }
-     
+    
       reportBtn.addEventListener('click', function() {
         if (!window.partnerId) {
           alert('No active partner to report.');
           return;
         }
-
+        if (isReporting) {
+          alert('Report already in progress.');
+          return;
+        }
+        isReporting = true;
         reportBtn.disabled = true;
-        reportBtn.textContent = 'Reporting...';
-       
+        reportBtn.textContent = 'Analyzing...';
+      
         html2canvas(remoteVideoContainer, {
           backgroundColor: null,
           scale: 1
         }).then(canvas => {
           const dataUrl = canvas.toDataURL('image/png');
-         
-          // Emit to server with partner ID
+        
+          // Emit to server with partner ID - server will analyze and respond
           socket.emit('reportPorn', {
             screenshot: dataUrl,
             timestamp: new Date().toISOString(),
             partnerId: window.partnerId
           });
-           
-          alert('Report sent to admin!'); // Or show toast
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
+          // No immediate alert; wait for 'reportHandled'
         }).catch(err => {
           console.error('Screenshot failed:', err);
           alert('Failed to take screenshot.');
+          isReporting = false;
           reportBtn.disabled = false;
           reportBtn.textContent = 'Report Porn';
         });
