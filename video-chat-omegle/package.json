@@ -1,13 +1,18 @@
 {
   "name": "video-chat-omegle",
   "version": "1.0.0",
-  "description": "Random video chat like Omegle using WebRTC and Socket.io",
+  "description": "Random Video Chat with NSFW Detection",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.2",
+    "nsfwjs": "^2.4.2",
+    "@tensorflow/tfjs-node": "^4.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
