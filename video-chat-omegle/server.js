@@ -3,6 +3,7 @@ const path = require("path"); // New: For absolute paths
 const fs = require("fs"); // New: For file system operations
 const basicAuth = require('express-basic-auth'); // New: For basic authentication
 const app = express();
+app.set('trust proxy', true); // Trust proxies for correct IP handling
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 app.use(express.static(__dirname));
@@ -102,7 +103,9 @@ app.post('/ban', adminAuth, (req, res) => {
   res.redirect('/admin');
 });
 io.on("connection", (socket) => {
-  const clientIp = socket.handshake.address.address;
+  // Get real client IP considering proxies (e.g., Render, Cloudflare)
+  const clientIp = socket.handshake.headers['cf-connecting-ip'] ||
+                   (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
   // Check for ban
   const banExpire = bannedIps.get(clientIp);
   if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
@@ -157,8 +160,12 @@ io.on("connection", (socket) => {
     const { screenshot, timestamp, partnerId } = payload;
     if (!partnerId || !screenshot) return;
     const reportedSocket = io.sockets.sockets.get(partnerId);
+    // Get real reported IP similarly
+    const reportedIp = reportedSocket ? 
+      (reportedSocket.handshake.headers['cf-connecting-ip'] ||
+       (reportedSocket.handshake.headers['x-forwarded-for'] ? reportedSocket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : reportedSocket.handshake.address))
+      : "Unknown";
     const reporterIp = clientIp;
-    const reportedIp = reportedSocket ? reportedSocket.handshake.address.address : "Unknown";
     if (reportedIp === "Unknown") {
       socket.emit("reportHandled", { message: "Could not identify the reported user." });
       return;
