@@ -47,25 +47,34 @@ app.get('/admin', adminAuth, (req, res) => {
           button { background: #ff0000; color: white; border: none; padding: 5px 10px; cursor: pointer; }
           button:hover { background: #cc0000; }
           select { margin-right: 5px; }
+          .banned-list { margin-top: 40px; }
+          .banned-item { margin-bottom: 10px; }
         </style>
       </head>
       <body>
-        <h1>Reported Screenshots</h1>
+        <h1>Reported Screenshots (Active Bans Only)</h1>
     `;
-    if (files.length === 0) {
-      html += '<p>No reports yet.</p>';
+    let activeReports = [];
+    files.forEach(file => {
+      const [timestamp, partnerId, reporterIp, reportedIp] = file.replace('.png', '').split('_');
+      const banExpire = bannedIps.get(reportedIp);
+      if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
+        activeReports.push({ file, timestamp, partnerId, reporterIp, reportedIp });
+      }
+    });
+    if (activeReports.length === 0) {
+      html += '<p>No active reports.</p>';
     } else {
-      files.forEach(file => {
-        const [timestamp, partnerId, reporterIp, reportedIp] = file.replace('.png', '').split('_');
+      activeReports.forEach(report => {
         html += `
           <div class="report">
-            <img src="/reports/${file}" alt="Reported Screenshot">
-            <p><strong>Timestamp:</strong> ${timestamp}</p>
-            <p><strong>Partner ID:</strong> ${partnerId}</p>
-            <p><strong>Reporter IP:</strong> ${reporterIp}</p>
-            <p><strong>Reported IP:</strong> ${reportedIp}</p>
+            <img src="/reports/${report.file}" alt="Reported Screenshot">
+            <p><strong>Timestamp:</strong> ${report.timestamp}</p>
+            <p><strong>Partner ID:</strong> ${report.partnerId}</p>
+            <p><strong>Reporter IP:</strong> ${report.reporterIp}</p>
+            <p><strong>Reported IP:</strong> ${report.reportedIp}</p>
             <form action="/ban" method="POST">
-              <input type="hidden" name="ip" value="${reportedIp}">
+              <input type="hidden" name="ip" value="${report.reportedIp}">
               <select name="duration">
                 <option value="24h">24 Hours</option>
                 <option value="permanent">Permanent</option>
@@ -76,7 +85,30 @@ app.get('/admin', adminAuth, (req, res) => {
         `;
       });
     }
-    html += '</body></html>';
+
+    // Banned users section
+    html += '<div class="banned-list"><h2>Banned IPs</h2>';
+    if (bannedIps.size === 0) {
+      html += '<p>No banned IPs.</p>';
+    } else {
+      for (const [ip, expire] of bannedIps) {
+        if (expire === Infinity || expire > Date.now()) {
+          const expireStr = expire === Infinity ? 'Permanent' : new Date(expire).toLocaleString();
+          html += `
+            <div class="banned-item">
+              <p><strong>IP:</strong> ${ip} - <strong>Expires:</strong> ${expireStr}</p>
+              <form action="/unban" method="POST">
+                <input type="hidden" name="ip" value="${ip}">
+                <button type="submit">Unban</button>
+              </form>
+            </div>
+          `;
+        } else {
+          bannedIps.delete(ip); // Clean up expired bans
+        }
+      }
+    }
+    html += '</div></body></html>';
     res.send(html);
   } catch (error) {
     console.error('Error loading admin page:', error);
@@ -91,15 +123,39 @@ app.post('/ban', adminAuth, (req, res) => {
     return res.status(400).send('Invalid IP.');
   }
   let banExpire;
+  let banMessage = 'You are banned from this service.';
   if (duration === 'permanent') {
     banExpire = Infinity;
+    banMessage = 'You are permanently banned from this service.';
   } else if (duration === '24h') {
     banExpire = Date.now() + 24 * 60 * 60 * 1000;
+    banMessage = 'You are banned for 24 hours from this service.';
   } else {
     return res.status(400).send('Invalid duration.');
   }
   bannedIps.set(ip, banExpire);
   console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
+
+  // Immediately disconnect any connected sockets with this IP
+  for (const [socketId, socket] of io.sockets.sockets) {
+    const socketIp = socket.handshake.headers['cf-connecting-ip'] ||
+                     (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
+    if (socketIp === ip) {
+      socket.emit("banned", { message: banMessage });
+      socket.disconnect(true);
+    }
+  }
+
+  res.redirect('/admin');
+});
+// Unban route (secured, POST)
+app.post('/unban', adminAuth, (req, res) => {
+  const ip = req.body.ip;
+  if (!ip) {
+    return res.status(400).send('Invalid IP.');
+  }
+  bannedIps.delete(ip);
+  console.log(`Unbanned IP ${ip}.`);
   res.redirect('/admin');
 });
 io.on("connection", (socket) => {
@@ -109,7 +165,8 @@ io.on("connection", (socket) => {
   // Check for ban
   const banExpire = bannedIps.get(clientIp);
   if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
-    socket.emit("banned", { message: "You are temporarily/permanently banned from this service." });
+    const banMessage = banExpire === Infinity ? 'You are permanently banned from this service.' : 'You are banned for 24 hours from this service.';
+    socket.emit("banned", { message: banMessage });
     socket.disconnect(true);
     return;
   }
