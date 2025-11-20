@@ -30,7 +30,7 @@ const bannedIps = new Map();
 // Admin page route (secured)
 app.get('/admin', adminAuth, (req, res) => {
   try {
-    const files = fs.readdirSync(reportDir);
+    let files = fs.readdirSync(reportDir);
     let html = `
       <!DOCTYPE html>
       <html lang="en">
@@ -52,18 +52,22 @@ app.get('/admin', adminAuth, (req, res) => {
         </style>
       </head>
       <body>
-        <h1>Reported Screenshots (Active Bans Only)</h1>
+        <h1>Reported Screenshots</h1>
     `;
     let activeReports = [];
     files.forEach(file => {
       const [timestamp, partnerId, reporterIp, reportedIp] = file.replace('.png', '').split('_');
       const banExpire = bannedIps.get(reportedIp);
-      if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
-        activeReports.push({ file, timestamp, partnerId, reporterIp, reportedIp });
+      if (banExpire && banExpire <= Date.now()) {
+        // Delete expired report file
+        fs.unlinkSync(path.join(reportDir, file));
+        bannedIps.delete(reportedIp);
+      } else {
+        activeReports.push({ file, timestamp, partnerId, reporterIp, reportedIp, banExpire });
       }
     });
     if (activeReports.length === 0) {
-      html += '<p>No active reports.</p>';
+      html += '<p>No reports yet.</p>';
     } else {
       activeReports.forEach(report => {
         html += `
@@ -73,6 +77,18 @@ app.get('/admin', adminAuth, (req, res) => {
             <p><strong>Partner ID:</strong> ${report.partnerId}</p>
             <p><strong>Reporter IP:</strong> ${report.reporterIp}</p>
             <p><strong>Reported IP:</strong> ${report.reportedIp}</p>
+        `;
+        if (report.banExpire) {
+          const expireStr = report.banExpire === Infinity ? 'Permanent' : new Date(report.banExpire).toLocaleString();
+          html += `
+            <p><strong>Ban Expires:</strong> ${expireStr}</p>
+            <form action="/unban" method="POST">
+              <input type="hidden" name="ip" value="${report.reportedIp}">
+              <button type="submit">Unban IP</button>
+            </form>
+          `;
+        } else {
+          html += `
             <form action="/ban" method="POST">
               <input type="hidden" name="ip" value="${report.reportedIp}">
               <select name="duration">
@@ -81,16 +97,18 @@ app.get('/admin', adminAuth, (req, res) => {
               </select>
               <button type="submit">Ban IP</button>
             </form>
-          </div>
-        `;
+          `;
+        }
+        html += '</div>';
       });
     }
 
-    // Banned users section
+    // Banned users section (for IPs banned without reports, if any)
     html += '<div class="banned-list"><h2>Banned IPs</h2>';
     if (bannedIps.size === 0) {
       html += '<p>No banned IPs.</p>';
     } else {
+      let hasBanned = false;
       for (const [ip, expire] of bannedIps) {
         if (expire === Infinity || expire > Date.now()) {
           const expireStr = expire === Infinity ? 'Permanent' : new Date(expire).toLocaleString();
@@ -103,10 +121,12 @@ app.get('/admin', adminAuth, (req, res) => {
               </form>
             </div>
           `;
+          hasBanned = true;
         } else {
           bannedIps.delete(ip); // Clean up expired bans
         }
       }
+      if (!hasBanned) html += '<p>No active banned IPs.</p>';
     }
     html += '</div></body></html>';
     res.send(html);
