@@ -1,25 +1,35 @@
 const express = require("express");
 const path = require("path"); // New: For absolute paths
 const fs = require("fs"); // New: For file system operations
+const basicAuth = require('express-basic-auth'); // New: For basic authentication
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 app.use(express.static(__dirname));
 
-// Serve reports folder statically
+// Serve reports folder statically (but we'll secure it via admin page)
 const reportDir = path.join(__dirname, 'reports');
 if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir);
 app.use('/reports', express.static(reportDir));
 
-const nsfwjs = require('nsfwjs');
-const tf = require('@tensorflow/tfjs-node');
+// Middleware for basic auth on admin routes
+const getUnauthorizedResponse = (req) => {
+  return req.auth
+    ? ('Credentials ' + req.auth.user + ':' + req.auth.password + ' rejected')
+    : 'No credentials provided';
+};
+const adminAuth = basicAuth({
+  users: { 'admin': 'supersecretpassword' }, // Change this to your desired username and password
+  unauthorizedResponse: getUnauthorizedResponse
+});
+app.use(express.urlencoded({ extended: true })); // For parsing POST forms
+
 const waitingQueue = [];
 const partners = new Map();
 const bannedIps = new Map();
-let model = null; // Lazy load the model
 
-// Admin page route
-app.get('/admin', (req, res) => {
+// Admin page route (secured)
+app.get('/admin', adminAuth, (req, res) => {
   try {
     const files = fs.readdirSync(reportDir);
     let html = `
@@ -34,6 +44,10 @@ app.get('/admin', (req, res) => {
           h1 { color: #f60; }
           .report { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; background: #fff; border-radius: 5px; }
           img { max-width: 500px; height: auto; }
+          form { display: inline; }
+          button { background: #ff0000; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+          button:hover { background: #cc0000; }
+          select { margin-right: 5px; }
         </style>
       </head>
       <body>
@@ -51,6 +65,14 @@ app.get('/admin', (req, res) => {
             <p><strong>Partner ID:</strong> ${partnerId}</p>
             <p><strong>Reporter IP:</strong> ${reporterIp}</p>
             <p><strong>Reported IP:</strong> ${reportedIp}</p>
+            <form action="/ban" method="POST">
+              <input type="hidden" name="ip" value="${reportedIp}">
+              <select name="duration">
+                <option value="24h">24 Hours</option>
+                <option value="permanent">Permanent</option>
+              </select>
+              <button type="submit">Ban IP</button>
+            </form>
           </div>
         `;
       });
@@ -61,6 +83,26 @@ app.get('/admin', (req, res) => {
     console.error('Error loading admin page:', error);
     res.status(500).send('Error loading reports.');
   }
+});
+
+// Ban route (secured, POST)
+app.post('/ban', adminAuth, (req, res) => {
+  const ip = req.body.ip;
+  const duration = req.body.duration;
+  if (!ip) {
+    return res.status(400).send('Invalid IP.');
+  }
+  let banExpire;
+  if (duration === 'permanent') {
+    banExpire = Infinity;
+  } else if (duration === '24h') {
+    banExpire = Date.now() + 24 * 60 * 60 * 1000;
+  } else {
+    return res.status(400).send('Invalid duration.');
+  }
+  bannedIps.set(ip, banExpire);
+  console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
+  res.redirect('/admin');
 });
 
 io.on("connection", (socket) => {
@@ -114,7 +156,7 @@ io.on("connection", (socket) => {
       target.emit("chat-message", { from: socket.id, message });
     }
   });
-  // Handle report porn with automatic analysis and save to admin
+  // Handle report porn: save screenshot for manual review
   socket.on("reportPorn", async (payload) => {
     const { screenshot, timestamp, partnerId } = payload;
     if (!partnerId || !screenshot) return;
@@ -134,41 +176,10 @@ io.on("connection", (socket) => {
       const filePath = path.join(reportDir, fileName);
       fs.writeFileSync(filePath, imageBuffer);
       console.log(`Saved report screenshot: ${fileName}`);
-
-      // Lazy load the model if not already loaded (local absolute path to model.json)
-      if (!model) {
-        console.log("Loading NSFW model from local path...");
-        const modelPath = path.join(__dirname, 'model/model.json');
-        model = await nsfwjs.load(`file://${modelPath}`);
-        console.log("NSFW model loaded successfully.");
-      }
-      // Decode image to tensor
-      const image = await tf.node.decodeImage(imageBuffer, 3); // RGB channels
-      // Classify
-      const predictions = await model.classify(image);
-      image.dispose();
-      // Check for NSFW classes ('Porn', 'Hentai', etc.) with threshold > 0.7
-      const nsfwPredictions = predictions.filter(p => ['Porn', 'Hentai', 'Sexy'].includes(p.className));
-      const highestProb = nsfwPredictions.reduce((max, p) => Math.max(max, p.probability), 0);
-      const isNudity = highestProb > 0.7;
-      console.log(`NSFW Analysis for IP ${reportedIp}: ${isNudity ? `Nudity detected (prob: ${highestProb.toFixed(2)})` : 'No nudity detected'}`);
-      if (isNudity) {
-        // Ban for 24 hours
-        const banDuration = 24 * 60 * 60 * 1000; // ms
-        bannedIps.set(reportedIp, Date.now() + banDuration);
-        console.log(`Banned IP ${reportedIp} for 24 hours.`);
-        // Disconnect reported user
-        if (reportedSocket) {
-          reportedSocket.emit("banned", { message: "Banned for 24 hours due to inappropriate content." });
-          reportedSocket.disconnect(true);
-        }
-        socket.emit("reportHandled", { message: "Nudity detected! User banned for 24 hours.", nudityDetected: true });
-      } else {
-        socket.emit("reportHandled", { message: "No nudity detected.", nudityDetected: false });
-      }
+      socket.emit("reportHandled", { message: "Report submitted for admin review." });
     } catch (error) {
-      console.error("Error in NSFW analysis:", error);
-      socket.emit("reportHandled", { message: "Analysis error. Try again.", error: true });
+      console.error("Error saving report:", error);
+      socket.emit("reportHandled", { message: "Error submitting report. Try again.", error: true });
     }
   });
   socket.on("skip", () => {
