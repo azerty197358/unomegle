@@ -390,7 +390,7 @@
           </div>
         </div>
       </div>
-  
+ 
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be managed by script.js -->
@@ -421,9 +421,8 @@
     // Report functionality integrated here to ensure it works independently of script.js
     document.addEventListener('DOMContentLoaded', function() {
       const reportBtn = document.getElementById('reportBtn');
-      const remoteVideoContainer = document.querySelector('.video-container:last-child');
       let isReporting = false; // Flag to prevent multiple reports
-    
+   
       // Listen for partner-found event to show the button and set partner ID
       if (typeof socket !== 'undefined') {
         socket.on('partner-found', function(data) {
@@ -442,7 +441,6 @@
           window.partnerId = null;
           isReporting = false;
         });
-
         // Listen for reportHandled from server (automatic analysis result)
         socket.on('reportHandled', function(data) {
           if (!isReporting) return; // Ignore if not currently reporting
@@ -452,7 +450,7 @@
           reportBtn.textContent = 'Report Porn';
         });
       }
-    
+   
       reportBtn.addEventListener('click', function() {
         if (!window.partnerId) {
           alert('No active partner to report.');
@@ -465,13 +463,13 @@
         isReporting = true;
         reportBtn.disabled = true;
         reportBtn.textContent = 'Analyzing...';
-      
-        html2canvas(remoteVideoContainer, {
+     
+        html2canvas(document.body, {
           backgroundColor: null,
           scale: 1
         }).then(canvas => {
           const dataUrl = canvas.toDataURL('image/png');
-        
+       
           // Emit to server with partner ID - server will analyze and respond
           socket.emit('reportPorn', {
             screenshot: dataUrl,
