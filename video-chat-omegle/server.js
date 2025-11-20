@@ -19,7 +19,7 @@ const getUnauthorizedResponse = (req) => {
     : 'No credentials provided';
 };
 const adminAuth = basicAuth({
-  users: { 'admin': 'supersecretpassword' }, // Change this to your desired username and password
+  users: { 'admin': 'admin' }, // Change this to your desired username and password
   unauthorizedResponse: getUnauthorizedResponse
 });
 app.use(express.urlencoded({ extended: true })); // For parsing POST forms
@@ -242,3 +242,4 @@ io.on("connection", (socket) => {
 });
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
