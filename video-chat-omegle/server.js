@@ -6,12 +6,10 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 app.use(express.static(__dirname));
-
 // Serve reports folder statically (but we'll secure it via admin page)
 const reportDir = path.join(__dirname, 'reports');
 if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir);
 app.use('/reports', express.static(reportDir));
-
 // Middleware for basic auth on admin routes
 const getUnauthorizedResponse = (req) => {
   return req.auth
@@ -20,14 +18,14 @@ const getUnauthorizedResponse = (req) => {
 };
 const adminAuth = basicAuth({
   users: { 'admin': 'admin' }, // Change this to your desired username and password
+  challenge: true, // Add this to force the authentication popup
+  realm: 'Admin Area', // Optional: Sets the realm for the auth dialog
   unauthorizedResponse: getUnauthorizedResponse
 });
 app.use(express.urlencoded({ extended: true })); // For parsing POST forms
-
 const waitingQueue = [];
 const partners = new Map();
 const bannedIps = new Map();
-
 // Admin page route (secured)
 app.get('/admin', adminAuth, (req, res) => {
   try {
@@ -84,7 +82,6 @@ app.get('/admin', adminAuth, (req, res) => {
     res.status(500).send('Error loading reports.');
   }
 });
-
 // Ban route (secured, POST)
 app.post('/ban', adminAuth, (req, res) => {
   const ip = req.body.ip;
@@ -104,7 +101,6 @@ app.post('/ban', adminAuth, (req, res) => {
   console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
   res.redirect('/admin');
 });
-
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.address.address;
   // Check for ban
@@ -121,7 +117,7 @@ io.on("connection", (socket) => {
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
-   
+  
       if (!otherSocket) {
         socket.emit("waiting", "Looking for a stranger...");
         if (waitingQueue.length > 0) socket.emit("find-partner");
@@ -242,4 +238,3 @@ io.on("connection", (socket) => {
 });
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
