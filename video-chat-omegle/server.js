@@ -1,324 +1,534 @@
-const express = require("express");
-const path = require("path"); // New: For absolute paths
-const fs = require("fs"); // New: For file system operations
-const basicAuth = require('express-basic-auth'); // New: For basic authentication
-const app = express();
-app.set('trust proxy', true); // Trust proxies for correct IP handling
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
-app.use(express.static(__dirname));
-// Serve reports folder statically (but we'll secure it via admin page)
-const reportDir = path.join(__dirname, 'reports');
-if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir);
-app.use('/reports', express.static(reportDir));
-// Middleware for basic auth on admin routes
-const getUnauthorizedResponse = (req) => {
-  return req.auth
-    ? ('Credentials ' + req.auth.user + ':' + req.auth.password + ' rejected')
-    : 'No credentials provided';
-};
-const adminAuth = basicAuth({
-  users: { 'admin': 'admin' }, // Change this to your desired username and password
-  challenge: true, // Add this to force the authentication popup
-  realm: 'Admin Area', // Optional: Sets the realm for the auth dialog
-  unauthorizedResponse: getUnauthorizedResponse
-});
-app.use(express.urlencoded({ extended: true })); // For parsing POST forms
-const waitingQueue = [];
-const partners = new Map();
-const bannedIps = new Map();
-// Admin page route (secured)
-app.get('/admin', adminAuth, (req, res) => {
-  try {
-    let files = fs.readdirSync(reportDir);
-    let html = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Admin Reports</title>
-        <style>
-          body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-          h1 { color: #f60; }
-          .report { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; background: #fff; border-radius: 5px; }
-          img { max-width: 500px; height: auto; }
-          form { display: inline; }
-          button { background: #ff0000; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-          button:hover { background: #cc0000; }
-          select { margin-right: 5px; }
-          .banned-list { margin-top: 40px; }
-          .banned-item { margin-bottom: 10px; }
-        </style>
-      </head>
-      <body>
-        <h1>Reported Screenshots</h1>
-    `;
-    let activeReports = [];
-    files.forEach(file => {
-      const [timestamp, partnerId, reporterIp, reportedIp] = file.replace('.png', '').split('_');
-      const banExpire = bannedIps.get(reportedIp);
-      if (banExpire && banExpire <= Date.now()) {
-        // Delete expired report file
-        fs.unlinkSync(path.join(reportDir, file));
-        bannedIps.delete(reportedIp);
-      } else {
-        activeReports.push({ file, timestamp, partnerId, reporterIp, reportedIp, banExpire });
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Video Chat</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #fff;
+      color: #000;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      overflow: hidden; /* Prevents scrolling on desktop */
+      direction: ltr; /* Support for English */
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    h1 {
+      color: #f60;
+      margin: 10px 0;
+    }
+    /* ====================== */
+    .main-content {
+      display: flex;
+      flex: 1;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 30px;
+      overflow: hidden;
+      padding: 10px 20px;
+    }
+    /* The two screens with background and shadow */
+    .videos {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 20px;
+      flex: 1;
+      min-width: 320px;
+      height: 100%;
+      transform: translateX(10px);
+      background: #f5f5f5;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 15px;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .video-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+      color: #000;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #333;
+      border: none;
+    }
+    /* Report button on remote video */
+    .report-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #ff0000;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      z-index: 10;
+      display: none; /* Show only when connected */
+    }
+    .report-btn:hover {
+      background: #cc0000;
+    }
+    /* Spinner inside the screen */
+    .video-spinner {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      color: #f60;
+    }
+    .video-spinner .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid #f60;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .video-spinner span {
+      display: block;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #fff;
+    }
+    /* Messages with background and shadow (unified) */
+    .chat-container {
+      flex: 1;
+      min-width: 340px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      transform: translateX(-10px);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      position: relative; /* To support absolute positioning for emoji */
+    }
+    /* Messages */
+    .chat-messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      scrollbar-width: thin;
+      scrollbar-color: #f60 #f5f5f5;
+      background: #fff;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    }
+    /* Show scrollbar on mobile too */
+    .chat-messages::-webkit-scrollbar {
+      width: 8px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background-color: #f60;
+      border-radius: 4px;
+    }
+    .chat-messages::-webkit-scrollbar-track {
+      background-color: #f5f5f5;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 18px;
+      max-width: 80%;
+      word-wrap: break-word;
+      background: #e9e9e9;
+      animation: fadeIn 0.3s ease-in; /* Smooth appearance effect */
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .message.you {
+      background: #f60;
+      color: white;
+      align-self: flex-end;
+    }
+    .message.stranger {
+      background: #007bff;
+      color: white;
+      align-self: flex-start;
+    }
+    .system-message {
+      align-self: center;
+      color: #888;
+      font-style: italic;
+      margin: 10px 0;
+      padding: 5px;
+      background: none;
+    }
+    /* Unified input area */
+    .input-area {
+      display: flex;
+      align-items: center;
+      background: #f1f1f1;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      gap: 10px;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: #fff;
+      color: #000;
+      outline: none;
+    }
+    .input-area input:focus {
+      border-color: #f60;
+    }
+    .send-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 5px;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) {
+      background: #f60;
+      color: white;
+    }
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    /* Buttons below messages */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+    }
+    .controls button {
+      padding: 12px 25px;
+      background: #f60;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+    .controls button:hover:not(:disabled) {
+      background: #e55;
+      transform: translateY(-2px);
+    }
+    .controls button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    /* Pen button for mobile */
+    #mobilePen {
+      display: none;
+      position: fixed;
+      bottom: 80px;
+      left: 20px;
+      background: #f60;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 55px;
+      height: 55px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+    /* Loading state */
+    .status-container {
+      padding: 10px;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #ccc;
+      border-top: 2px solid #f60;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* ===================== Mobile ===================== */
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+        gap: 15px;
+        align-items: center;
+        justify-content: flex-start;
       }
-    });
-    if (activeReports.length === 0) {
-      html += '<p>No reports yet.</p>';
-    } else {
-      activeReports.forEach(report => {
-        html += `
-          <div class="report">
-            <img src="/reports/${report.file}" alt="Reported Screenshot">
-            <p><strong>Timestamp:</strong> ${report.timestamp}</p>
-            <p><strong>Partner ID:</strong> ${report.partnerId}</p>
-            <p><strong>Reporter IP:</strong> ${report.reporterIp}</p>
-            <p><strong>Reported IP:</strong> ${report.reportedIp}</p>
-        `;
-        if (report.banExpire) {
-          const expireStr = report.banExpire === Infinity ? 'Permanent' : new Date(report.banExpire).toLocaleString();
-          html += `
-            <p><strong>Ban Expires:</strong> ${expireStr}</p>
-            <form action="/unban" method="POST">
-              <input type="hidden" name="ip" value="${report.reportedIp}">
-              <button type="submit">Unban IP</button>
-            </form>
-          `;
-        } else {
-          html += `
-            <form action="/ban" method="POST">
-              <input type="hidden" name="ip" value="${report.reportedIp}">
-              <select name="duration">
-                <option value="24h">24 Hours</option>
-                <option value="permanent">Permanent</option>
-              </select>
-              <button type="submit">Ban IP</button>
-            </form>
-          `;
+      .videos {
+        transform: none;
+        width: 100%;
+        flex-direction: column; /* Change to vertical for stacking */
+        justify-content: flex-start;
+        align-items: center;
+        height: auto;
+        padding: 10px;
+        gap: 10px;
+      }
+      .video-container {
+        width: 80%; /* Reduce size to 80% for more space for messages */
+        aspect-ratio: 16 / 9; /* Maintain aspect ratio but with smaller width */
+      }
+      .chat-container {
+        transform: none;
+        width: 100%;
+        position: relative;
+      }
+      .chat-messages {
+        /* Increase height to show more messages before scrolling */
+        flex: 1;
+        max-height: none;
+        height: 40vh; /* Reduce to 40vh to save space for videos above, but show more */
+        overflow-y: scroll;
+        -webkit-overflow-scrolling: touch;
+      }
+      body {
+        overflow-y: auto;
+      }
+      /* Hide pen as it's not needed now */
+      #mobilePen {
+        display: none;
+      }
+      .input-area {
+        /* Sticky positioned for easy use */
+        position: sticky;
+        bottom: 0;
+        z-index: 50;
+      }
+      /* Enlarge spinner on mobile */
+      .video-spinner .spinner {
+        width: 30px;
+        height: 30px;
+        border-width: 3px;
+      }
+      /* Report button on mobile */
+      .report-btn {
+        top: 5px;
+        right: 5px;
+        padding: 3px 6px;
+        font-size: 10px;
+      }
+    }
+    /* Ban overlay */
+    #banOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      text-align: center;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Random Video Chat</h1>
+    <div class="main-content">
+      <div class="videos">
+        <div class="video-container">
+          <div class="video-label">You</div>
+          <video id="localVideo" autoplay muted></video>
+          <div class="video-spinner" id="localSpinner">
+            <div class="spinner"></div>
+            <span>Searching...</span>
+          </div>
+        </div>
+        <div class="video-container">
+          <div class="video-label">Stranger</div>
+          <button class="report-btn" id="reportBtn">Report Porn</button>
+          <video id="remoteVideo" autoplay></video>
+          <div class="video-spinner" id="remoteSpinner">
+            <div class="spinner"></div>
+            <span>Searching...</span>
+          </div>
+        </div>
+      </div>
+ 
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <!-- Messages will be managed by script.js -->
+        </div>
+        <div class="input-area">
+          <input type="text" id="chatInput" placeholder="Type a message..." disabled>
+          <button class="send-btn" id="sendBtn" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="startBtn">Start</button>
+      <button id="skipBtn" disabled>Skip</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+    <div class="status-container">
+      <div id="status">Click "Start" to begin the chat.</div>
+      <div class="loading" id="loading" style="display: none;">
+        <div class="spinner"></div>
+        <span>Searching for a stranger...</span>
+      </div>
+    </div>
+  </div>
+  <div id="banOverlay">
+    <p id="banMessage"></p>
+  </div>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+  <script>
+    // Report functionality integrated here to ensure it works independently of script.js
+    document.addEventListener('DOMContentLoaded', function() {
+      const reportBtn = document.getElementById('reportBtn');
+      let isReporting = false; // Flag to prevent multiple reports
+   
+      // Listen for partner-found event to show the button and set partner ID
+      if (typeof socket !== 'undefined') {
+        socket.on('partner-found', function(data) {
+          reportBtn.style.display = 'block';
+          window.partnerId = data.id; // Store partner ID for reporting
+          console.log('Partner found, showing report button');
+        });
+        // Optionally, hide button on disconnect/skip/stop
+        socket.on('partner-disconnected', function() {
+          reportBtn.style.display = 'none';
+          window.partnerId = null;
+          isReporting = false;
+        });
+        socket.on('waiting', function() {
+          reportBtn.style.display = 'none';
+          window.partnerId = null;
+          isReporting = false;
+        });
+        // Listen for reportHandled from server (automatic analysis result)
+        socket.on('reportHandled', function(data) {
+          if (!isReporting) return; // Ignore if not currently reporting
+          isReporting = false;
+          alert(data.message); // Show server response (nudity detected/banned, no nudity, or error)
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Report Porn';
+        });
+        // Handle banned event
+        socket.on('banned', function(data) {
+          document.getElementById('banMessage').textContent = data.message;
+          document.getElementById('banOverlay').style.display = 'flex';
+          // Disable controls
+          document.getElementById('startBtn').disabled = true;
+          document.getElementById('skipBtn').disabled = true;
+          document.getElementById('stopBtn').disabled = true;
+          document.getElementById('chatInput').disabled = true;
+          document.getElementById('sendBtn').disabled = true;
+          reportBtn.disabled = true;
+          // Stop videos and streams
+          const localVideo = document.getElementById('localVideo');
+          const remoteVideo = document.getElementById('remoteVideo');
+          if (localVideo.srcObject) {
+            localVideo.srcObject.getTracks().forEach(track => track.stop());
+            localVideo.srcObject = null;
+          }
+          if (remoteVideo.srcObject) {
+            remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+            remoteVideo.srcObject = null;
+          }
+          // Disconnect socket if needed, but since server disconnects, it may not be necessary
+        });
+      }
+   
+      reportBtn.addEventListener('click', function() {
+        if (!window.partnerId) {
+          alert('No active partner to report.');
+          return;
         }
-        html += '</div>';
+        if (isReporting) {
+          alert('Report already in progress.');
+          return;
+        }
+        isReporting = true;
+        reportBtn.disabled = true;
+        reportBtn.textContent = 'Analyzing...';
+     
+        html2canvas(document.body, {
+          backgroundColor: null,
+          scale: 1
+        }).then(canvas => {
+          const dataUrl = canvas.toDataURL('image/png');
+       
+          // Emit to server with partner ID - server will analyze and respond
+          socket.emit('reportPorn', {
+            screenshot: dataUrl,
+            timestamp: new Date().toISOString(),
+            partnerId: window.partnerId
+          });
+          // No immediate alert; wait for 'reportHandled'
+        }).catch(err => {
+          console.error('Screenshot failed:', err);
+          alert('Failed to take screenshot.');
+          isReporting = false;
+          reportBtn.disabled = false;
+          reportBtn.textContent = 'Report Porn';
+        });
       });
-    }
-
-    // Banned users section (for IPs banned without reports, if any)
-    html += '<div class="banned-list"><h2>Banned IPs</h2>';
-    if (bannedIps.size === 0) {
-      html += '<p>No banned IPs.</p>';
-    } else {
-      let hasBanned = false;
-      for (const [ip, expire] of bannedIps) {
-        if (expire === Infinity || expire > Date.now()) {
-          const expireStr = expire === Infinity ? 'Permanent' : new Date(expire).toLocaleString();
-          html += `
-            <div class="banned-item">
-              <p><strong>IP:</strong> ${ip} - <strong>Expires:</strong> ${expireStr}</p>
-              <form action="/unban" method="POST">
-                <input type="hidden" name="ip" value="${ip}">
-                <button type="submit">Unban</button>
-              </form>
-            </div>
-          `;
-          hasBanned = true;
-        } else {
-          bannedIps.delete(ip); // Clean up expired bans
-        }
-      }
-      if (!hasBanned) html += '<p>No active banned IPs.</p>';
-    }
-    html += '</div></body></html>';
-    res.send(html);
-  } catch (error) {
-    console.error('Error loading admin page:', error);
-    res.status(500).send('Error loading reports.');
-  }
-});
-// Ban route (secured, POST)
-app.post('/ban', adminAuth, (req, res) => {
-  const ip = req.body.ip;
-  const duration = req.body.duration;
-  if (!ip) {
-    return res.status(400).send('Invalid IP.');
-  }
-  let banExpire;
-  let banMessage = 'You are banned from this service.';
-  if (duration === 'permanent') {
-    banExpire = Infinity;
-    banMessage = 'You are permanently banned from this service.';
-  } else if (duration === '24h') {
-    banExpire = Date.now() + 24 * 60 * 60 * 1000;
-    banMessage = 'You are banned for 24 hours from this service.';
-  } else {
-    return res.status(400).send('Invalid duration.');
-  }
-  bannedIps.set(ip, banExpire);
-  console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
-
-  // Immediately disconnect any connected sockets with this IP
-  for (const [socketId, socket] of io.sockets.sockets) {
-    const socketIp = socket.handshake.headers['cf-connecting-ip'] ||
-                     (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
-    if (socketIp === ip) {
-      socket.emit("banned", { message: banMessage });
-      socket.disconnect(true);
-    }
-  }
-
-  res.redirect('/admin');
-});
-// Unban route (secured, POST)
-app.post('/unban', adminAuth, (req, res) => {
-  const ip = req.body.ip;
-  if (!ip) {
-    return res.status(400).send('Invalid IP.');
-  }
-  bannedIps.delete(ip);
-  console.log(`Unbanned IP ${ip}.`);
-  res.redirect('/admin');
-});
-io.on("connection", (socket) => {
-  // Get real client IP considering proxies (e.g., Render, Cloudflare)
-  const clientIp = socket.handshake.headers['cf-connecting-ip'] ||
-                   (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
-  // Check for ban
-  const banExpire = bannedIps.get(clientIp);
-  if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
-    const banMessage = banExpire === Infinity ? 'You are permanently banned from this service.' : 'You are banned for 24 hours from this service.';
-    socket.emit("banned", { message: banMessage });
-    socket.disconnect(true);
-    return;
-  }
-  console.log("Connected:", socket.id, "IP:", clientIp);
-  socket.on("find-partner", () => {
-    if (partners.has(socket.id)) return;
-    if (waitingQueue.includes(socket.id)) return;
-    if (waitingQueue.length > 0) {
-      const otherId = waitingQueue.shift();
-      const otherSocket = io.sockets.sockets.get(otherId);
-  
-      if (!otherSocket) {
-        socket.emit("waiting", "Looking for a stranger...");
-        if (waitingQueue.length > 0) socket.emit("find-partner");
-        return;
-      }
-      partners.set(socket.id, otherId);
-      partners.set(otherId, socket.id);
-      socket.emit("partner-found", { id: otherId, initiator: true });
-      otherSocket.emit("partner-found", { id: socket.id, initiator: false });
-      console.log(`Paired ${socket.id} <-> ${otherId}`);
-    } else {
-      waitingQueue.push(socket.id);
-      socket.emit("waiting", "Looking for a stranger...");
-    }
-  });
-  socket.on("signal", (payload) => {
-    const to = payload.to;
-    const data = payload.data;
-    if (!to) return;
-    const target = io.sockets.sockets.get(to);
-    if (target) {
-      target.emit("signal", { from: socket.id, data });
-    }
-  });
-  // Handle chat messages
-  socket.on("chat-message", (payload) => {
-    const to = payload.to;
-    const message = payload.message;
-    if (!to) return;
-    const target = io.sockets.sockets.get(to);
-    if (target) {
-      target.emit("chat-message", { from: socket.id, message });
-    }
-  });
-  // Handle report porn: save screenshot for manual review
-  socket.on("reportPorn", async (payload) => {
-    const { screenshot, timestamp, partnerId } = payload;
-    if (!partnerId || !screenshot) return;
-    const reportedSocket = io.sockets.sockets.get(partnerId);
-    // Get real reported IP similarly
-    const reportedIp = reportedSocket ? 
-      (reportedSocket.handshake.headers['cf-connecting-ip'] ||
-       (reportedSocket.handshake.headers['x-forwarded-for'] ? reportedSocket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : reportedSocket.handshake.address))
-      : "Unknown";
-    const reporterIp = clientIp;
-    if (reportedIp === "Unknown") {
-      socket.emit("reportHandled", { message: "Could not identify the reported user." });
-      return;
-    }
-    try {
-      // Save screenshot to reports folder with metadata in filename
-      const base64Data = screenshot.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      const safeTimestamp = timestamp.replace(/[:]/g, '-');
-      const fileName = `${safeTimestamp}_${partnerId}_${reporterIp}_${reportedIp}.png`;
-      const filePath = path.join(reportDir, fileName);
-      fs.writeFileSync(filePath, imageBuffer);
-      console.log(`Saved report screenshot: ${fileName}`);
-      socket.emit("reportHandled", { message: "Report submitted for admin review." });
-    } catch (error) {
-      console.error("Error saving report:", error);
-      socket.emit("reportHandled", { message: "Error submitting report. Try again.", error: true });
-    }
-  });
-  socket.on("skip", () => {
-    const partnerId = partners.get(socket.id);
-    if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "skipped" });
-        partners.delete(partnerId);
-      }
-      partners.delete(socket.id);
-    }
-    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-    socket.emit("waiting", "Looking for a new stranger...");
-    // Pair if queue has 2+
-    if (waitingQueue.length >= 2) {
-      const first = waitingQueue.shift();
-      const second = waitingQueue.shift();
-      const s1 = io.sockets.sockets.get(first);
-      const s2 = io.sockets.sockets.get(second);
-      if (s1 && s2) {
-        partners.set(first, second);
-        partners.set(second, first);
-        s1.emit("partner-found", { id: second, initiator: true });
-        s2.emit("partner-found", { id: first, initiator: false });
-      } else {
-        if (s1 && !waitingQueue.includes(first)) waitingQueue.push(first);
-        if (s2 && !waitingQueue.includes(second)) waitingQueue.push(second);
-      }
-    }
-  });
-  socket.on("stop", () => {
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-    const partnerId = partners.get(socket.id);
-    if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "stopped" });
-        partners.delete(partnerId);
-      }
-      partners.delete(socket.id);
-    }
-    socket.emit("stopped", "Stopped searching");
-  });
-  socket.on("disconnect", () => {
-    console.log("Disconnected:", socket.id);
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-    const partnerId = partners.get(socket.id);
-    if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "peer-left" });
-        partners.delete(partnerId);
-      }
-      partners.delete(socket.id);
-    }
-  });
-});
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    });
+  </script>
+</body>
+</html>
