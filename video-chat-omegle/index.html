@@ -5,33 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Join SparkChat for free random video chat with strangers online. Anonymous webcam chat, fun and safe! Start chatting now.">
   <meta name="keywords" content="random video chat, chat with strangers, free video chat, anonymous chat, webcam chat, omegle alternative">
-  <meta name="robots" content="index, follow">
-  <meta property="og:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta property="og:description" content="Connect with strangers worldwide via random video chat. Enjoy anonymous, safe, and fun conversations.">
-  <meta property="og:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
-  <meta property="og:url" content="https://www.sparkchat.com">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta name="twitter:description" content="Connect with strangers worldwide via random video chat. Enjoy anonymous, safe, and fun conversations.">
-  <meta name="twitter:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
   <title>SparkChat - Free Random Video Chat with Strangers</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 0;
       font-family: Arial, sans-serif;
       background-color: #f5f5f5;
       color: #333;
+      overflow-x: hidden;
     }
-    .header {
-      background-color: #f60;
-      color: white;
-      padding: 20px;
-      text-align: center;
+
+    /* اسم الموقع في أعلى اليسار مثل Omegle */
+    .omegle-logo {
+      position: fixed;
+      top: 15px;
+      left: 20px;
+      font-size: 42px;
+      font-weight: bold;
+      color: #f60;
+      z-index: 9999;
+      pointer-events: none;
+      user-select: none;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
+
+    .omegle-logo span {
+      display: inline-block;
+      animation: jitter 2s infinite;
+    }
+
+    /* تأثير التراقص/التشقلُب العشوائي لكل حرف */
+    .omegle-logo span:nth-child(1) { animation-delay: 0s; }
+    .omegle-logo span:nth-child(2) { animation-delay: 0.1s; }
+    .omegle-logo span:nth-child(3) { animation-delay: 0.2s; }
+    .omegle-logo span:nth-child(4) { animation-delay: 0.05s; }
+    .omegle-logo span:nth-child(5) { animation-delay: 0.3s; }
+    .omegle-logo span:nth-child(6) { animation-delay: 0.15s; }
+    .omegle-logo span:nth-child(7) { animation-delay: 0.25s; }
+    .omegle-logo span:nth-child(8) { animation-delay: 0.35s; }
+
+    @keyframes jitter {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      10% { transform: translate(-1px, -2px) rotate(-1deg); }
+      20% { transform: translate(-2px, 0px) rotate(1deg); }
+      30% { transform: translate(2px, 2px) rotate(0deg); }
+      40% { transform: translate(1px, -1px) rotate(1deg); }
+      50% { transform: translate(-1px, 2px) rotate(-1deg); }
+      60% { transform: translate(-2px, 1px) rotate(0deg); }
+      70% { transform: translate(2px, 1px) rotate(-1deg); }
+      80% { transform: translate(-1px, -1px) rotate(1deg); }
+      90% { transform: translate(1px, 2px) rotate(0deg); }
+    }
+
+    .header { display: none; } /* نلغي الهيدر القديم لأن اللوجو الجديد حل محله */
+
     .hero {
       background-image: url('https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=');
       background-size: cover;
@@ -41,142 +71,95 @@
       justify-content: center;
       align-items: center;
       text-align: center;
+      position: relative;
     }
+
     .hero-content {
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.9);
       padding: 30px;
       border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
-    .hero h1 {
-      color: #f60;
-    }
+
+    .hero h1 { color: #f60; margin: 0 0 20px 0; }
+
     .btn {
       background-color: #f60;
       color: white;
-      padding: 15px 30px;
+      padding: 15px 40px;
       text-decoration: none;
       border-radius: 5px;
-      font-size: 18px;
-      transition: background-color 0.3s;
+      font-size: 20px;
+      font-weight: bold;
+      transition: all 0.3s;
+      display: inline-block;
     }
-    .btn:hover {
-      background-color: #e55;
-    }
-    .section {
-      padding: 40px 20px;
-      text-align: center;
-    }
-    .about {
-      background-color: white;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      margin: 20px auto;
-      max-width: 800px;
-      border-radius: 10px;
-      padding: 20px;
-    }
-    .features {
-      display: flex;
-      justify-content: space-around;
-      flex-wrap: wrap;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .feature {
-      background-color: white;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      margin: 10px;
-      padding: 20px;
-      border-radius: 10px;
-      width: 300px;
-      text-align: center;
-    }
-    .feature img {
-      width: 100px;
-      height: 100px;
-      margin-bottom: 10px;
-    }
-    footer {
-      background-color: #f60;
-      color: white;
-      text-align: center;
-      padding: 10px;
-      margin-top: 20px;
-    }
-    /* Mobile responsiveness */
+    .btn:hover { background-color: #e55; transform: scale(1.05); }
+
+    /* باقي الستايلات كما هي */
+    .section { padding: 40px 20px; text-align: center; }
+    .about { background-color: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin: 20px auto; max-width: 800px; border-radius: 10px; padding: 30px; }
+    .features { display: flex; justify-content: space-around; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; }
+    .feature { background-color: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin: 15px; padding: 25px; border-radius: 10px; width: 300px; text-align: center; }
+    .feature img { width: 100px; height: 100px; margin-bottom: 15px; border-radius: 50%; }
+    footer { background-color: #f60; color: white; text-align: center; padding: 15px; margin-top: 40px; }
+
+    /* استجابة للجوال */
     @media (max-width: 768px) {
-      .hero {
-        height: 300px;
-      }
-      .hero-content {
-        padding: 20px;
-      }
-      .section {
-        padding: 20px 10px;
-      }
-      .features {
-        flex-direction: column;
-        align-items: center;
-      }
-      .feature {
-        width: 90%;
-      }
-      .btn {
-        padding: 12px 24px;
-        font-size: 16px;
-      }
+      .omegle-logo { font-size: 36px; top: 10px; left: 15px; }
+      .hero { height: 350px; }
+      .features { flex-direction: column; align-items: center; }
+      .feature { width: 90%; }
     }
     @media (max-width: 480px) {
-      .header {
-        padding: 15px;
-      }
-      .hero h1 {
-        font-size: 24px;
-      }
-      .about {
-        padding: 15px;
-      }
-      .feature {
-        padding: 15px;
-      }
+      .omegle-logo { font-size: 30px; top: 8px; left: 10px; }
+      .hero h1 { font-size: 24px; }
+      .btn { padding: 12px 30px; font-size: 18px; }
     }
   </style>
 </head>
 <body>
-  <header class="header">
-    <h1>Welcome to SparkChat</h1>
-  </header>
+
+  <!-- اسم الموقع المتحرك مثل Omegle -->
+  <div class="omegle-logo" aria-hidden="true">
+    <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span><span>C</span><span>h</span><span>a</span><span>t</span>
+  </div>
+
   <section class="hero">
     <div class="hero-content">
       <h1>Start Random Video Chat Now!</h1>
       <a href="chat.html" class="btn">Video Chat</a>
     </div>
   </section>
+
   <section class="section about">
     <h2>About the Site</h2>
     <p>SparkChat is a website that allows you to connect with strangers from around the world via random and anonymous video chat. Enjoy a fun and safe experience with advanced features to protect your privacy and safety.</p>
   </section>
+
   <section class="section">
     <h2>Features</h2>
     <div class="features">
       <div class="feature">
-        <img src="https://thumbs.dreamstime.com/b/teenage-girls-taking-selfies-smartphones-vector-young-isolated-youth-cell-phones-gadgets-having-video-chat-259695582.jpg" alt="Fast random matching in video chat">
+        <img src="https://thumbs.dreamstime.com/b/teenage-girls-taking-selfies-smartphones-vector-young-isolated-youth-cell-phones-gadgets-having-video-chat-259695582.jpg" alt="Fast random matching">
         <h3>Fast Random Matching</h3>
         <p>Connect with a new person in seconds.</p>
       </div>
       <div class="feature">
-        <img src="https://www.shutterstock.com/image-vector/video-call-concept-vector-flat-260nw-2065150040.jpg" alt="Text chat alongside video">
+        <img src="https://www.shutterstock.com/image-vector/video-call-concept-vector-flat-260nw-2065150040.jpg" alt="Text chat">
         <h3>Side-by-Side Text Chat</h3>
         <p>Send text messages during video chat.</p>
       </div>
       <div class="feature">
-        <img src="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=" alt="Report inappropriate content in chat">
+        <img src="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=" alt="Report">
         <h3>Report Inappropriate Content</h3>
         <p>Maintain a safe environment by reporting bad behaviors.</p>
       </div>
     </div>
   </section>
+
   <footer>
-    <p>&copy; 2025 SparkChat. All rights reserved.</p>
+    <p>© 2025 SparkChat. All rights reserved.</p>
   </footer>
 </body>
 </html>
