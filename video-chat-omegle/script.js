@@ -1,380 +1,310 @@
-<!DOCTYPE html>
-<html lang="en" dir="ltr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Join SparkChat for free random video chat with strangers. Enjoy anonymous webcam conversations, text messaging, and safe reporting features. Start chatting now!">
-  <meta name="keywords" content="random video chat, chat with strangers, free video chat, anonymous chat, webcam chat, omegle alternative">
-  <meta name="robots" content="index, follow">
-  <meta property="og:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta property="og:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
-  <meta property="og:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
-  <meta property="og:url" content="https://www.sparkchat.com/chat.html">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta name="twitter:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
-  <meta name="twitter:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
-  <title>SparkChat - Start Random Video Chat with Strangers</title>
-  <style>
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; padding: 0; }
-    body {
-      background: #fff;
-      color: #000;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-      direction: ltr;
+const socket = io();
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
+let isInitiator = false;
+let autoReconnect = true;
+let isStopped = false;
+const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+// DOM Elements
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+const localSpinner = document.getElementById("localSpinner");
+const remoteSpinner = document.getElementById("remoteSpinner");
+const statusText = document.getElementById("status");
+const loadingIndicator = document.getElementById("loading");
+const startBtn = document.getElementById("startBtn");
+const skipBtn = document.getElementById("skipBtn");
+const stopBtn = document.getElementById("stopBtn");
+const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("sendBtn");
+const chatMessages = document.getElementById("chatMessages");
+function showLoading(show) {
+  loadingIndicator.style.display = show ? "flex" : "none";
+}
+function showSpinners() {
+  localSpinner.style.display = "block";
+  remoteSpinner.style.display = "block";
+  localVideo.style.display = "none";
+  remoteVideo.style.display = "none";
+}
+// دالة جديدة لإظهار الـ spinner فقط في شاشة الغريب
+function showRemoteSpinner() {
+  remoteSpinner.style.display = "block";
+  remoteVideo.style.display = "none";
+}
+function hideRemoteSpinner() {
+  remoteSpinner.style.display = "none";
+  remoteVideo.style.display = "block";
+}
+function hideSpinners() {
+  localSpinner.style.display = "none";
+  remoteSpinner.style.display = "none";
+  localVideo.style.display = "block";
+  remoteVideo.style.display = "block";
+}
+function addMessage(message, type = "system") {
+  const messageDiv = document.createElement("div");
+ 
+  if (type === "system") {
+    messageDiv.className = "system-message";
+    messageDiv.textContent = message;
+  } else {
+    messageDiv.className = `message ${type}`;
+    messageDiv.textContent = message;
+  }
+ 
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+function enableChat() {
+  chatInput.disabled = false;
+  sendBtn.disabled = false;
+  chatInput.focus();
+}
+function disableChat() {
+  chatInput.disabled = true;
+  sendBtn.disabled = true;
+  chatInput.value = "";
+}
+function closePeerConnection() {
+  try {
+    if (peerConnection) {
+      peerConnection.ontrack = null;
+      peerConnection.onicecandidate = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
     }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+  } catch (e) { console.warn(e); }
+  peerConnection = null;
+  remoteVideo.srcObject = null;
+  hideSpinners(); // إخفاء الـ spinners عند إغلاق الاتصال
+}
+function resetUI() {
+  disableChat();
+  addMessage("Disconnected. Click 'Start' to find a new stranger.", "system");
+  skipBtn.disabled = true;
+  stopBtn.disabled = true;
+  startBtn.disabled = false;
+  hideSpinners();
+}
+async function initMedia() {
+  if (!localStream) {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
+    } catch (err) {
+      statusText.textContent = "Camera/mic access denied.";
+      showLoading(false);
+      console.error(err);
+      return false;
     }
-    /* اسم SparkChat في الزاوية مع أنيميشن التقلب مثل Omegle */
-    .header {
-      position: absolute;
-      top: 15px;
-      left: 20px;
-      z-index: 100;
-      font-size: 36px;
-      font-weight: bold;
-      color: #f60;
-      user-select: none;
-      pointer-events: none;
+  }
+  return true;
+}
+
+let searchTimer = null;
+let pauseTimer = null;
+
+function startSearchLoop() {
+  if (isStopped || partnerId) return;
+
+  showRemoteSpinner();
+  socket.emit("find-partner");
+  statusText.textContent = "Searching for stranger...";
+
+  // Start 3-second search timer
+  searchTimer = setTimeout(() => {
+    if (!partnerId && !isStopped) {
+      socket.emit("stop"); // Remove from queue
+      hideRemoteSpinner();
+      statusText.textContent = "Pausing search...";
+      // Pause for 1 second
+      pauseTimer = setTimeout(() => {
+        startSearchLoop(); // Restart the search loop
+      }, 1000);
     }
-    .header span {
-      display: inline-block;
-      transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      transform-origin: center bottom;
+  }, 3000);
+}
+
+async function startSearch() {
+  if (isStopped) return;
+  statusText.textContent = "Requesting camera & microphone...";
+  showLoading(true);
+
+  if (!(await initMedia())) return;
+
+  closePeerConnection();
+  partnerId = null;
+  isInitiator = false;
+  chatMessages.innerHTML = '';
+  // إظهار الـ spinner في شاشة الغريب أثناء البحث
+  remoteSpinner.style.display = "block";
+  remoteVideo.style.display = "none";
+  statusText.textContent = "Searching for stranger...";
+  skipBtn.disabled = false;
+  stopBtn.disabled = false;
+  startBtn.disabled = true;
+
+  startSearchLoop();
+}
+// Event Listeners
+startBtn.onclick = () => {
+  isStopped = false;
+  autoReconnect = true;
+  startSearch();
+};
+skipBtn.onclick = () => {
+  statusText.textContent = "Skipping stranger...";
+  clearTimeout(searchTimer);
+  clearTimeout(pauseTimer);
+  socket.emit("skip");
+  closePeerConnection();
+  disableChat();
+  addMessage("You skipped the stranger.", "system");
+  // إظهار الـ spinner فقط في شاشة الغريب أثناء التخطي والبحث الجديد
+  showRemoteSpinner();
+  startSearchLoop();
+};
+stopBtn.onclick = () => {
+  statusText.textContent = "Stopped.";
+  isStopped = true;
+  autoReconnect = false;
+  clearTimeout(searchTimer);
+  clearTimeout(pauseTimer);
+  socket.emit("stop");
+  closePeerConnection();
+  resetUI();
+  showLoading(false);
+ 
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+    localVideo.srcObject = null;
+  }
+};
+sendBtn.onclick = sendMessage;
+chatInput.onkeypress = (e) => {
+  if (e.key === "Enter") sendMessage();
+};
+function sendMessage() {
+  const message = chatInput.value.trim();
+  if (!message || !partnerId) return;
+ 
+  // Add message to chat
+  addMessage(message, "you");
+ 
+  // Send message to partner
+  socket.emit("chat-message", { to: partnerId, message });
+ 
+  // Clear input
+  chatInput.value = "";
+}
+// Socket Events
+socket.on("waiting", (msg) => {
+  statusText.textContent = msg || "Waiting for stranger...";
+});
+socket.on("partner-found", async (payload) => {
+  clearTimeout(searchTimer);
+  clearTimeout(pauseTimer);
+  partnerId = payload.id;
+  isInitiator = !!payload.initiator;
+  statusText.textContent = "Stranger found! Connecting...";
+  showLoading(false);
+  hideSpinners(); // إخفاء الـ spinners عند العثور على شريك
+  createPeerConnection();
+  if (isInitiator) {
+    try {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit("signal", { to: partnerId, data: peerConnection.localDescription });
+    } catch (err) {
+      console.error("Error creating offer:", err);
     }
-    .header span.flip {
-      animation: flipLetter 0.6s ease-in-out;
+  }
+});
+socket.on("signal", async ({ from, data }) => {
+  if (!peerConnection) createPeerConnection();
+  try {
+    if (data.type === "offer") {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit("signal", { to: from, data: peerConnection.localDescription });
+    } else if (data.type === "answer") {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+    } else if (data.candidate) {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
     }
-    @keyframes flipLetter {
-      0% { transform: rotateX(0deg); }
-      50% { transform: rotateX(180deg); }
-      100% { transform: rotateX(360deg); }
+  } catch (err) {
+    console.error("Error handling signal:", err);
+  }
+});
+socket.on("chat-message", ({ from, message }) => {
+  addMessage(message, "stranger");
+});
+socket.on("partner-disconnected", (info) => {
+  statusText.textContent = "Stranger disconnected.";
+  clearTimeout(searchTimer);
+  clearTimeout(pauseTimer);
+  closePeerConnection();
+  disableChat();
+  addMessage("Stranger disconnected.", "system");
+  partnerId = null;
+  isInitiator = false;
+  if (autoReconnect && !isStopped) {
+    statusText.textContent = "Searching for new stranger...";
+    showLoading(true);
+    // إظهار الـ spinner فقط في شاشة الغريب أثناء إعادة الاتصال
+    showRemoteSpinner();
+    startSearchLoop();
+  } else {
+    resetUI();
+    showLoading(false);
+  }
+});
+// Peer Connection
+function createPeerConnection() {
+  peerConnection = new RTCPeerConnection(servers);
+  if (localStream) {
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+  }
+  peerConnection.ontrack = (event) => {
+    remoteVideo.srcObject = event.streams[0];
+    statusText.textContent = "Connected to stranger!";
+    enableChat();
+    addMessage("You are now connected with a stranger. Say hi!", "system");
+  };
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate && partnerId) {
+      socket.emit("signal", { to: partnerId, data: { candidate: event.candidate } });
     }
-    h1 { display: none; } /* مخفي لأننا نستخدم الـ header الجديد */
-    .main-content {
-      display: flex;
-      flex: 1;
-      justify-content: center;
-      align-items: flex-start;
-      gap: 30px;
-      overflow: hidden;
-      padding: 10px 20px;
-    }
-    .videos {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: center;
-      gap: 20px;
-      flex: 1;
-      min-width: 320px;
-      height: 100%;
-      transform: translateX(10px);
-      background: #f5f5f5;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      padding: 15px;
-    }
-    .video-container {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      background: #000;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-    .video-label {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.7);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 14px;
-      z-index: 10;
-      color: #000;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #333;
-    }
-    .report-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #ff0000;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 12px;
-      z-index: 10;
-      display: none;
-    }
-    .report-btn:hover { background: #cc0000; }
-    .video-spinner {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 5;
-      color: #f60;
-    }
-    .video-spinner .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top: 3px solid #f60;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .video-spinner span {
-      display: block;
-      margin-top: 10px;
-      font-size: 14px;
-      color: #fff;
-    }
-    .chat-container {
-      flex: 1;
-      min-width: 340px;
-      background: #f5f5f5;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      transform: translateX(-10px);
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      overflow: hidden;
-      position: relative;
-    }
-    .chat-messages {
-      flex: 1;
-      padding: 15px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      scrollbar-width: thin;
-      scrollbar-color: #f60 #f5f5f5;
-      background: #fff;
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
-    }
-    .chat-messages::-webkit-scrollbar { width: 8px; }
-    .chat-messages::-webkit-scrollbar-thumb { background-color: #f60; border-radius: 4px; }
-    .chat-messages::-webkit-scrollbar-track { background-color: #f5f5f5; }
-    .message {
-      margin-bottom: 10px;
-      padding: 8px 12px;
-      border-radius: 18px;
-      max-width: 80%;
-      word-wrap: break-word;
-      background: #e9e9e9;
-      animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .message.you { background: #f60; color: white; align-self: flex-end; }
-    .message.stranger { background: #007bff; color: white; align-self: flex-start; }
-    .system-message { align-self: center; color: #888; font-style: italic; margin: 10px 0; background: none; }
-    .input-area {
-      display: flex;
-      align-items: center;
-      background: #f1f1f1;
-      padding: 10px;
-      border-top: 1px solid #ccc;
-      gap: 10px;
-    }
-    .input-area input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: #fff;
-      outline: none;
-    }
-    .input-area input:focus { border-color: #f60; }
-    .send-btn {
-      background: none;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 10px;
-      border-radius: 5px;
-      transition: background 0.2s;
-    }
-    .send-btn:hover:not(:disabled) { background: #f60; color: white; }
-    .send-btn:disabled { opacity:0.5; cursor: not-allowed; }
-    .controls {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px;
-    }
-    .controls button {
-      padding: 12px 25px;
-      background: #f60;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      transition: all 0.3s;
-    }
-    .controls button:hover:not(:disabled) { background: #e55; transform: translateY(-2px); }
-    .controls button:disabled { background: #ccc; cursor: not-allowed; }
-    #exitBtn { background: #ff0000; }
-    #exitBtn:hover:not(:disabled) { background: #cc0000; }
-    .status-container { 
-      padding: 10px; 
-      background: #f5f5f5; 
-      border-bottom: 1px solid #ccc; 
-      text-align: center; 
-    }
-    .loading { display: flex; align-items: center; justify-content: center; gap: 10px; }
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid #ccc;
-      border-top: 2px solid #f60;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    /* Mobile */
-    @media (max-width: 768px) {
-      .header { font-size: 32px; top: 10px; left: 15px; }
-      .main-content { flex-direction: column; gap: 15px; }
-      .videos { transform: none; width: 100%; height: auto; padding: 10px; gap: 10px; }
-      .video-container { width: 80%; aspect-ratio: 16/9; }
-      .chat-messages { height: 40vh; }
-      body { overflow-y: auto; }
-      .report-btn { top: 5px; right: 5px; padding: 3px 6px; font-size: 10px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <!-- اسم الموقع مع أنيميشن التقلب -->
-    <div class="header" aria-label="SparkChat">
-      <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span><span>C</span><span>h</span><span>a</span><span>t</span>
-    </div>
-    <h1>SparkChat</h1> <!-- مخفي لكن موجود للـ SEO -->
-    <div class="main-content">
-      <div class="videos">
-        <div class="video-container">
-          <div class="video-label">You</div>
-          <video id="localVideo" autoplay muted></video>
-          <div class="video-spinner" id="localSpinner">
-            <div class="spinner"></div>
-            <span>Searching...</span>
-          </div>
-        </div>
-        <div class="video-container">
-          <div class="video-label">Stranger</div>
-          <button class="report-btn" id="reportBtn">Report Porn</button>
-          <video id="remoteVideo" autoplay></video>
-          <div class="video-spinner" id="remoteSpinner">
-            <div class="spinner"></div>
-            <span>Searching...</span>
-          </div>
-        </div>
-      </div>
-      <div class="chat-container">
-        <div class="status-container">
-          <div id="status">Click "Start" to begin the chat.</div>
-          <div class="loading" id="loading" style="display:none;">
-            <div class="spinner"></div>
-            <span>Searching for a stranger...</span>
-          </div>
-        </div>
-        <div class="chat-messages" id="chatMessages"></div>
-        <div class="input-area">
-          <input type="text" id="chatInput" placeholder="Type a message..." disabled>
-          <button class="send-btn" id="sendBtn" disabled>Send</button>
-        </div>
-        <div class="controls">
-          <button id="startBtn">Start</button>
-          <button id="skipBtn" disabled>Skip</button>
-          <button id="stopBtn" disabled>Stop</button>
-          <button id="exitBtn" onclick="window.location.href='index.html'">Exit</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
-  <!-- أنيميشن تقلب الحروف عشوائياً مثل Omegle -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const letters = document.querySelectorAll('.header span');
-      setInterval(() => {
-        const i = Math.floor(Math.random() * letters.length);
-        letters[i].classList.add('flip');
-        setTimeout(() => letters[i].classList.remove('flip'), 600);
-      }, 800);
-    });
-  </script>
-  <!-- كود الريبورت الأصلي (لم يتم المساس به) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const reportBtn = document.getElementById('reportBtn');
-      let isReporting = false;
-      if (typeof socket !== 'undefined') {
-        socket.on('partner-found', function(data) {
-          reportBtn.style.display = 'block';
-          window.partnerId = data.id;
-        });
-        socket.on('partner-disconnected', () => { reportBtn.style.display = 'none'; window.partnerId = null; isReporting = false; });
-        socket.on('waiting', () => { reportBtn.style.display = 'none'; window.partnerId = null; isReporting = false; });
-        socket.on('reportHandled', function(data) {
-          if (!isReporting) return;
-          isReporting = false;
-          alert(data.message);
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
-        });
+  };
+  peerConnection.onconnectionstatechange = () => {
+    if (!peerConnection) return;
+    const state = peerConnection.connectionState;
+   
+    if (state === "connected") {
+      statusText.textContent = "Connected to stranger!";
+      showLoading(false);
+    } else if (["disconnected", "failed", "closed"].includes(state)) {
+      statusText.textContent = "Connection lost.";
+      clearTimeout(searchTimer);
+      clearTimeout(pauseTimer);
+      closePeerConnection();
+      disableChat();
+      addMessage("Connection lost.", "system");
+     
+      if (autoReconnect && !isStopped) {
+        statusText.textContent = "Reconnecting...";
+        showLoading(true);
+        // إظهار الـ spinner فقط في شاشة الغريب أثناء إعادة الاتصال
+        showRemoteSpinner();
+        startSearchLoop();
+      } else {
+        resetUI();
+        showLoading(false);
       }
-      reportBtn.addEventListener('click', function() {
-        if (!window.partnerId) return alert('No active partner to report.');
-        if (isReporting) return alert('Report already in progress.');
-        isReporting = true;
-        reportBtn.disabled = true;
-        reportBtn.textContent = 'Analyzing...';
-        html2canvas(document.body, {backgroundColor: null, scale: 1}).then(canvas => {
-          const dataUrl = canvas.toDataURL('image/png');
-          socket.emit('reportPorn', {
-            screenshot: dataUrl,
-            timestamp: new Date().toISOString(),
-            partnerId: window.partnerId
-          });
-        }).catch(err => {
-          console.error('Screenshot failed:', err);
-          alert('Failed to take screenshot.');
-          isReporting = false;
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
-        });
-      });
-    });
-  </script>
-</body>
-</html>
+    }
+  };
+}
