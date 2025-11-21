@@ -122,9 +122,9 @@ function startSearchLoop() {
       // Pause for 1 second
       pauseTimer = setTimeout(() => {
         startSearchLoop(); // Restart the search loop
-      }, 1000);
+      }, 2000);
     }
-  }, 3000);
+  }, 4000);
 }
 
 async function startSearch() {
