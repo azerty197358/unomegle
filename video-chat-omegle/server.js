@@ -142,13 +142,13 @@ app.post('/ban', adminAuth, (req, res) => {
     return res.status(400).send('Invalid IP.');
   }
   let banExpire;
-  let banMessage = 'You are banned from this service.';
+  let banMessage = 'You have been banned for engaging in pornographic activities.';
   if (duration === 'permanent') {
     banExpire = Infinity;
-    banMessage = 'You are permanently banned from this service.';
+    banMessage = 'You have been permanently banned for engaging in pornographic activities.';
   } else if (duration === '24h') {
     banExpire = Date.now() + 24 * 60 * 60 * 1000;
-    banMessage = 'You are banned for 24 hours from this service.';
+    banMessage = 'You have been banned for 24 hours for engaging in pornographic activities.';
   } else {
     return res.status(400).send('Invalid duration.');
   }
@@ -182,7 +182,7 @@ io.on("connection", (socket) => {
   // Check for ban
   const banExpire = bannedIps.get(clientIp);
   if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
-    const banMessage = banExpire === Infinity ? 'You are permanently banned from this service.' : 'You are banned for 24 hours from this service.';
+    const banMessage = banExpire === Infinity ? 'You have been permanently banned for engaging in pornographic activities.' : 'You have been banned for 24 hours for engaging in pornographic activities.';
     socket.emit("banned", { message: banMessage });
     socket.disconnect(true);
     return;
