@@ -33,6 +33,10 @@ function showRemoteSpinner() {
   remoteSpinner.style.display = "block";
   remoteVideo.style.display = "none";
 }
+function hideRemoteSpinner() {
+  remoteSpinner.style.display = "none";
+  remoteVideo.style.display = "block";
+}
 function hideSpinners() {
   localSpinner.style.display = "none";
   remoteSpinner.style.display = "none";
@@ -105,7 +109,7 @@ let pauseTimer = null;
 function startSearchLoop() {
   if (isStopped || partnerId) return;
 
-  showLoading(true);
+  showRemoteSpinner();
   socket.emit("find-partner");
   statusText.textContent = "Searching for stranger...";
 
@@ -113,7 +117,7 @@ function startSearchLoop() {
   searchTimer = setTimeout(() => {
     if (!partnerId && !isStopped) {
       socket.emit("stop"); // Remove from queue
-      showLoading(false);
+      hideRemoteSpinner();
       statusText.textContent = "Pausing search...";
       // Pause for 1 second
       pauseTimer = setTimeout(() => {
