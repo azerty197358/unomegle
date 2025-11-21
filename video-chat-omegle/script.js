@@ -105,6 +105,7 @@ let pauseTimer = null;
 function startSearchLoop() {
   if (isStopped || partnerId) return;
 
+  showLoading(true);
   socket.emit("find-partner");
   statusText.textContent = "Searching for stranger...";
 
@@ -112,6 +113,8 @@ function startSearchLoop() {
   searchTimer = setTimeout(() => {
     if (!partnerId && !isStopped) {
       socket.emit("stop"); // Remove from queue
+      showLoading(false);
+      statusText.textContent = "Pausing search...";
       // Pause for 1 second
       pauseTimer = setTimeout(() => {
         startSearchLoop(); // Restart the search loop
