@@ -102,7 +102,6 @@ app.get('/admin', adminAuth, (req, res) => {
         html += '</div>';
       });
     }
-
     // Banned users section (for IPs banned without reports, if any)
     html += '<div class="banned-list"><h2>Banned IPs</h2>';
     if (bannedIps.size === 0) {
@@ -155,7 +154,6 @@ app.post('/ban', adminAuth, (req, res) => {
   }
   bannedIps.set(ip, banExpire);
   console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
-
   // Immediately disconnect any connected sockets with this IP
   for (const [socketId, socket] of io.sockets.sockets) {
     const socketIp = socket.handshake.headers['cf-connecting-ip'] ||
@@ -165,7 +163,6 @@ app.post('/ban', adminAuth, (req, res) => {
       socket.disconnect(true);
     }
   }
-
   res.redirect('/admin');
 });
 // Unban route (secured, POST)
@@ -197,7 +194,7 @@ io.on("connection", (socket) => {
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
-  
+ 
       if (!otherSocket) {
         socket.emit("waiting", "Looking for a stranger...");
         if (waitingQueue.length > 0) socket.emit("find-partner");
@@ -232,13 +229,13 @@ io.on("connection", (socket) => {
       target.emit("chat-message", { from: socket.id, message });
     }
   });
-  // Handle report porn: save screenshot for manual review
+  // Handle report porn: save screenshot for manual review and automatically skip the reported partner
   socket.on("reportPorn", async (payload) => {
     const { screenshot, timestamp, partnerId } = payload;
     if (!partnerId || !screenshot) return;
     const reportedSocket = io.sockets.sockets.get(partnerId);
     // Get real reported IP similarly
-    const reportedIp = reportedSocket ? 
+    const reportedIp = reportedSocket ?
       (reportedSocket.handshake.headers['cf-connecting-ip'] ||
        (reportedSocket.handshake.headers['x-forwarded-for'] ? reportedSocket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : reportedSocket.handshake.address))
       : "Unknown";
@@ -256,7 +253,35 @@ io.on("connection", (socket) => {
       const filePath = path.join(reportDir, fileName);
       fs.writeFileSync(filePath, imageBuffer);
       console.log(`Saved report screenshot: ${fileName}`);
-      socket.emit("reportHandled", { message: "Report submitted for admin review." });
+      socket.emit("reportHandled", { message: "Report submitted for admin review. Skipping partner..." });
+
+      // Automatically skip the reported partner
+      if (partnerId) {
+        const partnerSocket = io.sockets.sockets.get(partnerId);
+        if (partnerSocket) {
+          partnerSocket.emit("partner-disconnected", { reason: "skipped" });
+          partners.delete(partnerId);
+        }
+        partners.delete(socket.id);
+      }
+      if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
+      socket.emit("waiting", "Looking for a new stranger...");
+      // Pair if queue has 2+
+      if (waitingQueue.length >= 2) {
+        const first = waitingQueue.shift();
+        const second = waitingQueue.shift();
+        const s1 = io.sockets.sockets.get(first);
+        const s2 = io.sockets.sockets.get(second);
+        if (s1 && s2) {
+          partners.set(first, second);
+          partners.set(second, first);
+          s1.emit("partner-found", { id: second, initiator: true });
+          s2.emit("partner-found", { id: first, initiator: false });
+        } else {
+          if (s1 && !waitingQueue.includes(first)) waitingQueue.push(first);
+          if (s2 && !waitingQueue.includes(second)) waitingQueue.push(second);
+        }
+      }
     } catch (error) {
       console.error("Error saving report:", error);
       socket.emit("reportHandled", { message: "Error submitting report. Try again.", error: true });
