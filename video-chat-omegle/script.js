@@ -282,6 +282,8 @@ function createPeerConnection() {
       showLoading(false);
     } else if (["disconnected", "failed", "closed"].includes(state)) {
       statusText.textContent = "Connection lost.";
+      clearTimeout(searchTimer);
+      clearTimeout(pauseTimer);
       closePeerConnection();
       disableChat();
       addMessage("Connection lost.", "system");
