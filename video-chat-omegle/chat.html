@@ -3,7 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Video Chat</title>
+  <meta name="description" content="Join SparkChat for free random video chat with strangers. Enjoy anonymous webcam conversations, text messaging, and safe reporting features. Start chatting now!">
+  <meta name="keywords" content="random video chat, chat with strangers, free video chat, anonymous chat, webcam chat, omegle alternative">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="SparkChat - Free Random Video Chat with Strangers">
+  <meta property="og:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
+  <meta property="og:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
+  <meta property="og:url" content="https://www.sparkchat.com/chat.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SparkChat - Free Random Video Chat with Strangers">
+  <meta name="twitter:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
+  <meta name="twitter:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
+  <title>SparkChat - Start Random Video Chat with Strangers</title>
   <style>
     * {
       box-sizing: border-box;
@@ -264,6 +275,12 @@
       cursor: not-allowed;
       transform: none;
     }
+    #exitBtn {
+      background: #ff0000;
+    }
+    #exitBtn:hover:not(:disabled) {
+      background: #cc0000;
+    }
     /* Pen button for mobile */
     #mobilePen {
       display: none;
@@ -369,7 +386,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Random Video Chat</h1>
+    <h1>SparkChat</h1>
     <div class="main-content">
       <div class="videos">
         <div class="video-container">
@@ -390,7 +407,6 @@
           </div>
         </div>
       </div>
- 
       <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
           <!-- Messages will be managed by script.js -->
@@ -405,8 +421,7 @@
       <button id="startBtn">Start</button>
       <button id="skipBtn" disabled>Skip</button>
       <button id="stopBtn" disabled>Stop</button>
-            <a href="index.html" class="btn">Exit</a>
-
+      <button id="exitBtn" onclick="window.location.href='index.html'">Exit</button>
     </div>
     <div class="status-container">
       <div id="status">Click "Start" to begin the chat.</div>
@@ -424,7 +439,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       const reportBtn = document.getElementById('reportBtn');
       let isReporting = false; // Flag to prevent multiple reports
-   
+  
       // Listen for partner-found event to show the button and set partner ID
       if (typeof socket !== 'undefined') {
         socket.on('partner-found', function(data) {
@@ -452,7 +467,7 @@
           reportBtn.textContent = 'Report Porn';
         });
       }
-   
+  
       reportBtn.addEventListener('click', function() {
         if (!window.partnerId) {
           alert('No active partner to report.');
@@ -465,13 +480,13 @@
         isReporting = true;
         reportBtn.disabled = true;
         reportBtn.textContent = 'Analyzing...';
-     
+    
         html2canvas(document.body, {
           backgroundColor: null,
           scale: 1
         }).then(canvas => {
           const dataUrl = canvas.toDataURL('image/png');
-       
+      
           // Emit to server with partner ID - server will analyze and respond
           socket.emit('reportPorn', {
             screenshot: dataUrl,
