@@ -242,7 +242,12 @@
     .controls button:disabled { background: #ccc; cursor: not-allowed; }
     #exitBtn { background: #ff0000; }
     #exitBtn:hover:not(:disabled) { background: #cc0000; }
-    .status-container { padding: 10px; }
+    .status-container { 
+      padding: 10px; 
+      background: #f5f5f5; 
+      border-bottom: 1px solid #ccc; 
+      text-align: center; 
+    }
     .loading { display: flex; align-items: center; justify-content: center; gap: 10px; }
     .spinner {
       width: 20px;
@@ -293,6 +298,13 @@
         </div>
       </div>
       <div class="chat-container">
+        <div class="status-container">
+          <div id="status">Click "Start" to begin the chat.</div>
+          <div class="loading" id="loading" style="display:none;">
+            <div class="spinner"></div>
+            <span>Searching for a stranger...</span>
+          </div>
+        </div>
         <div class="chat-messages" id="chatMessages"></div>
         <div class="input-area">
           <input type="text" id="chatInput" placeholder="Type a message..." disabled>
@@ -304,13 +316,6 @@
           <button id="stopBtn" disabled>Stop</button>
           <button id="exitBtn" onclick="window.location.href='index.html'">Exit</button>
         </div>
-      </div>
-    </div>
-    <div class="status-container">
-      <div id="status">Click "Start" to begin the chat.</div>
-      <div class="loading" id="loading" style="display:none;">
-        <div class="spinner"></div>
-        <span>Searching for a stranger...</span>
       </div>
     </div>
   </div>
