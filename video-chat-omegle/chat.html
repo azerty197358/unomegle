@@ -1,497 +1,651 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Join SparkChat for free random video chat with strangers. Enjoy anonymous webcam conversations, text messaging, and safe reporting features. Start chatting now!">
-  <meta name="keywords" content="random video chat, chat with strangers, free video chat, anonymous chat, webcam chat, omegle alternative">
-  <meta name="robots" content="index, follow">
-  <meta property="og:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta property="og:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
-  <meta property="og:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
-  <meta property="og:url" content="https://www.sparkchat.com/chat.html">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="SparkChat - Free Random Video Chat with Strangers">
-  <meta name="twitter:description" content="Connect anonymously with people worldwide via video and text chat on SparkChat. Safe, fun, and easy to use.">
-  <meta name="twitter:image" content="https://media.istockphoto.com/id/1367317637/vector/online-dating.jpg?s=612x612&w=is&k=20&c=oeDBuuGnagiLePolZYCzwdsP1gs6tv0lsF-Cn3bNenI=">
-  <title>SparkChat - Start Random Video Chat with Strangers</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      background: #fff;
-      color: #000;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-      direction: ltr;
-      position: relative;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding-top: 70px; /* مساحة للوغو */
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SparkChat - Start Random Video Chat with Strangers</title>
+    <!-- Load Tailwind CSS for modern utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font family -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        * {
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7; /* Light background */
+        }
+        body {
+            color: #1f2937;
+            text-align: center;
+            overflow-y: auto; /* Allow scrolling on small screens */
+            direction: ltr;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
 
-    /* ===================== Logo مثل Omegle تمامًا ===================== */
-    .logo-container {
-      position: absolute;
-      top: 15px;
-      left: 20px;
-      z-index: 100;
-      pointer-events: none;
-    }
+        /* --- LOGO FLIPPING EFFECT --- */
+        .logo-container {
+            font-size: 3rem; /* Large font size */
+            font-weight: 900;
+            color: #f97316; /* Tailwind orange-500 equivalent */
+            margin: 1.5rem 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            letter-spacing: -2px;
+        }
+        .logo-letter {
+            display: inline-block;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+            transition: all 0.1s;
+        }
+        /* Define the flipping animation */
+        @keyframes flipLetter {
+            0%, 5% { transform: rotateY(0deg); }
+            10% { transform: rotateY(90deg); }
+            15% { transform: rotateY(180deg); }
+            20%, 100% { transform: rotateY(0deg); }
+        }
+        /* Apply animation to all letters */
+        .logo-letter {
+            animation-name: flipLetter;
+            animation-iteration-count: infinite;
+            animation-timing-function: ease-in-out;
+        }
+        /* --- END LOGO FLIPPING EFFECT --- */
 
-    .flip-logo {
-      color: #f60;
-      font-size: 36px;
-      font-weight: bold;
-      font-family: "Arial Black", Arial, sans-serif;
-      margin: 0;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-      user-select: none;
-    }
+        /* ====================== MAIN CONTENT ====================== */
+        .main-content {
+            display: flex;
+            flex: 1;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+            padding-bottom: 20px;
+        }
+        /* The two screens with background and shadow */
+        .videos {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 20px;
+            flex: 1;
+            min-width: 300px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            padding: 15px;
+            height: auto; /* Adjusted for responsive stacking */
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .video-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #333;
+            border: none;
+        }
+        /* Report button on remote video */
+        .report-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ef4444; /* Tailwind red-500 */
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 10;
+            transition: background 0.2s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            display: none; /* Show only when connected */
+        }
+        .report-btn:hover {
+            background: #dc2626;
+        }
+        /* Spinner inside the screen */
+        .video-spinner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+        }
+        .video-spinner .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #f97316;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .video-spinner span {
+            display: block;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #fff;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
-    .flip-logo span {
-      display: inline-block;
-      transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-      transform-style: preserve-3d;
-    }
-
-    .flip-logo span.flipping {
-      animation: flipLetter 0.8s cubic-bezier(0.23, 1, 0.32, 1);
-    }
-
-    @keyframes flipLetter {
-      0%   { transform: rotateX(0deg); }
-      50%  { transform: rotateX(-180deg); }
-      100% { transform: rotateX(-360deg); }
-    }
-
-    @media (max-width: 768px) {
-      .flip-logo {
-        font-size: 28px;
-      }
-      .logo-container {
-        top: 10px;
-        left: 15px;
-      }
-      .container {
-        padding-top: 60px;
-      }
-    }
-
-    h1 { margin: 10px 0; }
-    .main-content {
-      display: flex;
-      flex: 1;
-      justify-content: center;
-      align-items: flex-start;
-      gap: 30px;
-      overflow: hidden;
-      padding: 10px 20px;
-    }
-    .videos {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: center;
-      gap: 20px;
-      flex: 1;
-      min-width: 320px;
-      height: 100%;
-      transform: translateX(10px);
-      background: #f5f5f5;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      padding: 15px;
-    }
-    .video-container {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 自主 4 / 3;
-      background: #000;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      overflow: hidden;
-    }
-    .video-label {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.7);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 14px;
-      z-index: 10;
-      color: #000;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #333;
-    }
-    .report-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #ff0000;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 12px;
-      z-index: 10;
-      display: none;
-    }
-    .report-btn:hover { background: #cc0000; }
-    .video-spinner {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 5;
-      color: #f60;
-    }
-    .video-spinner .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-top: 3px solid #f60;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    .video-spinner span {
-      display: block;
-      margin-top: 10px;
-      font-size: 14px;
-      color: #fff;
-    }
-    .chat-container {
-      flex: 1;
-      min-width: 340px;
-      background: #f5f5f5;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      transform: translateX(-10px);
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-      position: relative;
-    }
-    .chat-messages {
-      flex: 1;
-      padding: 15px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      scrollbar-width: thin;
-      scrollbar-color: #f60 #f5f5f5;
-      background: #fff;
-      scroll-behavior: smooth;
-    }
-    .chat-messages::-webkit-scrollbar {
-      width: 8px;
-    }
-    .chat-messages::-webkit-scrollbar-thumb {
-      background-color: #f60;
-      border-radius: 4px;
-    }
-    .message {
-      margin-bottom: 10px;
-      padding: 8px 12px;
-      border-radius: 18px;
-      max-width: 80%;
-      word-wrap: break-word;
-      background: #e9e9e9;
-      animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .message.you {
-      background: #f60;
-      color: white;
-      align-self: flex-end;
-    }
-    .message.stranger {
-      background: #007bff;
-      color: white;
-      align-self: flex-start;
-    }
-    .system-message {
-      align-self: center;
-      color: #888;
-      font-style: italic;
-      margin: 10px 0;
-      padding: 5px;
-      background: none;
-    }
-    .input-area {
-      display: flex;
-      align-items: center;
-      background: #f1f1f1;
-      padding: 10px;
-      border-top: 1px solid #ccc;
-      gap: 10px;
-    }
-    .input-area input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: #fff;
-      color: #000;
-      outline: none;
-    }
-    .input-area input:focus { border-color: #f60; }
-    .send-btn {
-      background: none;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 10px;
-      border-radius: 5px;
-      transition: background 0.2s;
-    }
-    .send-btn:hover:not(:disabled) { background: #f60; color: white; }
-    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .controls {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px;
-    }
-    .controls button {
-      padding: 12px 25px;
-      background: #f60;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      transition: all 0.3s;
-    }
-    .controls button:hover:not(:disabled) {
-      background: #e55;
-      transform: translateY(-2px);
-    }
-    .controls button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    #exitBtn {
-      background: #ff0000;
-    }
-    #exitBtn:hover:not(:disabled) { background: #cc0000; }
-    .status-container {
-      padding: 10px;
-    }
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid #ccc;
-      border-top: 2px solid #f60;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* ===================== Mobile ===================== */
-    @media (max-width: 768px) {
-      .main-content {
-        flex-direction: column;
-        gap: 15px;
-        align-items: center;
-        justify-content: flex-start;
-      }
-      .videos {
-        transform: none;
-        width: 100%;
-        height: auto;
-        padding: 10px;
-        gap: 10px;
-      }
-      .video-container {
-        width: 80%;
-        aspect-ratio: 16 / 9;
-      }
-      .chat-messages {
-        height: 40vh;
-      }
-      body { overflow-y: auto; }
-    }
-  </style>
+        /* Messages with background and shadow (unified) */
+        .chat-container {
+            flex: 1;
+            min-width: 320px;
+            max-width: 450px;
+            background: #ffffff;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 450px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        /* Messages */
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            scroll-behavior: smooth;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px 15px;
+            border-radius: 1.25rem;
+            max-width: 85%;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease-in;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.you {
+            background: #f97316; /* Orange */
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+        .message.stranger {
+            background: #3b82f6; /* Blue */
+            color: white;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+        }
+        .system-message {
+            align-self: center;
+            color: #9ca3af;
+            font-size: 0.8rem;
+            margin: 10px 0;
+            padding: 5px 10px;
+            background: #e5e7eb;
+            border-radius: 5px;
+        }
+        /* Unified input area */
+        .input-area {
+            display: flex;
+            align-items: center;
+            background: #f9fafb;
+            padding: 10px;
+            border-top: 1px solid #e5e7eb;
+            gap: 10px;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-area input:focus {
+            border-color: #f97316;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+        }
+        .send-btn {
+            background: #f97316;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .send-btn:hover:not(:disabled) {
+            background: #ea580c;
+        }
+        .send-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px 0;
+        }
+        .controls button {
+            padding: 12px 25px;
+            background: #f97316;
+            border: none;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .controls button:hover:not(:disabled) {
+            background: #ea580c;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+        }
+        .controls button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        #exitBtn {
+            background: #ef4444; /* Red for exit */
+        }
+        #exitBtn:hover:not(:disabled) {
+            background: #dc2626;
+        }
+        .status-container {
+            padding: 10px;
+            color: #4b5563;
+            font-size: 0.9rem;
+            margin-top: -10px;
+        }
+        /* ===================== Mobile ===================== */
+        @media (max-width: 768px) {
+            .logo-container {
+                font-size: 2.5rem;
+            }
+            .main-content {
+                flex-direction: column;
+                gap: 15px;
+                align-items: center;
+            }
+            .videos {
+                width: 100%;
+                max-width: none;
+                padding: 10px;
+            }
+            .video-container {
+                width: 95%; /* Make videos slightly smaller to fit screen */
+                aspect-ratio: 16 / 9;
+            }
+            .chat-container {
+                width: 100%;
+                max-width: none;
+                min-height: 40vh; /* Ensure chat is visible */
+            }
+            .controls {
+                gap: 10px;
+                padding: 15px 0;
+            }
+            .controls button {
+                padding: 10px 15px;
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
 <body>
-
-  <!-- اللوغو المتقلّب مثل Omegle -->
-  <div class="logo-container">
-    <h1 class="flip-logo" id="sparkLogo">
-      <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span><span>C</span><span>h</span><span>a</span><span>t</span>
-    </h1>
-  </div>
-
-  <div class="container">
-    <div class="main-content">
-      <div class="videos">
-        <div class="video-container">
-          <div class="video-label">You</div>
-          <video id="localVideo" autoplay muted></video>
-          <div class="video-spinner" id="localSpinner">
-            <div class="spinner"></div>
-            <span>Searching...</span>
-          </div>
+    <div class="container">
+        <!-- The Logo with the Omegle-style flipping effect -->
+        <div id="sparkchat-logo" class="logo-container">
+            <span class="logo-letter">S</span>
+            <span class="logo-letter">p</span>
+            <span class="logo-letter">a</span>
+            <span class="logo-letter">r</span>
+            <span class="logo-letter">k</span>
+            <span class="logo-letter">C</span>
+            <span class="logo-letter">h</span>
+            <span class="logo-letter">a</span>
+            <span class="logo-letter">t</span>
         </div>
-        <div class="video-container">
-          <div class="video-label">Stranger</div>
-          <button class="report-btn" id="reportBtn">Report Porn</button>
-          <video id="remoteVideo" autoplay></video>
-          <div class="video-spinner" id="remoteSpinner">
-            <div class="spinner"></div>
-            <span>Searching...</span>
-          </div>
+
+        <div class="main-content">
+            <div class="videos">
+                <!-- Local Video -->
+                <div class="video-container">
+                    <div class="video-label">You</div>
+                    <video id="localVideo" autoplay muted></video>
+                    <div class="video-spinner" id="localSpinner">
+                        <div class="spinner"></div>
+                        <span>Getting Camera...</span>
+                    </div>
+                </div>
+                <!-- Remote Video -->
+                <div class="video-container">
+                    <div class="video-label">Stranger</div>
+                    <button class="report-btn" id="reportBtn">Report Nudity</button>
+                    <video id="remoteVideo" autoplay></video>
+                    <div class="video-spinner" id="remoteSpinner">
+                        <div class="spinner"></div>
+                        <span>Searching...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="system-message">Welcome to SparkChat! Click Start to connect.</div>
+                </div>
+                <div class="input-area">
+                    <input type="text" id="chatInput" placeholder="Type a message..." disabled>
+                    <button class="send-btn" id="sendBtn" disabled>Send</button>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="chat-container">
-        <div class="chat-messages" id="chatMessages"></div>
-        <div class="input-area">
-          <input type="text" id="chatInput" placeholder="Type a message..." disabled>
-          <button class="send-btn" id="sendBtn" disabled>Send</button>
+
+        <div class="controls">
+            <button id="startBtn">Start</button>
+            <button id="skipBtn" disabled>Skip</button>
+            <button id="stopBtn" disabled>Stop</button>
+            <button id="exitBtn">Exit</button>
         </div>
-      </div>
+        <div class="status-container">
+            <div id="status">Click "Start" to begin the chat.</div>
+        </div>
     </div>
-    <div class="controls">
-      <button id="startBtn">Start</button>
-      <button id="skipBtn" disabled>Skip</button>
-      <button id="stopBtn" disabled>Stop</button>
-      <button id="exitBtn" onclick="window.location.href='index.html'">Exit</button>
-    </div>
-    <div class="status-container">
-      <div id="status">Click "Start" to begin the chat.</div>
-      <div class="loading" id="loading" style="display: none;">
-        <div class="spinner"></div>
-        <span>Searching for a stranger...</span>
-      </div>
-    </div>
-  </div>
 
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+    <!-- Required external script for screenshot functionality -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <script>
+        // --- Single-File JavaScript Logic ---
 
-  <!-- تأثير تقليب الحروف العشوائي (مثل Omegle) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const logo = document.getElementById('sparkLogo');
-      const letters = logo.querySelectorAll('span');
+        // Mock WebSocket/Socket.IO logic since we cannot connect to a real server here.
+        // In a real application, you would connect to a signaling server.
+        let isConnected = false;
+        let localStream = null;
+        let partnerId = null;
 
-      function randomFlip() {
-        const randomIndex = Math.floor(Math.random() * letters.length);
-        const letter = letters[randomIndex];
+        const startBtn = document.getElementById('startBtn');
+        const skipBtn = document.getElementById('skipBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const exitBtn = document.getElementById('exitBtn');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const localSpinner = document.getElementById('localSpinner');
+        const remoteSpinner = document.getElementById('remoteSpinner');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDiv = document.getElementById('status');
+        const reportBtn = document.getElementById('reportBtn');
 
-        letter.classList.remove('flipping');
-        void letter.offsetWidth;
-        letter.classList.add('flipping');
-
-        setTimeout(() => {
-          letter.classList.remove('flipping');
-        }, 800);
-      }
-
-      setInterval(() => {
-        randomFlip();
-      }, Math.random() * 3000 + 1500);
-
-      setTimeout(randomFlip, 2000);
-    });
-  </script>
-
-  <!-- كود الـ Report (يبقى كما هو) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const reportBtn = document.getElementById('reportBtn');
-      let isReporting = false;
-
-      if (typeof socket !== 'undefined') {
-        socket.on('partner-found', function(data) {
-          reportBtn.style.display = 'block';
-          window.partnerId = data.id;
+        // --- Logo Animation Setup (Random Stagger) ---
+        const logoLetters = document.querySelectorAll('.logo-letter');
+        logoLetters.forEach((letter) => {
+            // Randomize the start delay and duration for a non-uniform flip
+            const delay = Math.random() * 2; // up to 2s delay
+            const duration = 4 + Math.random() * 4; // 4s to 8s cycle duration
+            letter.style.animationDelay = `${delay}s`;
+            letter.style.animationDuration = `${duration}s`;
         });
-        socket.on('partner-disconnected', function() {
-          reportBtn.style.display = 'none';
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on('waiting', function() {
-          reportBtn.style.display = 'none';
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on('reportHandled', function(data) {
-          if (!isReporting) return;
-          isReporting = false;
-          alert(data.message);
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
-        });
-      }
+        // --- End Logo Animation Setup ---
 
-      reportBtn.addEventListener('click', function() {
-        if (!window.partnerId) {
-          alert('No active partner to report.');
-          return;
+        // Helper to append messages
+        function appendMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender);
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
         }
-        if (isReporting) {
-          alert('Report already in progress.');
-          return;
-        }
-        isReporting = true;
-        reportBtn.disabled = true;
-        reportBtn.textContent = 'Analyzing...';
 
-        html2canvas(document.body, { backgroundColor: null, scale: 1 }).then(canvas => {
-          const dataUrl = canvas.toDataURL('image/png');
-          socket.emit('reportPorn', {
-            screenshot: dataUrl,
-            timestamp: new Date().toISOString(),
-            partnerId: window.partnerId
-          });
-        }).catch(err => {
-          console.error('Screenshot failed:', err);
-          alert('Failed to take screenshot.');
-          isReporting = false;
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
+        // Handle UI state changes
+        function updateUI(state) {
+            if (state === 'searching') {
+                startBtn.disabled = true;
+                skipBtn.disabled = true;
+                stopBtn.disabled = false;
+                chatInput.disabled = true;
+                sendBtn.disabled = true;
+                statusDiv.textContent = 'Searching for a stranger...';
+                remoteVideo.style.background = 'black';
+                remoteSpinner.style.display = 'block';
+                reportBtn.style.display = 'none';
+            } else if (state === 'connected') {
+                startBtn.disabled = true;
+                skipBtn.disabled = false;
+                stopBtn.disabled = false;
+                chatInput.disabled = false;
+                sendBtn.disabled = false;
+                statusDiv.textContent = 'Connected with a stranger!';
+                remoteSpinner.style.display = 'none';
+                reportBtn.style.display = 'block';
+            } else { // 'disconnected' or 'initial'
+                startBtn.disabled = false;
+                skipBtn.disabled = true;
+                stopBtn.disabled = true;
+                chatInput.disabled = true;
+                sendBtn.disabled = true;
+                statusDiv.textContent = 'Click "Start" to begin the chat.';
+                localSpinner.style.display = 'none';
+                remoteSpinner.style.display = 'none';
+                remoteVideo.srcObject = null;
+                reportBtn.style.display = 'none';
+            }
+        }
+
+        // Mock WebRTC setup (simulates getting user media)
+        async function setupLocalMedia() {
+            localSpinner.style.display = 'block';
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                localSpinner.style.display = 'none';
+                return true;
+            } catch (error) {
+                console.error("Error accessing media devices:", error);
+                statusDiv.textContent = 'Error: Cannot access camera/microphone. Check permissions.';
+                localSpinner.style.display = 'none';
+                return false;
+            }
+        }
+
+        // Mock Signal/Connect function
+        function startChat() {
+            if (isConnected) return;
+            
+            // 1. Get local media first
+            if (localStream === null) {
+                setupLocalMedia().then(success => {
+                    if (success) {
+                        // 2. Start searching simulation
+                        updateUI('searching');
+                        simulateMatch();
+                    } else {
+                        updateUI('disconnected');
+                    }
+                });
+            } else {
+                updateUI('searching');
+                simulateMatch();
+            }
+            appendMessage('Searching for a partner...', 'system-message');
+        }
+
+        // Mock match simulation
+        function simulateMatch() {
+            // Simulate a server search delay
+            setTimeout(() => {
+                isConnected = true;
+                partnerId = crypto.randomUUID(); // Mock partner ID
+                // Simulate remote stream acquisition
+                remoteVideo.srcObject = localStream; 
+                updateUI('connected');
+                appendMessage('You are connected! Say hello!', 'system-message');
+            }, 3000); 
+        }
+
+        function stopChat() {
+            if (!isConnected && !startBtn.disabled) return;
+
+            isConnected = false;
+            partnerId = null;
+            remoteVideo.srcObject = null;
+            updateUI('disconnected');
+            appendMessage('Chat disconnected. Click Start to find a new partner.', 'system-message');
+
+            // In a real app, you would close RTCPeerConnection and signal server
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', startChat);
+        skipBtn.addEventListener('click', stopChat);
+        stopBtn.addEventListener('click', stopChat);
+        exitBtn.addEventListener('click', () => {
+            // Stop media tracks before leaving
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            // For Canvas environment, simulating an exit from the app
+            statusDiv.textContent = 'Application exited. Local media stopped.';
         });
-      });
-    });
-  </script>
+
+        sendBtn.addEventListener('click', () => {
+            const message = chatInput.value.trim();
+            if (message && isConnected) {
+                appendMessage(message, 'you');
+                chatInput.value = '';
+                // Simulate a response
+                setTimeout(() => {
+                    appendMessage("That's interesting!", 'stranger');
+                }, 1500);
+                // In a real app, you would send this via DataChannel
+            }
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !sendBtn.disabled) {
+                sendBtn.click();
+            }
+        });
+
+
+        // --- Reporting Logic (as requested) ---
+        let isReporting = false;
+
+        reportBtn.addEventListener('click', function() {
+            if (!partnerId) {
+                appendMessage('No active partner to report.', 'system-message');
+                return;
+            }
+            if (isReporting) {
+                appendMessage('Report already in progress.', 'system-message');
+                return;
+            }
+
+            // Custom UI for confirmation (instead of alert/confirm)
+            const confirmReport = window.confirm ? window.confirm('Are you sure you want to report this partner for nudity? This will disconnect the chat immediately.') : true;
+            
+            if (!confirmReport) return;
+
+            isReporting = true;
+            reportBtn.disabled = true;
+            reportBtn.textContent = 'Analyzing...';
+            
+            // Disconnect immediately on report
+            stopChat();
+
+            // Use html2canvas to capture the screen
+            html2canvas(document.body, {
+                backgroundColor: null,
+                scale: 1,
+                useCORS: true // Important for handling video elements
+            }).then(canvas => {
+                const dataUrl = canvas.toDataURL('image/png');
+                console.log('Screenshot taken and base64 encoded.');
+                
+                // Mock Server Analysis (using a timeout)
+                setTimeout(() => {
+                    const isNude = Math.random() > 0.5;
+                    const message = isNude 
+                        ? 'Report received. Partner has been banned.' 
+                        : 'Report received. No violation detected.';
+
+                    // Use a simple, non-blocking message display
+                    appendMessage(message, 'system-message');
+                    console.log('Mock server response:', message);
+
+                    // Reset button state
+                    isReporting = false;
+                    reportBtn.disabled = false;
+                    reportBtn.textContent = 'Report Nudity';
+                }, 4000); 
+
+            }).catch(err => {
+                console.error('Screenshot failed:', err);
+                appendMessage('Failed to take screenshot for report.', 'system-message');
+                
+                // Reset button state
+                isReporting = false;
+                reportBtn.disabled = false;
+                reportBtn.textContent = 'Report Nudity';
+            });
+        });
+
+        // Initial setup on load
+        window.onload = () => {
+             updateUI('initial');
+             // Attempt to get local media early
+             setupLocalMedia();
+        };
+
+    </script>
 </body>
 </html>
