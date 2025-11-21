@@ -258,51 +258,15 @@
       animation: spin 1s linear infinite;
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    /* Mobile optimizations */
+    /* Mobile */
     @media (max-width: 768px) {
-      .header { font-size: 28px; top: 8px; left: 12px; } /* تقليل حجم الرأس قليلاً */
-      .main-content { flex-direction: column; gap: 10px; padding: 5px; } /* تقليل المسافات */
-      .videos { 
-        transform: none; 
-        width: 100%; 
-        height: auto; 
-        padding: 10px; 
-        gap: 10px; 
-        border-radius: 5px; /* تقليل الزوايا */
-      }
-      .video-container { 
-        width: 100%; /* ملء العرض الكامل */
-        aspect-ratio: 16/9; /* نسبة أفضل للجوال */
-      }
-      .video-label { font-size: 12px; padding: 3px 6px; } /* تقليل حجم التسميات */
+      .header { font-size: 32px; top: 10px; left: 15px; }
+      .main-content { flex-direction: column; gap: 15px; }
+      .videos { transform: none; width: 100%; height: auto; padding: 10px; gap: 10px; }
+      .video-container { width: 80%; aspect-ratio: 16/9; }
+      .chat-messages { height: 40vh; }
+      body { overflow-y: auto; }
       .report-btn { top: 5px; right: 5px; padding: 3px 6px; font-size: 10px; }
-      .chat-container { 
-        transform: none; 
-        width: 100%; 
-        min-width: auto; 
-        height: auto; /* السماح بالتمدد */
-        border-radius: 5px;
-      }
-      .chat-messages { 
-        height: 50vh; /* ارتفاع أكبر للدردشة على الجوال */
-        padding: 10px; 
-      }
-      .input-area { padding: 8px; gap: 5px; }
-      .input-area input { padding: 8px; font-size: 14px; }
-      .send-btn { font-size: 18px; padding: 8px; }
-      .controls { 
-        flex-wrap: wrap; /* تكديس الأزرار إذا كانت الشاشة ضيقة */
-        gap: 5px; 
-        padding: 8px; 
-        justify-content: space-around; 
-      }
-      .controls button { 
-        padding: 10px 20px; 
-        font-size: 14px; /* تقليل حجم الزر */
-        flex: 1 1 40%; /* جعلها تتوزع */
-      }
-      .status-container { padding: 8px; font-size: 14px; }
-      body { overflow-y: auto; } /* السماح بالتمرير إذا لزم */
     }
   </style>
 </head>
