@@ -141,7 +141,7 @@
       cursor: pointer;
       font-size: 20px;
       z-index: 11;
-      display: flex;
+      display: none; /* مخفي افتراضيًا حتى يبدأ الفيديو */
       align-items: center;
       justify-content: center;
       transition: all 0.3s;
@@ -358,7 +358,7 @@
           <div class="video-label">You</div>
           <video id="localVideo" autoplay muted></video>
           <!-- زر الميكروفون -->
-          <button class="mic-btn" id="micBtn" title="Toggle Microphone">Mic On</button>
+          <button class="mic-btn" id="micBtn" title="Toggle Microphone" onclick="toggleMicrophone()"></button>
           <!-- شعار الموقع -->
           <div class="logo-overlay">SparkChat</div>
           <div class="video-spinner" id="localSpinner">
@@ -417,44 +417,6 @@
         letters[i].classList.add('flip');
         setTimeout(() => letters[i].classList.remove('flip'), 600);
       }, 800);
-    });
-  </script>
-
-  <!-- كود التحكم في الميكروفون (يجب أن يُدمج مع script.js الخاص بك)
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const micBtn = document.getElementById('micBtn');
-      const localVideo = document.getElementById('localVideo');
-      let localStream = null;
-      let micEnabled = true; // الميكروفون مفعّل افتراضيًا
-
-      // دالة لتحديث حالة الزر
-      function updateMicButton() {
-        if (micEnabled) {
-          micBtn.textContent = 'Mic On';
-          micBtn.classList.remove('muted');
-        } else {
-          micBtn.textContent = 'Mic Off';
-          micBtn.classList.add('muted');
-        }
-      }
-
-      micBtn.addEventListener('click', async () => {
-        if (!localStream) return;
-
-        micEnabled = !micEnabled;
-        localStream.getAudioTracks().forEach(track => {
-          track.enabled = micEnabled;
-        });
-        updateMicButton();
-      });
-
-      // لربط المتغيّر localStream عندما يتم إنشاؤ الكاميرا (يجب أن تُستدعى من script.js بعد getUserMedia)
-      window.setLocalStream = function(stream) {
-        localStream = stream;
-        updateMicButton();
-        micBtn.style.display = 'flex'; // إظهاره بعد بدء الفيديو
-      };
     });
   </script>
 
