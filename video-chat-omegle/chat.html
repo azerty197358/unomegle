@@ -59,12 +59,14 @@
       100% { transform: rotateX(360deg); }
     }
     h1 { display: none; }
+    
+    /* التعديل الوحيد: جعل الشاشتين في أقصى الجانبين والشات في المنتصف */
     .main-content {
       display: flex;
       flex: 1;
-      justify-content: center;
+      justify-content: space-between;
       align-items: flex-start;
-      gap: 30px;
+      gap: 20px;
       overflow: hidden;
       padding: 10px 20px;
     }
@@ -74,15 +76,30 @@
       justify-content: flex-start;
       align-items: center;
       gap: 20px;
-      flex: 1;
+      width: 45%;
+      max-width: 600px;
       min-width: 320px;
       height: 100%;
-      transform: translateX(10px);
       background: #f5f5f5;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       padding: 15px;
     }
+    .chat-container {
+      width: 380px;
+      min-width: 340px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+
     .video-container {
       position: relative;
       width: 100%;
@@ -124,6 +141,7 @@
       display: none;
     }
     .report-btn:hover { background: #cc0000; }
+
     .mic-btn {
       position: absolute;
       bottom: 12px;
@@ -145,6 +163,7 @@
     }
     .mic-btn:hover { background: rgba(0,0,0,0.8); }
     .mic-btn.muted { color: #ff4444; }
+
     .logo-overlay {
       position: absolute;
       bottom: 10px;
@@ -158,6 +177,7 @@
       z-index: 10;
       text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
     }
+
     .video-spinner {
       display: none;
       position: absolute;
@@ -181,20 +201,7 @@
       font-size: 14px;
       color: #fff;
     }
-    .chat-container {
-      flex: 1;
-      min-width: 340px;
-      background: #f5f5f5;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      transform: translateX(-10px);
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-      position: relative;
-    }
+
     .chat-messages {
       flex: 1;
       padding: 15px;
@@ -206,11 +213,11 @@
       scrollbar-color: #f60 #f5f5f5;
       background: #fff;
       scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
     }
     .chat-messages::-webkit-scrollbar { width: 8px; }
     .chat-messages::-webkit-scrollbar-thumb { background-color: #f60; border-radius: 4px; }
     .chat-messages::-webkit-scrollbar-track { background-color: #f5f5f5f5; }
+
     .message {
       margin-bottom: 10px;
       padding: 8px 12px;
@@ -227,6 +234,7 @@
     .message.you { background: #f60; color: white; align-self: flex-end; }
     .message.stranger { background: #007bff; color: white; align-self: flex-start; }
     .system-message { align-self: center; color: #888; font-style: italic; margin: 10px 0; background: none; }
+
     .input-area {
       display: flex;
       align-items: center;
@@ -255,6 +263,7 @@
     }
     .send-btn:hover:not(:disabled) { background: #f60; color: white; }
     .send-btn:disabled { opacity:0.5; cursor: not-allowed; }
+
     .controls {
       display: flex;
       justify-content: center;
@@ -275,6 +284,7 @@
     .controls button:disabled { background: #ccc; cursor: not-allowed; }
     #exitBtn { background: #ff0000; }
     #exitBtn:hover:not(:disabled) { background: #cc0000; }
+
     .status-container {
       padding: 10px;
       background: #f5f5f5;
@@ -292,79 +302,21 @@
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Mobile optimizations */
+    /* Mobile */
     @media (max-width: 768px) {
       .header { font-size: 28px; top: 8px; left: 12px; }
-      .main-content { flex-direction: column; gap: 10px; padding: 5px; }
-      .videos {
-        transform: none;
+      .main-content { 
+        flex-direction: column; 
+        gap: 10px; 
+        padding: 5px; 
+        justify-content: flex-start;
+      }
+      .videos, .chat-container {
         width: 100%;
-        height: auto;
-        padding: 10px;
-        gap: 10px;
-        border-radius: 5px;
+        max-width: none;
       }
-      .video-container {
-        width: 100%;
-        aspect-ratio: 16/9;
-      }
-      .video-label { font-size: 12px; padding: 3px 6px; }
-      .report-btn { top: 5px; right: 5px; padding: 3px 6px; font-size: 10px; }
-      .mic-btn { width: 36px; height: 36px; font-size: 18px; bottom: 10px; }
-      .logo-overlay { font-size: 16px; bottom: 8px; }
-      .chat-container {
-        transform: none;
-        width: 100%;
-        min-width: auto;
-        height: auto;
-        border-radius: 5px;
-      }
-      .chat-messages { height: 50vh; padding: 10px; }
-      .input-area { padding: 8px; gap: 5px; }
-      .input-area input { padding: 8px; font-size: 14px; }
-      .send-btn { font-size: 18px; padding: 8px; }
-      .controls {
-        flex-wrap: wrap;
-        gap: 5px;
-        padding: 8px;
-        justify-content: space-around;
-      }
-      .controls button {
-        padding: 10px 20px;
-        font-size: 14px;
-        flex: 1 1 40%;
-      }
-      .status-container { padding: 8px; font-size: 14px; }
+      .video-container { aspect-ratio: 16/9; }
       body { overflow-y: auto; }
-    }
-
-    /* تعديل مواضع الشاشتين - لسطح المكتب فقط */
-    @media (min-width: 769px) {
-      .videos {
-        position: relative !important;
-        display: block !important;
-        width: 100% !important;
-        height: 100% !important;
-        padding: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-      }
-      
-      /* شاشة المستخدم (أنت) - صغيرة في الزاوية اليسرى العليا */
-      .video-container:first-child {
-        position: absolute !important;
-        top: 15px !important;
-        left: 15px !important;
-        width: 200px !important;
-        height: 150px !important;
-        z-index: 10 !important;
-      }
-      
-      /* شاشة الغريب - كبيرة تملأ المساحة */
-      .video-container:last-child {
-        width: 100% !important;
-        height: 100% !important;
-      }
     }
   </style>
 </head>
@@ -376,13 +328,10 @@
     <h1>SparkChat</h1>
     <div class="main-content">
       <div class="videos">
-        <!-- شاشة المستخدم المحلي -->
         <div class="video-container">
           <div class="video-label">You</div>
           <video id="localVideo" autoplay muted></video>
-          <!-- زر الميكروفون -->
-          <button class="mic-btn" id="micBtn" title="Toggle Microphone" onclick="toggleMicrophone()"></button>
-          <!-- شعار الموقع -->
+          <button class="mic-btn" id="micBtn" title="Toggle Microphone">Microphone On</button>
           <div class="logo-overlay">SparkChat</div>
           <div class="video-spinner" id="localSpinner">
             <div class="spinner"></div>
@@ -390,12 +339,10 @@
           </div>
         </div>
 
-        <!-- شاشة الغريب -->
         <div class="video-container">
           <div class="video-label">Stranger</div>
           <button class="report-btn" id="reportBtn">Report Porn</button>
           <video id="remoteVideo" autoplay></video>
-          <!-- شعار الموقع -->
           <div class="logo-overlay">SparkChat</div>
           <div class="video-spinner" id="remoteSpinner">
             <div class="spinner"></div>
@@ -431,7 +378,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 
-  <!-- أنيميشن تقلب الحروف -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const letters = document.querySelectorAll('.header span');
@@ -443,7 +389,6 @@
     });
   </script>
 
-  <!-- كود الريبورت الأصلي (لم يتم تغييره) -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const reportBtn = document.getElementById('reportBtn');
