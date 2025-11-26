@@ -1,235 +1,318 @@
-<!-- path: /var/www/html/chat.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SparkChat — OmegleWeb Look</title>
+  <title>SparkChat</title>
 
   <style>
-    /* Minimal essential comment: تصميم ليتطابق مع صورة OmegleWeb */
     :root{
-      --bg:#ffffff;
-      --panel:#ffffff;
-      --muted:#f5f0ec;
       --blue:#2ea3ff;
-      --button-blue: #2ea3ff;
-      --skip-blue: #4fb2ff;
+      --dark:#111;
+      --light:#ffffff;
       --border:#e6d7c8;
-      --radius:10px;
     }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Arial, Helvetica, sans-serif;background:var(--bg);color:#111;overflow:hidden}
-    /* top bar */
+    body{
+      margin:0;
+      background:#fff;
+      font-family:Arial,Helvetica,sans-serif;
+      color:#111;
+      overflow:hidden;
+    }
+
+    /* Top bar */
     .topbar{
-      position:fixed;left:0;right:0;top:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:8px 20px;
-      background:transparent;pointer-events:none;z-index:30;
+      height:64px;
+      display:flex;
+      align-items:center;
+      padding:0 20px;
+      border-bottom:1px solid #eee;
+      justify-content:flex-start;
     }
     .logo{
-      pointer-events:none;user-select:none;display:flex;align-items:center;gap:6px;
-      font-weight:700;font-size:36px;color:#ff9a00;margin-left:6px;
+      font-size:32px;
+      font-weight:700;
+      color:#ff9a00;
     }
-    .logo .dot{color:#3fa0ff;font-weight:700}
-    .online-bubble{
-      pointer-events:none;margin-right:12px;background:transparent;color:#7a7a7a;font-size:14px;
+    .logo span{
+      color:#3fa0ff;
     }
 
-    /* layout */
+    /* Main layout */
     .stage{
-      position:absolute;top:64px;bottom:0;left:0;right:0;display:flex;gap:18px;padding:18px;align-items:flex-start;
+      position:absolute;
+      top:64px;
+      bottom:0;
+      left:0;
+      right:0;
+      display:flex;
+      gap:16px;
+      padding:16px;
+      overflow:hidden;
     }
 
-    /* left column - videos */
+    /* Left side videos */
     .left-col{
-      width:360px;min-width:300px;display:flex;flex-direction:column;gap:18px;
-      align-items:stretch;justify-content:flex-start;padding:4px;
+      width:360px;
+      min-width:280px;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
     }
+
     .video-frame{
-      border-radius:12px;overflow:hidden;background:#000;box-shadow:0 1px 0 rgba(0,0,0,0.2);position:relative;
-      min-height:190px;border:6px solid #f3e9de;
+      border-radius:12px;
+      overflow:hidden;
+      border:6px solid var(--border);
+      position:relative;
+      background:#000;
+      min-height:220px;
     }
-    /* top video (stranger) looks noisy/black in image */
-    .video-frame.top{background:#0b0b0b;height:320px;display:flex;align-items:center;justify-content:center}
-    .video-frame.bottom{background:linear-gradient(180deg,#303030,#2a2a2a);height:260px}
+    .video-frame.top{height:320px;background:#0b0b0b}
+    .video-frame.bottom{height:260px;background:#303030}
 
-    /* watermark like omegle text bottom-left */
+    video{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
     .watermark{
-      position:absolute;left:8px;bottom:8px;color:#ff8a00;font-weight:700;font-size:18px;opacity:0.95;
+      position:absolute;
+      left:10px;
+      bottom:8px;
+      color:#ff8a00;
+      font-size:16px;
+      font-weight:700;
       text-shadow:0 1px 0 rgba(0,0,0,0.6);
+      opacity:0.9;
     }
 
-    /* left small overlay icons */
     .video-label{
-      position:absolute;top:8px;left:8px;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;font-size:13px;color:#111;
+      position:absolute;
+      top:8px;
+      left:8px;
+      background:#fff;
+      padding:6px 10px;
+      border-radius:8px;
+      font-size:12px;
     }
+
     .report-btn{
-      position:absolute;top:8px;right:8px;background:#ff3b3b;color:#fff;border:none;border-radius:6px;padding:6px 8px;font-size:12px;cursor:pointer;display:none;
+      position:absolute;
+      top:8px;
+      right:8px;
+      background:#ff3b3b;
+      color:#fff;
+      padding:6px 8px;
+      border:none;
+      border-radius:6px;
+      font-size:12px;
+      cursor:pointer;
+      display:none;
     }
 
-    /* Skip button (bottom-left) */
-    .skip-area{display:flex;align-items:flex-end;justify-content:flex-start;padding-top:6px}
+    .skip-area{
+      margin-top:4px;
+    }
     #skipBtn{
-      background:linear-gradient(#66b8ff,#3a98e6);border:none;color:#fff;padding:10px 18px;border-radius:8px;font-size:16px;cursor:pointer;
-      box-shadow:0 2px 0 rgba(0,0,0,0.08);
+      padding:10px 18px;
+      background:var(--blue);
+      border:none;
+      color:#fff;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:16px;
+      width:100%;
     }
 
-    /* right column - chat */
+    /* Right side chat */
     .right-col{
-      flex:1;height:100%;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;border:6px solid #f3e9de;
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      border:6px solid var(--border);
+      border-radius:10px;
+      overflow:hidden;
     }
+
     .chat-area{
-      flex:1;background:#fff;padding:18px;overflow:auto;
+      flex:1;
+      overflow:auto;
+      padding:16px;
+      background:#fff;
     }
-    .chat-messages{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
-    .msg.system{align-self:center;color:#8a8a8a;font-style:italic}
-    .msg.you{align-self:flex-end;background:var(--skip-blue);color:#fff;padding:10px 14px;border-radius:18px;max-width:70%}
-    .msg.them{align-self:flex-start;background:#2b9cff;color:#fff;padding:10px 14px;border-radius:18px;max-width:70%}
 
-    /* input area pinned bottom of right-col */
+    .chat-messages{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .msg.you{
+      align-self:flex-end;
+      background:#3fa0ff;
+      color:#fff;
+      padding:10px 14px;
+      border-radius:16px;
+      max-width:75%;
+    }
+    .msg.them{
+      align-self:flex-start;
+      background:#2e8de6;
+      color:#fff;
+      padding:10px 14px;
+      border-radius:16px;
+      max-width:75%;
+    }
+    .msg.system{
+      text-align:center;
+      color:#888;
+      font-size:13px;
+      margin:10px 0;
+    }
+
     .chat-input-row{
-      display:flex;align-items:center;padding:10px 12px;background:#fafafa;border-top:1px solid #e8e8e8;
-      gap:8px;
-    }
-    .chat-input{
-      flex:1;padding:12px;border-radius:6px;border:1px solid #d9d9d9;font-size:15px;
-    }
-    .send-btn{
-      background:linear-gradient(#3fb0ff,#2b8ce6);border:none;color:#fff;padding:10px 16px;border-radius:8px;font-size:16px;cursor:pointer;
-      min-width:92px;box-shadow:0 2px 0 rgba(0,0,0,0.06)
+      display:flex;
+      padding:10px;
+      gap:10px;
+      border-top:1px solid #eee;
+      background:#fafafa;
     }
 
-    /* video element styling (kept but may be replaced by streams) */
-    video{width:100%;height:100%;object-fit:cover;display:block}
+    #chatInput{
+      flex:1;
+      padding:12px;
+      border-radius:8px;
+      border:1px solid #ddd;
+      font-size:15px;
+    }
 
-    /* responsive: stack columns vertically on narrow screens */
-    @media (max-width:900px){
-      .stage{flex-direction:column;padding:12px;top:56px}
-      .left-col{width:100%;flex-direction:row;gap:12px;height:auto}
-      .video-frame{flex:1;min-height:180px}
-      .right-col{width:100%}
-      body{overflow:auto}
+    #sendBtn{
+      background:#2ea3ff;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      padding:10px 16px;
+      cursor:pointer;
+      font-size:16px;
+      min-width:90px;
+    }
+
+    /* FULL RESPONSIVE — mobile first */
+    @media(max-width:900px){
+      body{overflow:auto;}
+      .stage{
+        flex-direction:column;
+        overflow:visible;
+      }
+      .left-col{
+        width:100%;
+        min-width:100%;
+      }
+      .video-frame{
+        height:240px !important;
+      }
+      .right-col{
+        width:100%;
+        height:auto;
+        min-height:360px;
+      }
     }
   </style>
 </head>
 <body>
-  <!-- top bar: logo left, online indicator right -->
-  <div class="topbar" aria-hidden="true">
-    <div class="logo" style="margin-left:12px">
-      <span style="font-family:Arial, Helvetica, sans-serif;">omegle</span><span class="dot">web</span>
-    </div>
-    <div class="online-bubble">180+ online</div>
+
+  <div class="topbar">
+    <div class="logo">Spark<span>Chat</span></div>
   </div>
 
-  <!-- main stage -->
   <div class="stage">
-    <!-- left: stacked video frames -->
     <div class="left-col">
       <div class="video-frame top" id="strangerFrame">
         <div class="video-label">Stranger</div>
         <video id="remoteVideo" autoplay playsinline></video>
-        <button id="reportBtn" class="report-btn">Report Porn</button>
-        <div class="watermark">OmegleWeb.com</div>
+        <button id="reportBtn" class="report-btn">Report</button>
+        <div class="watermark">SparkChat</div>
       </div>
 
       <div class="video-frame bottom" id="youFrame">
         <div class="video-label">You</div>
         <video id="localVideo" autoplay muted playsinline></video>
-        <div class="watermark" style="left:10px;bottom:8px;font-size:14px;opacity:0.6">SparkChat</div>
+        <div class="watermark" style="opacity:0.6;">SparkChat</div>
       </div>
 
-      <!-- Skip button sits visually under left column -->
       <div class="skip-area">
         <button id="skipBtn">Skip (Esc)</button>
       </div>
     </div>
 
-    <!-- right: chat big area -->
     <div class="right-col">
       <div class="chat-area" id="chatMessages">
-        <!-- existing messages will be appended here by script.js -->
         <div class="msg system">Click "Start" to begin the chat.</div>
       </div>
 
       <div class="chat-input-row">
-        <input id="chatInput" class="chat-input" placeholder="Type a message..." disabled />
-        <button id="sendBtn" class="send-btn" disabled>Send (Enter)</button>
+        <input id="chatInput" placeholder="Type a message..." disabled />
+        <button id="sendBtn" disabled>Send</button>
       </div>
     </div>
   </div>
 
-  <!-- keep your existing external scripts so functionality remains -->
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 
-  <!-- keep existing inline scripts (report screenshot + header animation removed because header now static) -->
   <script>
-    // preserve report logic: assumes same IDs and socket usage
-    document.addEventListener('DOMContentLoaded', function() {
-      const reportBtn = document.getElementById('reportBtn');
+    document.addEventListener("DOMContentLoaded", () => {
+      
+      const reportBtn = document.getElementById("reportBtn");
       let isReporting = false;
-      if (typeof socket !== 'undefined') {
-        socket.on('partner-found', function(data) {
-          reportBtn.style.display = 'block';
+
+      if (typeof socket !== "undefined") {
+        socket.on("partner-found", data => {
+          reportBtn.style.display = "block";
           window.partnerId = data.id;
         });
-        socket.on('partner-disconnected', () => {
-          reportBtn.style.display = 'none';
+        socket.on("partner-disconnected", () => {
+          reportBtn.style.display = "none";
           window.partnerId = null;
           isReporting = false;
         });
-        socket.on('waiting', () => {
-          reportBtn.style.display = 'none';
+        socket.on("waiting", () => {
+          reportBtn.style.display = "none";
           window.partnerId = null;
           isReporting = false;
         });
-        socket.on('reportHandled', function(data) {
+        socket.on("reportHandled", data => {
           if (!isReporting) return;
           isReporting = false;
           alert(data.message);
           reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
+          reportBtn.textContent = "Report";
         });
       }
-      reportBtn.addEventListener('click', function() {
-        if (!window.partnerId) return alert('No active partner to report.');
-        if (isReporting) return alert('Report already in progress.');
+
+      reportBtn.addEventListener("click", () => {
+        if (!window.partnerId) return alert("No active partner.");
+        if (isReporting) return;
         isReporting = true;
         reportBtn.disabled = true;
-        reportBtn.textContent = 'Analyzing...';
-        html2canvas(document.body, {backgroundColor: null, scale: 1}).then(canvas => {
-          const dataUrl = canvas.toDataURL('image/png');
-          if (typeof socket !== 'undefined') {
-            socket.emit('reportPorn', {
-              screenshot: dataUrl,
-              timestamp: new Date().toISOString(),
-              partnerId: window.partnerId
-            });
-          } else {
-            console.warn('socket undefined — demo only');
-            isReporting = false;
-            reportBtn.disabled = false;
-            reportBtn.textContent = 'Report Porn';
-            alert('Report simulated (no socket).');
-          }
-        }).catch(err => {
-          console.error('Screenshot failed:', err);
-          alert('Failed to take screenshot.');
-          isReporting = false;
-          reportBtn.disabled = false;
-          reportBtn.textContent = 'Report Porn';
-        });
-      });
+        reportBtn.textContent = "Analyzing...";
 
-      // simple UI hook: enable/disable input buttons in case script.js wants to control
-      const input = document.getElementById('chatInput');
-      const send = document.getElementById('sendBtn');
-      input.addEventListener('input', () => {
-        send.disabled = input.value.trim().length === 0;
-      });
-      // keep Enter key behavior for send to integrate with existing script
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !send.disabled) send.click();
+        html2canvas(document.body,{backgroundColor:null}).then(canvas=>{
+          const dataUrl = canvas.toDataURL("image/png");
+
+          if (typeof socket !== "undefined") {
+            socket.emit("reportPorn", {
+              screenshot:dataUrl,
+              timestamp:new Date().toISOString(),
+              partnerId:window.partnerId
+            });
+          }
+        });
       });
     });
   </script>
