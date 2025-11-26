@@ -1,320 +1,285 @@
 <!DOCTYPE html>
-<html lang="ar" dir="ltr">
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SparkChat</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YourSite - Random Video Chat</title>
 
-  <style>
-    :root{
-      --blue:#2ea3ff;
-      --dark:#111;
-      --light:#ffffff;
-      --border:#e6d7c8;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      background:#fff;
-      font-family:Arial,Helvetica,sans-serif;
-      color:#111;
-      overflow:hidden;
-    }
+<style>
+/* ============= Reset ============= */
+* { box-sizing: border-box; margin:0; padding:0; }
+body {
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
 
-    /* Top bar */
-    .topbar{
-      height:64px;
-      display:flex;
-      align-items:center;
-      padding:0 20px;
-      border-bottom:1px solid #eee;
-      justify-content:flex-start;
-    }
-    .logo{
-      font-size:32px;
-      font-weight:700;
-      color:#ff9a00;
-    }
-    .logo span{
-      color:#3fa0ff;
-    }
+/* ============= Layout ============= */
+.main-layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  padding: 10px;
+  gap: 10px;
+}
 
-    /* Main layout */
-    .stage{
-      position:absolute;
-      top:64px;
-      bottom:0;
-      left:0;
-      right:0;
-      display:flex;
-      gap:16px;
-      padding:16px;
-      overflow:hidden;
-    }
+/* Left side (two videos) */
+.left-side {
+  width: 45%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
-    /* Left side videos */
-    .left-col{
-      width:360px;
-      min-width:280px;
-      display:flex;
-      flex-direction:column;
-      gap:16px;
-    }
+.video-box {
+  background: #000;
+  border-radius: 6px;
+  position: relative;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+}
 
-    .video-frame{
-      border-radius:12px;
-      overflow:hidden;
-      border:6px solid var(--border);
-      position:relative;
-      background:#000;
-      min-height:220px;
-    }
-    .video-frame.top{height:320px;background:#0b0b0b}
-    .video-frame.bottom{height:260px;background:#303030}
+.video-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-    video{
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      display:block;
-    }
+.label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(255,255,255,0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+}
 
-    .watermark{
-      position:absolute;
-      left:10px;
-      bottom:8px;
-      color:#ff8a00;
-      font-size:16px;
-      font-weight:700;
-      text-shadow:0 1px 0 rgba(0,0,0,0.6);
-      opacity:0.9;
-    }
+/* Right side (chat) */
+.right-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f8f8f8;
+}
 
-    .video-label{
-      position:absolute;
-      top:8px;
-      left:8px;
-      background:#fff;
-      padding:6px 10px;
-      border-radius:8px;
-      font-size:12px;
-    }
+/* Chat messages */
+.chat-area {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  background: #ffffff;
+}
 
-    .report-btn{
-      position:absolute;
-      top:8px;
-      right:8px;
-      background:#ff3b3b;
-      color:#fff;
-      padding:6px 8px;
-      border:none;
-      border-radius:6px;
-      font-size:12px;
-      cursor:pointer;
-      display:none;
-    }
+.msg {
+  background: #eee;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  max-width: 80%;
+}
 
-    .skip-area{
-      margin-top:4px;
-    }
-    #skipBtn{
-      padding:10px 18px;
-      background:var(--blue);
-      border:none;
-      color:#fff;
-      border-radius:8px;
-      cursor:pointer;
-      font-size:16px;
-      width:100%;
-    }
+.msg.you { background: #1e90ff; color: white; margin-left: auto; }
 
-    /* Right side chat */
-    .right-col{
-      flex:1;
-      display:flex;
-      flex-direction:column;
-      border:6px solid var(--border);
-      border-radius:10px;
-      overflow:hidden;
-    }
+/* Input box */
+.chat-input-box {
+  display: flex;
+  padding: 10px;
+  border-top: 1px solid #ccc;
+  gap: 10px;
+}
+.chat-input-box input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #aaa;
+}
+.chat-input-box button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  background: #1e90ff;
+  color: white;
+  cursor: pointer;
+}
 
-    .chat-area{
-      flex:1;
-      overflow:auto;
-      padding:16px;
-      background:#fff;
-    }
+/* Skip button (like Omegle) */
+.skip-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  background: #e5e5e5;
+  cursor: pointer;
+  font-size: 16px;
+}
+.skip-btn:hover { background:#dcdcdc; }
 
-    .chat-messages{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
+/* ============= Omegle-style controls ============= */
+.omegle-controls {
+  padding: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #ddd;
+}
 
-    .msg.you{
-      align-self:flex-end;
-      background:#3fa0ff;
-      color:#fff;
-      padding:10px 14px;
-      border-radius:16px;
-      max-width:75%;
-    }
-    .msg.them{
-      align-self:flex-start;
-      background:#2e8de6;
-      color:#fff;
-      padding:10px 14px;
-      border-radius:16px;
-      max-width:75%;
-    }
-    .msg.system{
-      text-align:center;
-      color:#888;
-      font-size:13px;
-      margin:10px 0;
-    }
+.omegle-controls button {
+  padding: 10px 18px;
+  font-size: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+}
 
-    .chat-input-row{
-      display:flex;
-      padding:10px;
-      gap:10px;
-      border-top:1px solid #eee;
-      background:#fafafa;
-    }
+/* Start = blue */
+.btn-start {
+  background: #1e90ff;
+  color: white;
+}
 
-    #chatInput{
-      flex:1;
-      padding:12px;
-      border-radius:8px;
-      border:1px solid #ddd;
-      font-size:15px;
-    }
+/* Stop = gray */
+.btn-stop {
+  background: #e5e5e5;
+  color: #111;
+}
 
-    #sendBtn{
-      background:#2ea3ff;
-      color:#fff;
-      border:none;
-      border-radius:8px;
-      padding:10px 16px;
-      cursor:pointer;
-      font-size:16px;
-      min-width:90px;
-    }
+/* Disconnect = red */
+.btn-disconnect {
+  background: #ff3b3b;
+  color: white;
+}
 
-    /* FULL RESPONSIVE — mobile first */
-    @media(max-width:900px){
-      body{overflow:auto;}
-      .stage{
-        flex-direction:column;
-        overflow:visible;
-      }
-      .left-col{
-        width:100%;
-        min-width:100%;
-      }
-      .video-frame{
-        height:240px !important;
-      }
-      .right-col{
-        width:100%;
-        height:auto;
-        min-height:360px;
-      }
-    }
-  </style>
+/* ================= Responsive ================= */
+@media(max-width: 900px) {
+  body { overflow-y: auto; height:auto; }
+  
+  .main-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .left-side {
+    width: 100%;
+    height: auto;
+  }
+
+  .video-box {
+    height: 250px;
+  }
+
+  .omegle-controls {
+    justify-content: center;
+  }
+  
+  .omegle-controls button { flex: 1; }
+}
+</style>
 </head>
+
 <body>
 
-  <div class="topbar">
-    <div class="logo">Spark<span>Chat</span></div>
-  </div>
+<div class="main-layout">
 
-  <div class="stage">
-    <div class="left-col">
-      <div class="video-frame top" id="strangerFrame">
-        <div class="video-label">Stranger</div>
-        <video id="remoteVideo" autoplay playsinline></video>
-        <button id="reportBtn" class="report-btn">Report</button>
-        <div class="watermark">SparkChat</div>
-      </div>
+  <!-- LEFT SIDE (VIDEOS) -->
+  <div class="left-side">
 
-      <div class="video-frame bottom" id="youFrame">
-        <div class="video-label">You</div>
-        <video id="localVideo" autoplay muted playsinline></video>
-        <div class="watermark" style="opacity:0.6;">SparkChat</div>
-      </div>
-
-      <div class="skip-area">
-        <button id="skipBtn">Skip (Esc)</button>
-      </div>
+    <!-- Stranger -->
+    <div class="video-box">
+      <span class="label">Stranger</span>
+      <video id="remoteVideo" autoplay></video>
     </div>
 
-    <div class="right-col">
-      <div class="chat-area" id="chatMessages">
-        <div class="msg system">Click "Start" to begin the chat.</div>
-      </div>
-
-      <div class="chat-input-row">
-        <input id="chatInput" placeholder="Type a message..." disabled />
-        <button id="sendBtn" disabled>Send</button>
-      </div>
+    <!-- You -->
+    <div class="video-box">
+      <span class="label">You</span>
+      <video id="localVideo" autoplay muted></video>
     </div>
+
   </div>
 
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+  <!-- RIGHT SIDE (CHAT) -->
+  <div class="right-side">
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      
-      const reportBtn = document.getElementById("reportBtn");
-      let isReporting = false;
+    <button class="skip-btn" id="skipBtn">Skip</button>
 
-      if (typeof socket !== "undefined") {
-        socket.on("partner-found", data => {
-          reportBtn.style.display = "block";
-          window.partnerId = data.id;
-        });
-        socket.on("partner-disconnected", () => {
-          reportBtn.style.display = "none";
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on("waiting", () => {
-          reportBtn.style.display = "none";
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on("reportHandled", data => {
-          if (!isReporting) return;
-          isReporting = false;
-          alert(data.message);
-          reportBtn.disabled = false;
-          reportBtn.textContent = "Report";
-        });
-      }
+    <div class="chat-area" id="chatMessages"></div>
 
-      reportBtn.addEventListener("click", () => {
-        if (!window.partnerId) return alert("No active partner.");
-        if (isReporting) return;
-        isReporting = true;
-        reportBtn.disabled = true;
-        reportBtn.textContent = "Analyzing...";
+    <div class="chat-input-box">
+      <input type="text" id="chatInput" placeholder="Say hi..." disabled>
+      <button id="sendBtn" disabled>Send</button>
+    </div>
 
-        html2canvas(document.body,{backgroundColor:null}).then(canvas=>{
-          const dataUrl = canvas.toDataURL("image/png");
+    <div class="omegle-controls">
+      <button id="startBtn" class="btn-start">Start</button>
+      <button id="stopBtn" class="btn-stop" style="display:none;">Stop</button>
+      <button id="disconnectBtn" class="btn-disconnect" style="display:none;">Disconnect</button>
+    </div>
 
-          if (typeof socket !== "undefined") {
-            socket.emit("reportPorn", {
-              screenshot:dataUrl,
-              timestamp:new Date().toISOString(),
-              partnerId:window.partnerId
-            });
-          }
-        });
-      });
-    });
-  </script>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
+<script>
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const disconnectBtn = document.getElementById("disconnectBtn");
+const skipBtn = document.getElementById("skipBtn");
+
+const sendBtn = document.getElementById("sendBtn");
+const chatInput = document.getElementById("chatInput");
+
+function UI_startState() {
+  startBtn.style.display = "block";
+  stopBtn.style.display = "none";
+  disconnectBtn.style.display = "none";
+  chatInput.disabled = true;
+  sendBtn.disabled = true;
+}
+
+function UI_chatState() {
+  startBtn.style.display = "none";
+  stopBtn.style.display = "block";
+  disconnectBtn.style.display = "block";
+  chatInput.disabled = false;
+  sendBtn.disabled = false;
+}
+
+UI_startState();
+
+if (typeof socket !== "undefined") {
+
+  startBtn.onclick = () => {
+    socket.emit("find-partner");
+    UI_chatState();
+  };
+
+  stopBtn.onclick = () => {
+    socket.emit("stop-search");
+    UI_startState();
+  };
+
+  disconnectBtn.onclick = () => {
+    socket.emit("disconnect-partner");
+    UI_startState();
+  };
+
+  skipBtn.onclick = () => {
+    socket.emit("disconnect-partner");
+    socket.emit("find-partner");
+  };
+
+  socket.on("partner-found", () => UI_chatState());
+  socket.on("partner-disconnected", () => UI_startState());
+}
+</script>
+
 </body>
 </html>
