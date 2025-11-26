@@ -1,358 +1,533 @@
 <!DOCTYPE html>
-<html lang="ar" dir="ltr"> 
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SparkChat</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stranger Chat</title>
 
-  <style>
-    :root{
-      --blue:#2ea3ff;
-      --dark:#111;
-      --light:#ffffff;
-      --border:#e6d7c8;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      background:#fff;
-      font-family:Arial,Helvetica,sans-serif;
-      color:#111;
-      overflow:hidden;
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        height: 100vh;
+        display: flex;
+        background: #f2f2f2;
     }
 
-    /* Top bar */
-    .topbar{
-      height:64px;
-      display:flex;
-      align-items:center;
-      padding:0 20px;
-      border-bottom:1px solid #eee;
-      justify-content:flex-start;
-    }
-    .logo{
-      font-size:32px;
-      font-weight:700;
-      color:#ff9a00;
-    }
-    .logo span{
-      color:#3fa0ff;
+    .container {
+        display: flex;
+        width: 100%;
+        height: 100%;
     }
 
-    /* Main layout */
-    .stage{
-      position:absolute;
-      top:64px;
-      bottom:0;
-      left:0;
-      right:0;
-      display:flex;
-      gap:16px;
-      padding:16px;
-      overflow:hidden;
+    /* ===== VIDEO AREA ===== */
+    .left-col {
+        flex: 2;
+        position: relative;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
-    /* Left side videos */
-    .left-col{
-      width:360px;
-      min-width:280px;
-      display:flex;
-      flex-direction:column;
-      gap:16px;
+    video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
     }
 
-    .video-frame{
-      border-radius:12px;
-      overflow:hidden;
-      border:6px solid var(--border);
-      position:relative;
-      background:#000;
-      min-height:220px;
-    }
-    .video-frame.top{height:320px;background:#0b0b0b}
-    .video-frame.bottom{height:260px;background:#303030}
-
-    video{
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      display:block;
-    }
-
-    .watermark{
-      position:absolute;
-      left:10px;
-      bottom:8px;
-      color:#ff8a00;
-      font-size:16px;
-      font-weight:700;
-      text-shadow:0 1px 0 rgba(0,0,0,0.6);
-      opacity:0.9;
-    }
-
-    .video-label{
-      position:absolute;
-      top:8px;
-      left:8px;
-      background:#fff;
-      padding:6px 10px;
-      border-radius:8px;
-      font-size:12px;
-    }
-
-    .report-btn{
-      position:absolute;
-      top:8px;
-      right:8px;
-      background:#ff3b3b;
-      color:#fff;
-      padding:6px 8px;
-      border:none;
-      border-radius:6px;
-      font-size:12px;
-      cursor:pointer;
-      display:none;
-    }
-
-    /* Skip btn */
-    .skip-area{
-      margin-top:4px;
-    }
-    #skipBtn{
-      padding:10px 18px;
-      background:var(--blue);
-      border:none;
-      color:#fff;
-      border-radius:8px;
-      cursor:pointer;
-      font-size:16px;
-      width:100%;
-    }
-
-    /* Controls */
-    .controls-area {
-      margin-top: 10px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-    .controls-area button {
-      padding: 10px 18px;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      border: none;
-    }
-    .btn-start {
-      background: var(--blue);
-      color: #fff;
-    }
-    .btn-stop {
-      background: #e5e5e5;
-      color: var(--dark);
-    }
-    .btn-disconnect {
-      background: #ff3b3b;
-      color: #fff;
-    }
-
-    /* Chat area */
-    .right-col{
-      flex:1;
-      display:flex;
-      flex-direction:column;
-      border:6px solid var(--border);
-      border-radius:10px;
-      overflow:hidden;
-    }
-    .chat-area{
-      flex:1;
-      overflow:auto;
-      padding:16px;
-      background:#fff;
-    }
-    .chat-messages{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-    .msg.you{
-      align-self:flex-end;
-      background:#3fa0ff;
-      color:#fff;
-      padding:10px 14px;
-      border-radius:16px;
-      max-width:75%;
-    }
-    .msg.them{
-      align-self:flex-start;
-      background:#2e8de6;
-      color:#fff;
-      padding:10px 14px;
-      border-radius:16px;
-      max-width:75%;
-    }
-    .msg.system{
-      text-align:center;
-      color:#888;
-      font-size:13px;
-      margin:10px 0;
-    }
-
-    .chat-input-row{
-      display:flex;
-      padding:10px;
-      gap:10px;
-      border-top:1px solid #eee;
-      background:#fafafa;
-    }
-    #chatInput{
-      flex:1;
-      padding:12px;
-      border-radius:8px;
-      border:1px solid #ddd;
-      font-size:15px;
-    }
-    #sendBtn{
-      background:#2ea3ff;
-      color:#fff;
-      border:none;
-      border-radius:8px;
-      padding:10px 16px;
-      cursor:pointer;
-      font-size:16px;
-      min-width:90px;
-    }
-
-    /* Mic button */
-    #micBtn {
-      display:none;
-      width:50px;
-      height:50px;
-      border-radius:50%;
-      border:none;
-      background:#2ea3ff;
-      color:white;
-      font-size:22px;
-      cursor:pointer;
-      align-items:center;
-      justify-content:center;
-    }
-
-    /* Spinner style */
     .spinner {
-      position:absolute;
-      top:50%;left:50%;
-      transform:translate(-50%,-50%);
-      width:40px;height:40px;
-      border:4px solid #fff;
-      border-top-color:transparent;
-      border-radius:50%;
-      animation:spin 1s linear infinite;
-      display:none;
-      z-index:50;
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 50px;
+        height: 50px;
+        border: 4px solid #fff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: none;
+        z-index: 20;
     }
+
     @keyframes spin {
-      from {transform:translate(-50%,-50%) rotate(0deg);}
-      to   {transform:translate(-50%,-50%) rotate(360deg);}
+        from { transform: translate(-50%, -50%) rotate(0deg); }
+        to { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
-    /* Loading overlay */
-    #loading {
-      display:none;
-      position:fixed;
-      top:0;left:0;right:0;bottom:0;
-      background:rgba(0,0,0,0.4);
-      backdrop-filter:blur(2px);
-      justify-content:center;
-      align-items:center;
-      font-size:22px;
-      color:white;
-      z-index:9999;
+    #micBtn {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 55px;
+        height: 55px;
+        border-radius: 50%;
+        background: #3498ff;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
     }
 
-    /* Status text */
+    /* ===== CHAT AREA ===== */
+    .right-col {
+        flex: 1;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        border-left: 2px solid #ddd;
+    }
+
     #status {
-      text-align:center;
-      padding:6px;
-      font-size:16px;
-      color:#444;
-      background:#f7f7f7;
-      border-bottom:1px solid #ddd;
+        padding: 10px;
+        text-align: center;
+        background: #fff;
+        font-size: 16px;
+        color: #444;
+        border-bottom: 1px solid #ddd;
     }
 
-  </style>
-</head>
+    #chatMessages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        background: #fafafa;
+    }
 
+    .message {
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        font-size: 14px;
+        max-width: 80%;
+    }
+
+    .you {
+        background: #d2e8ff;
+        align-self: flex-end;
+    }
+
+    .stranger {
+        background: #e7e7e7;
+        align-self: flex-start;
+    }
+
+    .system-message {
+        text-align: center;
+        font-size: 13px;
+        color: #666;
+        margin: 10px 0;
+    }
+
+    .chat-input-row {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .chat-btn {
+        background:#3498ff;
+        color:white;
+        border:none;
+        padding:8px 12px;
+        border-radius:6px;
+        cursor:pointer;
+        font-size:14px;
+    }
+
+    .chat-btn.stop {
+        background:#ff3b3b;
+    }
+
+    #chatInput {
+        flex: 1;
+        padding:10px;
+        border:1px solid #ccc;
+        border-radius:6px;
+        font-size:14px;
+    }
+
+    #sendBtn {
+        background:#2ecc71;
+        border:none;
+        padding:8px 12px;
+        border-radius:6px;
+        color:white;
+        cursor:pointer;
+    }
+</style>
+</head>
 <body>
 
-  <!-- Loading overlay -->
-  <div id="loading">Loading...</div>
+<div class="container">
 
-  <!-- Status text -->
-  <div id="status">Ready</div>
-
-  <div class="topbar">
-    <div class="logo">Spark<span>Chat</span></div>
-  </div>
-
-  <div class="stage">
-
+    <!-- LEFT: VIDEO -->
     <div class="left-col">
-
-      <!-- Stranger video -->
-      <div class="video-frame top">
-        <div class="video-label">Stranger</div>
-        <video id="remoteVideo" autoplay playsinline></video>
-
-        <div id="remoteSpinner" class="spinner"></div>
-
-        <button id="reportBtn" class="report-btn">Report</button>
-        <div class="watermark">SparkChat</div>
-      </div>
-
-      <!-- Your video -->
-      <div class="video-frame bottom">
-        <div class="video-label">You</div>
-        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="localVideo" autoplay muted></video>
+        <video id="remoteVideo" autoplay></video>
 
         <div id="localSpinner" class="spinner"></div>
+        <div id="remoteSpinner" class="spinner"></div>
 
-        <div class="watermark" style="opacity:0.6;">SparkChat</div>
-      </div>
-
-      <!-- Mic button -->
-      <button id="micBtn">🎤</button>
-
-      <!-- Skip button -->
-      <div class="skip-area">
-        <button id="skipBtn">Skip (Esc)</button>
-      </div>
-
-      <!-- Start/Stop -->
-      <div class="controls-area">
-        <button id="startBtn" class="btn-start">Start</button>
-        <button id="stopBtn" class="btn-stop">Stop</button>
-      </div>
-
+        <button id="micBtn">🎤</button>
     </div>
 
-    <!-- Chat -->
+    <!-- RIGHT: CHAT -->
     <div class="right-col">
-      <div class="chat-area" id="chatMessages">
-        <div class="msg system">Click "Start" to begin the chat.</div>
-      </div>
+        <div id="status">Ready</div>
 
-      <div class="chat-input-row">
-        <input id="chatInput" placeholder="Type a message..." disabled />
-        <button id="sendBtn" disabled>Send</button>
-      </div>
+        <div id="chatMessages"></div>
+
+        <div class="chat-input-row">
+            <button id="startBtn" class="chat-btn">Start</button>
+            <button id="skipBtn" class="chat-btn">Skip</button>
+            <button id="stopBtn" class="chat-btn stop">Stop</button>
+
+            <input id="chatInput" placeholder="Type a message..." disabled>
+            <button id="sendBtn" disabled>Send</button>
+        </div>
     </div>
 
-  </div>
+</div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+<!-- SOCKET.IO -->
+<script src="/socket.io/socket.io.js"></script>
+
+<!-- SCRIPT.JS كامل (الذي أعطيتني إياه) -->
+<script>
+/* ——————————————————————————————————————————
+   سكربتك كامل + التعديلات المطلوبة
+—————————————————————————————————————————— */
+
+const socket = io();
+let localStream = null;
+let peerConnection = null;
+let partnerId = null;
+let isInitiator = false;
+let autoReconnect = true;
+let isStopped = false;
+let micEnabled = true;
+
+const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+
+// DOM
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+const localSpinner = document.getElementById("localSpinner");
+const remoteSpinner = document.getElementById("remoteSpinner");
+const statusText = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+const skipBtn = document.getElementById("skipBtn");
+const stopBtn = document.getElementById("stopBtn");
+const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("sendBtn");
+const chatMessages = document.getElementById("chatMessages");
+const micBtn = document.getElementById("micBtn");
+
+/* ========= MIC BUTTON ========= */
+function updateMicButton() {
+    if (!micBtn) return;
+    micBtn.innerHTML = micEnabled ? "🎤" : "🔇";
+}
+
+function toggleMicrophone() {
+    if (!localStream) return;
+    micEnabled = !micEnabled;
+    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+    updateMicButton();
+}
+window.toggleMicrophone = toggleMicrophone;
+micBtn.onclick = toggleMicrophone;
+
+window.setLocalStream = function(stream) {
+    localStream = stream;
+    micBtn.style.display = "flex";
+    updateMicButton();
+};
+
+/* ========= UI ========= */
+function showSpinners() {
+    localSpinner.style.display = "block";
+    remoteSpinner.style.display = "block";
+    localVideo.style.display = "none";
+    remoteVideo.style.display = "none";
+}
+
+function hideSpinners() {
+    localSpinner.style.display = "none";
+    remoteSpinner.style.display = "none";
+    localVideo.style.display = "block";
+    remoteVideo.style.display = "block";
+}
+
+function showRemoteSpinner() {
+    remoteSpinner.style.display = "block";
+    remoteVideo.style.display = "none";
+}
+
+function hideRemoteSpinner() {
+    remoteSpinner.style.display = "none";
+    remoteVideo.style.display = "block";
+}
+
+function addMessage(msg, type="system") {
+    const div = document.createElement("div");
+    div.className = type === "system" ? "system-message" : "message " + type;
+    div.textContent = msg;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function enableChat() {
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+}
+
+function disableChat() {
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    chatInput.value = "";
+}
+
+/* ========= MEDIA ========= */
+async function initMedia() {
+    if (!localStream) {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
+            window.setLocalStream(localStream);
+        } catch {
+            statusText.textContent = "Camera/mic access denied.";
+            return false;
+        }
+    }
+    return true;
+}
+
+/* ========= SEARCH LOOP ========= */
+let searchTimer = null;
+let pauseTimer = null;
+
+function startSearchLoop() {
+    if (isStopped || partnerId) return;
+    showRemoteSpinner();
+    socket.emit("find-partner");
+    statusText.textContent = "Searching for stranger...";
+
+    searchTimer = setTimeout(() => {
+        if (!partnerId && !isStopped) {
+            socket.emit("stop");
+            hideRemoteSpinner();
+            statusText.textContent = "Pausing search...";
+            pauseTimer = setTimeout(startSearchLoop, 2000);
+        }
+    }, 4000);
+}
+
+async function startSearch() {
+    if (!(await initMedia())) return;
+
+    closePeerConnection();
+    partnerId = null;
+    isInitiator = false;
+    chatMessages.innerHTML = "";
+    showRemoteSpinner();
+
+    statusText.textContent = "Searching...";
+    skipBtn.disabled = false;
+    stopBtn.disabled = false;
+    startBtn.disabled = true;
+
+    startSearchLoop();
+}
+
+/* ========= BUTTONS ========= */
+startBtn.onclick = () => {
+    isStopped = false;
+    autoReconnect = true;
+    startSearch();
+};
+
+skipBtn.onclick = () => {
+    statusText.textContent = "Skipping...";
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+    socket.emit("skip");
+    closePeerConnection();
+    disableChat();
+    addMessage("You skipped the stranger.", "system");
+    showRemoteSpinner();
+    startSearchLoop();
+};
+
+stopBtn.onclick = () => {
+    statusText.textContent = "Stopped.";
+    isStopped = true;
+    autoReconnect = false;
+
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+    socket.emit("stop");
+    closePeerConnection();
+    disableChat();
+
+    addMessage("Disconnected.", "system");
+
+    startBtn.disabled = false;
+    skipBtn.disabled = true;
+    stopBtn.disabled = true;
+
+    if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+        micBtn.style.display = "none";
+    }
+
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+};
+
+/* ========= CHAT ========= */
+sendBtn.onclick = sendMessage;
+chatInput.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
+
+function sendMessage() {
+    const msg = chatInput.value.trim();
+    if (!msg || !partnerId) return;
+
+    addMessage(msg, "you");
+    socket.emit("chat-message", { to: partnerId, message: msg });
+    chatInput.value = "";
+}
+
+/* ========= SOCKET EVENTS ========= */
+socket.on("waiting", msg => {
+    statusText.textContent = msg || "Waiting...";
+});
+
+socket.on("chat-message", ({ message }) => {
+    addMessage(message, "stranger");
+});
+
+socket.on("partner-found", async payload => {
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+
+    partnerId = payload.id;
+    isInitiator = !!payload.initiator;
+    statusText.textContent = "Stranger found! Connecting...";
+
+    hideSpinners();
+    createPeerConnection();
+
+    if (isInitiator) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit("signal", { to: partnerId, data: peerConnection.localDescription });
+    }
+});
+
+socket.on("signal", async ({ from, data }) => {
+    if (!peerConnection) createPeerConnection();
+
+    if (data.type === "offer") {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit("signal", { to: from, data: peerConnection.localDescription });
+    }
+    else if (data.type === "answer") {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+    }
+    else if (data.candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+    }
+});
+
+socket.on("partner-disconnected", () => {
+    statusText.textContent = "Stranger disconnected.";
+    closePeerConnection();
+    disableChat();
+    addMessage("Stranger disconnected.", "system");
+
+    partnerId = null;
+    isInitiator = false;
+
+    if (autoReconnect && !isStopped) {
+        statusText.textContent = "Searching for new stranger...";
+        showRemoteSpinner();
+        startSearchLoop();
+    } else {
+        startBtn.disabled = false;
+        skipBtn.disabled = true;
+        stopBtn.disabled = true;
+    }
+});
+
+/* ========= WEBRTC ========= */
+function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(servers);
+
+    if (localStream) {
+        localStream.getTracks().forEach(track =>
+            peerConnection.addTrack(track, localStream)
+        );
+    }
+
+    peerConnection.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
+        hideRemoteSpinner();
+        enableChat();
+        addMessage("Connected! Say hi 👋", "system");
+        remoteVideo.style.display = "block";
+        localVideo.style.display = "block";
+    };
+
+    peerConnection.onicecandidate = e => {
+        if (e.candidate && partnerId) {
+            socket.emit("signal", { to: partnerId, data: { candidate: e.candidate } });
+        }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+        if (!peerConnection) return;
+        const s = peerConnection.connectionState;
+
+        if (s === "connected") {
+            statusText.textContent = "Connected!";
+        }
+        
+        if (["failed","disconnected","closed"].includes(s)) {
+            statusText.textContent = "Connection lost.";
+            closePeerConnection();
+            disableChat();
+            addMessage("Connection lost.", "system");
+
+            if (autoReconnect && !isStopped) {
+                statusText.textContent = "Reconnecting...";
+                showRemoteSpinner();
+                startSearchLoop();
+            }
+        }
+    };
+}
+
+function closePeerConnection() {
+    try {
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+    } catch {}
+    remoteVideo.srcObject = null;
+}
+</script>
 
 </body>
 </html>
