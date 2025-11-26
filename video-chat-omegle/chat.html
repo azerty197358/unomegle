@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="ltr">
+<html lang="ar" dir="ltr"> 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -114,6 +114,7 @@
       display:none;
     }
 
+    /* Skip btn */
     .skip-area{
       margin-top:4px;
     }
@@ -128,7 +129,7 @@
       width:100%;
     }
 
-    /* Controls area */
+    /* Controls */
     .controls-area {
       margin-top: 10px;
       display: flex;
@@ -154,16 +155,8 @@
       background: #ff3b3b;
       color: #fff;
     }
-    @media(max-width: 900px) {
-      .controls-area {
-        justify-content: center;
-      }
-      .controls-area button {
-        flex: 1;
-      }
-    }
 
-    /* Right side chat */
+    /* Chat area */
     .right-col{
       flex:1;
       display:flex;
@@ -172,20 +165,17 @@
       border-radius:10px;
       overflow:hidden;
     }
-
     .chat-area{
       flex:1;
       overflow:auto;
       padding:16px;
       background:#fff;
     }
-
     .chat-messages{
       display:flex;
       flex-direction:column;
       gap:10px;
     }
-
     .msg.you{
       align-self:flex-end;
       background:#3fa0ff;
@@ -216,7 +206,6 @@
       border-top:1px solid #eee;
       background:#fafafa;
     }
-
     #chatInput{
       flex:1;
       padding:12px;
@@ -224,7 +213,6 @@
       border:1px solid #ddd;
       font-size:15px;
     }
-
     #sendBtn{
       background:#2ea3ff;
       color:#fff;
@@ -236,61 +224,120 @@
       min-width:90px;
     }
 
-    /* FULL RESPONSIVE — mobile first */
-    @media(max-width:900px){
-      body{overflow:auto;}
-      .stage{
-        flex-direction:column;
-        overflow:visible;
-      }
-      .left-col{
-        width:100%;
-        min-width:100%;
-      }
-      .video-frame{
-        height:240px !important;
-      }
-      .right-col{
-        width:100%;
-        height:auto;
-        min-height:360px;
-      }
+    /* Mic button */
+    #micBtn {
+      display:none;
+      width:50px;
+      height:50px;
+      border-radius:50%;
+      border:none;
+      background:#2ea3ff;
+      color:white;
+      font-size:22px;
+      cursor:pointer;
+      align-items:center;
+      justify-content:center;
     }
+
+    /* Spinner style */
+    .spinner {
+      position:absolute;
+      top:50%;left:50%;
+      transform:translate(-50%,-50%);
+      width:40px;height:40px;
+      border:4px solid #fff;
+      border-top-color:transparent;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      display:none;
+      z-index:50;
+    }
+    @keyframes spin {
+      from {transform:translate(-50%,-50%) rotate(0deg);}
+      to   {transform:translate(-50%,-50%) rotate(360deg);}
+    }
+
+    /* Loading overlay */
+    #loading {
+      display:none;
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.4);
+      backdrop-filter:blur(2px);
+      justify-content:center;
+      align-items:center;
+      font-size:22px;
+      color:white;
+      z-index:9999;
+    }
+
+    /* Status text */
+    #status {
+      text-align:center;
+      padding:6px;
+      font-size:16px;
+      color:#444;
+      background:#f7f7f7;
+      border-bottom:1px solid #ddd;
+    }
+
   </style>
 </head>
+
 <body>
+
+  <!-- Loading overlay -->
+  <div id="loading">Loading...</div>
+
+  <!-- Status text -->
+  <div id="status">Ready</div>
 
   <div class="topbar">
     <div class="logo">Spark<span>Chat</span></div>
   </div>
 
   <div class="stage">
+
     <div class="left-col">
-      <div class="video-frame top" id="strangerFrame">
+
+      <!-- Stranger video -->
+      <div class="video-frame top">
         <div class="video-label">Stranger</div>
         <video id="remoteVideo" autoplay playsinline></video>
+
+        <div id="remoteSpinner" class="spinner"></div>
+
         <button id="reportBtn" class="report-btn">Report</button>
         <div class="watermark">SparkChat</div>
       </div>
 
-      <div class="video-frame bottom" id="youFrame">
+      <!-- Your video -->
+      <div class="video-frame bottom">
         <div class="video-label">You</div>
         <video id="localVideo" autoplay muted playsinline></video>
+
+        <div id="localSpinner" class="spinner"></div>
+
         <div class="watermark" style="opacity:0.6;">SparkChat</div>
       </div>
 
+      <!-- Mic button -->
+      <button id="micBtn">🎤</button>
+
+      <!-- Skip button -->
       <div class="skip-area">
         <button id="skipBtn">Skip (Esc)</button>
       </div>
 
-      <!-- Controls -->
+      <!-- Start/Stop -->
       <div class="controls-area">
         <button id="startBtn" class="btn-start">Start</button>
-        <button id="stopBtn" class="btn-stop" style="display:none;">Stop</button>
-        <button id="disconnectBtn" class="btn-disconnect" style="display:none;">Disconnect</button>
+        <button id="stopBtn" class="btn-stop">Stop</button>
       </div>
+
     </div>
 
+    <!-- Chat -->
     <div class="right-col">
       <div class="chat-area" id="chatMessages">
         <div class="msg system">Click "Start" to begin the chat.</div>
@@ -301,40 +348,11 @@
         <button id="sendBtn" disabled>Send</button>
       </div>
     </div>
+
   </div>
 
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const reportBtn = document.getElementById("reportBtn");
-      let isReporting = false;
-
-      if (typeof socket !== "undefined") {
-        socket.on("partner-found", data => {
-          reportBtn.style.display = "block";
-          window.partnerId = data.id;
-        });
-        socket.on("partner-disconnected", () => {
-          reportBtn.style.display = "none";
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on("waiting", () => {
-          reportBtn.style.display = "none";
-          window.partnerId = null;
-          isReporting = false;
-        });
-        socket.on("reportHandled", data => {
-          if (!isReporting) return;
-          isReporting = false;
-          alert(data.message);
-          reportBtn.disabled = false;
-          reportBtn.textContent = "Report";
-        });
-      }
-
-      reportBtn.addEventListener("click", () => {
-        if (!window
+</body>
+</html>
