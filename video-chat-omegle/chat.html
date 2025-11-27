@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ar" dir="ltr">
 <head>
   <meta charset="UTF-8" />
@@ -11,32 +11,18 @@
       --dark:#111;
       --light:#ffffff;
       --border:#e6d7c8;
-      --red:#ff3b3b;
     }
 
-    *{ box-sizing:border-box; margin:0; padding:0; }
-    body{
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
       background:#fff;
       font-family:Arial, Helvetica, sans-serif;
       height:100vh;
       overflow:hidden;
     }
 
-    /* 🔴 زر الخروج الأحمر */
-    .exit-btn {
-      background:#ff3b3b;
-      color:#fff;
-      padding:10px 16px;
-      border:none;
-      border-radius:10px;
-      cursor:pointer;
-      font-size:16px;
-      font-weight:bold;
-    }
-
-    .exit-btn:hover { background:#e60000; }
-
-    .topbar{
+    /* 🎯 TOP BAR */
+    .topbar {
       height:60px;
       display:flex;
       justify-content:space-between;
@@ -46,16 +32,36 @@
       background:#fff;
     }
 
-    .logo{
+    .logo {
       font-size:26px;
       font-weight:bold;
       color:#ff9a00;
     }
-    .logo span{color:#3fa0ff;}
+    .logo span { color:#3fa0ff; }
 
-    /* تم حذف شريط حالة الاتصال */
+    /* 🎯 EXIT BUTTON — RED */
+    #exitBtn {
+      background:red;
+      color:#fff;
+      padding:10px 18px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
 
-    .stage{
+    /* 🎯 نقل حالة الاتصال داخل منطقة الإدخال */
+    #status {
+      padding:6px 10px;
+      font-size:14px;
+      background:#fafafa;
+      border-radius:6px;
+      border:1px solid #ddd;
+      text-align:center;
+      width:100%;
+    }
+
+    .stage {
       position:absolute;
       top:60px;
       bottom:0;
@@ -67,7 +73,7 @@
       overflow:hidden;
     }
 
-    .left-col{
+    .left-col {
       width:350px;
       min-width:260px;
       display:flex;
@@ -76,7 +82,7 @@
       flex-shrink:0;
     }
 
-    .video-frame{
+    .video-frame {
       position:relative;
       border-radius:12px;
       border:6px solid var(--border);
@@ -87,30 +93,44 @@
       align-items:center;
     }
 
-    .video-frame.top{height:300px;}
-    .video-frame.bottom{height:240px;}
+    .video-frame.top { height:300px; }
+    .video-frame.bottom { height:240px; }
 
-    video{
+    video {
       width:100%;
       height:100%;
       object-fit:cover;
     }
 
-    /* 🔴 زر الإبلاغ صغير ومكان مناسب */
-    #reportBtn {
+    /* 🎯 شعار داخل الفيديو */
+    .watermark {
       position:absolute;
-      top:10px;
-      right:10px;
-      background:#ff3b3b;
-      color:#fff;
-      padding:5px 7px;
-      font-size:14px;
-      border-radius:50%;
-      cursor:pointer;
-      z-index:12;
+      bottom:10px;
+      left:10px;
+      font-size:18px;
+      font-weight:bold;
+      color:#ffffffaa;
+      z-index:15;
+      pointer-events:none;
     }
 
-    .video-label{
+    /* 🎯 Spinners */
+    #remoteSpinner, #localSpinner {
+      position:absolute;
+      width:45px;
+      height:45px;
+      border:5px solid #fff;
+      border-top-color:transparent;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      display:none;
+      top:50%; left:50%;
+      transform:translate(-50%, -50%);
+      z-index:10;
+    }
+    @keyframes spin { to { transform:translate(-50%,-50%) rotate(360deg);} }
+
+    .video-label {
       position:absolute;
       top:8px; left:8px;
       background:#fff;
@@ -120,20 +140,37 @@
       z-index:10;
     }
 
-    /* 🎤 زر المايك صغير */
+    /* 🎯 زر الإبلاغ داخل الشاشة - يمين أسفل */
+    #reportBtn {
+      position:absolute;
+      bottom:10px;
+      right:10px;
+      background:red;
+      color:#fff;
+      padding:10px 12px;
+      font-size:18px;
+      border-radius:50%;
+      cursor:pointer;
+      z-index:20;
+    }
+
+    /* 🎯 زر المايك داخل الشاشة - يمين أسفل */
     #micBtn {
       position:absolute;
       bottom:10px;
       right:10px;
-      background:#fff;
-      padding:6px 8px;
-      font-size:16px;
+      background:#2ea3ff;
+      color:#fff;
+      padding:10px 12px;
+      font-size:18px;
       border-radius:50%;
       cursor:pointer;
-      z-index:12;
+      z-index:20;
     }
 
-    .right-col{
+    .remote-mute-btn { display:none !important; }
+
+    .right-col {
       flex:1;
       display:flex;
       flex-direction:column;
@@ -141,17 +178,16 @@
       border-radius:10px;
       background:#fff;
       overflow:hidden;
-      min-width:0;
     }
 
-    .chat-area{
+    .chat-area {
       flex:1;
       padding:14px;
       overflow-y:auto;
-      background:#fff;
       display:flex;
       flex-direction:column;
       gap:8px;
+      background:#fff;
     }
 
     .warning-msg {
@@ -159,54 +195,38 @@
       color:#b30000;
       padding:10px;
       border-radius:10px;
-      font-size:14px;
       text-align:center;
       border:1px solid #ffb3b3;
-      margin-bottom:10px;
     }
 
-    .status-msg {
-      background:#eef3ff;
-      color:#2e5dff;
-      padding:6px;
-      text-align:center;
-      border-radius:8px;
-      margin-bottom:10px;
-      font-size:14px;
-      font-weight:bold;
-    }
+    .msg.system { text-align:center; color:#777; }
 
-    .msg.system {text-align:center;color:#777;}
-    .msg.you, .msg.them{
-      padding:10px 14px;
-      border-radius:16px;
-      max-width:75%;
-      color:#fff;
-      font-size:14px;
-    }
-    .msg.you{align-self:flex-end;background:#3fa0ff;}
-    .msg.them{align-self:flex-start;background:#2e8de6;}
-
-    .chat-input-row{
+    .chat-input-row {
       display:flex;
-      align-items:center;
-      gap:6px;
+      flex-direction:column;
+      gap:8px;
       padding:10px;
-      border-top:1px solid #ddd;
       background:#fafafa;
-      flex-wrap:wrap;
+      border-top:1px solid #ddd;
     }
 
-    #chatInput{
+    .row-buttons {
+      display:flex;
+      gap:6px;
+      width:100%;
+    }
+
+    #chatInput {
       flex:1;
       padding:10px;
       border:1px solid #ccc;
       border-radius:8px;
       font-size:14px;
       min-width:120px;
+      width:100%;
     }
 
-    button{
+    button {
       border:none;
       border-radius:8px;
       padding:10px 14px;
@@ -215,10 +235,11 @@
       white-space:nowrap;
     }
 
-    #startBtn{background:#2ea3ff;color:#fff;}
-    #sendBtn{background:#2ea3ff;color:#fff;}
-    #skipBtn{background:#ff9a00;color:#fff;}
-    #stopBtn{background:#ccc;color:#111;}
+    #startBtn { background:#2ea3ff; color:#fff; flex:1; }
+    #sendBtn  { background:#2ea3ff; color:#fff; }
+    #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
+    #stopBtn  { background:#ccc; color:#111; flex:1; }
+
   </style>
 </head>
 
@@ -226,60 +247,72 @@
 
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
-  <button class="exit-btn" id="exitBtn">Exit</button>
+  <button id="exitBtn">Exit</button>
 </div>
 
 <div class="stage">
 
   <div class="left-col">
 
+    <!-- Stranger -->
     <div class="video-frame top">
       <button id="reportBtn">🚨</button>
+      <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
+      <div id="remoteSpinner"></div>
     </div>
 
+    <!-- You -->
     <div class="video-frame bottom">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
-      <button id="micBtn" onclick="toggleMicrophone()">🎤</button>
+      <div id="localSpinner"></div>
     </div>
 
   </div>
 
   <div class="right-col">
-    <div class="chat-area" id="chatMessages">
-      <div class="status-msg" id="connStatus">Ready</div>
-      <div class="warning-msg">⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.</div>
-      <div class="msg.system">Click "Start" to begin.</div>
+    <div id="chatMessages" class="chat-area">
+      <div class="warning-msg">
+        ⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.
+      </div>
+      <div class="msg system">Click "Start" to begin.</div>
     </div>
 
     <div class="chat-input-row">
-      <button id="startBtn">Start</button>
-      <button id="skipBtn">Skip</button>
+
+      <div id="status">Ready</div>
+
+      <div class="row-buttons">
+        <button id="startBtn">Start</button>
+        <button id="skipBtn">Skip</button>
+        <button id="stopBtn">Stop</button>
+      </div>
+
       <input id="chatInput" placeholder="Type.." disabled />
       <button id="sendBtn" disabled>Send</button>
-      <button id="stopBtn">Stop</button>
     </div>
   </div>
-
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
 <script>
-document.getElementById("exitBtn").onclick = ()=>location.href="index.html";
+document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
 document.getElementById("reportBtn").onclick = async () => {
     try {
         await captureReport();
         alert("تم إرسال البلاغ بنجاح");
-    } catch(e) {
+    } catch (e) {
         alert("حدث خطأ أثناء الإبلاغ");
     }
 };
 </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
 
 </body>
 </html>
