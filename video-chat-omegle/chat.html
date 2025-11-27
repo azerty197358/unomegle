@@ -30,6 +30,9 @@
       border-bottom:1px solid #eee;
       justify-content:space-between;
       flex-shrink:0;
+      position:relative;
+      z-index:20;
+      background:#fff;
     }
     .logo{
       font-size:32px;
@@ -46,6 +49,7 @@
       border:none;
       border-radius:8px;
       cursor:pointer;
+      flex-shrink:0;
     }
 
     /* ---------------- Main Layout ---------------- */
@@ -104,20 +108,9 @@
       display:none;
       opacity:0.9;
     }
-    @keyframes spin { 
-      from{transform:translate(-50%, -50%) rotate(0deg);} 
-      to{transform:translate(-50%, -50%) rotate(360deg);} 
-    }
+    @keyframes spin { from{transform:translate(-50%, -50%) rotate(0deg);} to{transform:translate(-50%, -50%) rotate(360deg);} }
 
-    /* Watermark + Labels */
-    .watermark{
-      position:absolute;
-      left:10px; bottom:8px;
-      color:#ff8a00;
-      font-size:16px;
-      font-weight:700;
-      opacity:0.8;
-    }
+    /* Label */
     .video-label{
       position:absolute;
       top:8px; left:8px;
@@ -125,7 +118,26 @@
       padding:6px 10px;
       border-radius:8px;
       font-size:12px;
-      white-space:nowrap;
+      z-index:5;
+    }
+
+    /* Remove previous watermarks completely */
+    .watermark{ display:none !important; }
+
+    /* ---------------- Mute Buttons ---------------- */
+    .mute-btn{
+      position:absolute;
+      bottom:10px;
+      right:10px;
+      background:rgba(0,0,0,0.55);
+      color:#fff;
+      border:none;
+      padding:8px 10px;
+      border-radius:50%;
+      font-size:18px;
+      cursor:pointer;
+      z-index:10;
+      backdrop-filter:blur(4px);
     }
 
     /* ---------------- Right Column ---------------- */
@@ -139,7 +151,6 @@
       min-width:0;
     }
 
-    /* Chat Messages Area */
     .chat-area{
       flex:1;
       overflow:auto;
@@ -173,7 +184,6 @@
       margin:10px 0;
     }
 
-    /* Chat Input Row */
     .chat-input-row{
       display:flex;
       align-items:center;
@@ -235,8 +245,6 @@
       cursor:pointer;
     }
 
-    /* Status Bar */
-    #loading{display:none!important;}
     #status{
       text-align:center;
       padding:6px;
@@ -247,12 +255,6 @@
     }
 
     /* ---------------- RESPONSIVE FIXED ---------------- */
-    @media(max-width:1024px){
-      .left-col{
-        width:300px;
-      }
-    }
-
     @media(max-width:900px){
       .stage{
         flex-direction:column;
@@ -276,9 +278,7 @@
       .video-frame{
         height:190px !important;
       }
-      .logo{
-        font-size:26px;
-      }
+      .logo{ font-size:26px; }
     }
 
     @media(max-width:380px){
@@ -293,11 +293,7 @@
 
 <body>
 
-<div id="loading"></div>
 <div id="status">Ready</div>
-
-<!-- زر الميكروفون -->
-<button id="micBtn" style="display:none;" onclick="toggleMicrophone()">🎤</button>
 
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
@@ -306,26 +302,27 @@
 
 <div class="stage">
 
-  <!-- Left: Videos -->
+  <!-- Left Videos -->
   <div class="left-col">
 
     <div class="video-frame top">
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
+      <button class="mute-btn" onclick="toggleRemoteMute()">🔇</button>
       <div id="remoteSpinner" class="omegle-spinner"></div>
-      <div class="watermark">SparkChat</div>
     </div>
 
     <div class="video-frame bottom">
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
-      <div class="watermark" style="opacity:0.6;">SparkChat</div>
+      <button class="mute-btn" onclick="toggleLocalMute()">🔇</button>
     </div>
 
   </div>
 
-  <!-- Right: Chat Section -->
+  <!-- Chat -->
   <div class="right-col">
+
     <div class="chat-area" id="chatMessages">
       <div class="msg system">Click "Start" to begin the chat.</div>
     </div>
@@ -341,6 +338,7 @@
         <button id="stopBtn" class="btn-stop">Stop</button>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -350,10 +348,20 @@ document.getElementById("exitBtn").addEventListener("click",()=>{
   window.location.href="index.html";
 });
 
-// Fix: Stop spinner
+// Stop Spinner
 document.getElementById("stopBtn").addEventListener("click",()=>{
   document.getElementById("remoteSpinner").style.display="none";
 });
+
+// Mute Controls
+function toggleLocalMute(){
+  const vid=document.getElementById("localVideo");
+  vid.muted=!vid.muted;
+}
+function toggleRemoteMute(){
+  const vid=document.getElementById("remoteVideo");
+  vid.muted=!vid.muted;
+}
 </script>
 
 <script src="/socket.io/socket.io.js"></script>
