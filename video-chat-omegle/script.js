@@ -1,5 +1,5 @@
 // ========================================================
-//  SPARKCHAT — Full Clean Script (Rewritten & Fixed)
+//  SPARKCHAT — Full Clean Script (Fixed & Verified)
 // ========================================================
 
 window.onload = () => {
@@ -281,11 +281,14 @@ window.onload = () => {
     else resetUI();
   });
 
-  socket.on("partner-found", async ({ id, initiator }) => {
+  // ================================================
+  //  🔥 FIXED HERE: partnerId was not being set 🔥
+  // ================================================
+  socket.on("partner-found", async ({ partnerId: pid, initiator }) => {
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
 
-    partnerId = id;
+    partnerId = pid;      // ← FIXED
     isInitiator = initiator;
 
     statusText.textContent = "Connecting...";
