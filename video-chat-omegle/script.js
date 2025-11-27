@@ -1,3 +1,40 @@
+// ====== REPORT BUTTON ======
+const reportBtn = document.getElementById("reportBtn");
+
+reportBtn.onclick = async () => {
+  if (!partnerId) {
+    alert("لا يوجد شخص للإبلاغ عنه.");
+    return;
+  }
+
+  const remoteVideo = document.getElementById("remoteVideo");
+  if (!remoteVideo || remoteVideo.readyState < 2) {
+    alert("لا يمكن التقاط لقطة الآن. لم يظهر الفيديو بعد.");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = remoteVideo.videoWidth;
+  canvas.height = remoteVideo.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+
+  const screenshot = canvas.toDataURL("image/png");
+  const timestamp = new Date().toISOString().replace(/[:]/g, '-');
+
+  socket.emit("reportPorn", {
+    partnerId,
+    timestamp,
+    screenshot
+  });
+
+  alert("🚨 تم إرسال الإبلاغ بنجاح!");
+};
+
+socket.on("reportHandled", (msg) => {
+  console.log("Report server message:", msg.message);
+});
+
 // ====== SOCKET & GLOBALS ======
 const socket = io();
 let localStream = null;
@@ -13,26 +50,20 @@ const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 // ====== DOM ======
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
-
-const localSpinner = document.getElementById("localSpinner");  // داخل شاشة الغريب
-const remoteSpinner = document.getElementById("remoteSpinner"); // أيضا داخل شاشة الغريب
-
+const localSpinner = document.getElementById("localSpinner");
+const remoteSpinner = document.getElementById("remoteSpinner");
 const statusText = document.getElementById("status");
-
 const startBtn = document.getElementById("startBtn");
 const skipBtn = document.getElementById("skipBtn");
 const stopBtn = document.getElementById("stopBtn");
-
 const chatInput = document.getElementById("chatInput");
 const sendBtn = document.getElementById("sendBtn");
 const chatMessages = document.getElementById("chatMessages");
-
 const micBtn = document.getElementById("micBtn");
 
 // ====== MIC BUTTON ======
 function updateMicButton() {
   if (!micBtn) return;
-
   if (micEnabled) {
     micBtn.innerHTML = "🎤";
     micBtn.title = "Mute microphone";
@@ -44,7 +75,6 @@ function updateMicButton() {
 
 function toggleMicrophone() {
   if (!localStream) return;
-
   micEnabled = !micEnabled;
 
   localStream.getAudioTracks().forEach(track => {
@@ -62,8 +92,7 @@ window.setLocalStream = function (stream) {
   micBtn.style.display = "flex";
 };
 
-// ====== SPINNERS (جديدة ومُصلّحة) ======
-
+// ====== SPINNERS ======
 function showRemoteSpinnerOnly(show) {
   remoteSpinner.style.display = show ? "block" : "none";
   remoteVideo.style.display = show ? "none" : "block";
@@ -87,13 +116,9 @@ function hideAllSpinners() {
 function addMessage(message, type = "system") {
   const d = document.createElement("div");
 
-  if (type === "system") {
-    d.className = "msg system";
-  } else if (type === "you") {
-    d.className = "msg you";
-  } else {
-    d.className = "msg them";
-  }
+  if (type === "system") d.className = "msg system";
+  else if (type === "you") d.className = "msg you";
+  else d.className = "msg them";
 
   d.textContent = message;
   chatMessages.appendChild(d);
@@ -121,7 +146,7 @@ function closePeerConnection() {
       peerConnection.onconnectionstatechange = null;
       peerConnection.close();
     }
-  } catch { }
+  } catch {}
 
   peerConnection = null;
   remoteVideo.srcObject = null;
@@ -130,11 +155,9 @@ function closePeerConnection() {
 function resetUI() {
   disableChat();
   addMessage("Disconnected. Click 'Start' to find a new stranger.", "system");
-
   skipBtn.disabled = true;
   stopBtn.disabled = true;
   startBtn.disabled = false;
-
   hideAllSpinners();
 }
 
@@ -146,8 +169,8 @@ async function initMedia() {
         video: true,
         audio: true
       });
-      localVideo.srcObject = localStream;
 
+      localVideo.srcObject = localStream;
       if (window.setLocalStream) window.setLocalStream(localStream);
 
     } catch (err) {
@@ -168,14 +191,11 @@ function startSearchLoop() {
 
   showRemoteSpinnerOnly(true);
   statusText.textContent = "Searching for stranger...";
-
   socket.emit("find-partner");
 
   searchTimer = setTimeout(() => {
-
     if (!partnerId && !isStopped) {
       socket.emit("stop");
-
       showRemoteSpinnerOnly(false);
       statusText.textContent = "Pausing...";
 
@@ -183,7 +203,6 @@ function startSearchLoop() {
         startSearchLoop();
       }, 2000);
     }
-
   }, 4000);
 }
 
@@ -192,17 +211,14 @@ async function startSearch() {
   if (isStopped) return;
 
   statusText.textContent = "Requesting camera & microphone...";
-
   if (!(await initMedia())) return;
 
   closePeerConnection();
   partnerId = null;
   isInitiator = false;
-
   chatMessages.innerHTML = "";
 
   showRemoteSpinnerOnly(true);
-
   statusText.textContent = "Searching for stranger...";
 
   skipBtn.disabled = false;
@@ -221,15 +237,13 @@ startBtn.onclick = () => {
 
 skipBtn.onclick = () => {
   statusText.textContent = "Skipping stranger...";
-
   clearTimeout(searchTimer);
   clearTimeout(pauseTimer);
 
   socket.emit("skip");
-
   closePeerConnection();
-  disableChat();
 
+  disableChat();
   addMessage("You skipped the stranger.", "system");
 
   showRemoteSpinnerOnly(true);
@@ -238,14 +252,13 @@ skipBtn.onclick = () => {
 
 stopBtn.onclick = () => {
   statusText.textContent = "Stopped.";
-
   isStopped = true;
   autoReconnect = false;
 
   clearTimeout(searchTimer);
   clearTimeout(pauseTimer);
-
   socket.emit("stop");
+
   closePeerConnection();
   resetUI();
 
@@ -266,7 +279,6 @@ chatInput.onkeypress = (e) => {
 
 function sendMessage() {
   const message = chatInput.value.trim();
-
   if (!message || !partnerId) return;
 
   addMessage(message, "you");
@@ -289,8 +301,8 @@ socket.on("partner-disconnected", () => {
 
   clearTimeout(searchTimer);
   clearTimeout(pauseTimer);
-
   closePeerConnection();
+
   disableChat();
   addMessage("Stranger disconnected.", "system");
 
@@ -315,8 +327,8 @@ socket.on("partner-found", async ({ id, initiator }) => {
   isInitiator = initiator;
 
   statusText.textContent = "Stranger found! Connecting...";
-
   hideAllSpinners();
+
   createPeerConnection();
 
   if (isInitiator) {
@@ -328,7 +340,6 @@ socket.on("partner-found", async ({ id, initiator }) => {
         to: partnerId,
         data: peerConnection.localDescription
       });
-
     } catch (err) {
       console.error("Offer error:", err);
     }
@@ -341,7 +352,6 @@ socket.on("signal", async ({ from, data }) => {
   try {
     if (data.type === "offer") {
       await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
@@ -374,11 +384,9 @@ function createPeerConnection() {
 
   peerConnection.ontrack = (event) => {
     remoteVideo.srcObject = event.streams[0];
-
     statusText.textContent = "Connected!";
     enableChat();
     addMessage("Connected with a stranger. Say hi!", "system");
-
     showRemoteSpinnerOnly(false);
   };
 
