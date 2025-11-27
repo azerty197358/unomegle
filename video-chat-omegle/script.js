@@ -1,169 +1,144 @@
-// ====== REPORT BUTTON ======
-const reportBtn = document.getElementById("reportBtn");
+// ========================================================
+//  SPARKCHAT — Full Clean Script (Rewritten & Fixed)
+// ========================================================
 
-reportBtn.onclick = async () => {
-  if (!partnerId) {
-    alert("لا يوجد شخص للإبلاغ عنه.");
-    return;
-  }
+window.onload = () => {
 
+  // ====== GLOBALS ======
+  const socket = io();
+
+  let localStream = null;
+  let peerConnection = null;
+  let partnerId = null;
+  let isInitiator = false;
+  let autoReconnect = true;
+  let isStopped = false;
+  let micEnabled = true;
+
+  let searchTimer = null;
+  let pauseTimer = null;
+
+  const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+
+  // ====== DOM ELEMENTS ======
+  const localVideo = document.getElementById("localVideo");
   const remoteVideo = document.getElementById("remoteVideo");
-  if (!remoteVideo || remoteVideo.readyState < 2) {
-    alert("لا يمكن التقاط لقطة الآن. لم يظهر الفيديو بعد.");
-    return;
-  }
+  const localSpinner = document.getElementById("localSpinner");
+  const remoteSpinner = document.getElementById("remoteSpinner");
 
-  const canvas = document.createElement("canvas");
-  canvas.width = remoteVideo.videoWidth;
-  canvas.height = remoteVideo.videoHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+  const statusText = document.getElementById("status");
 
-  const screenshot = canvas.toDataURL("image/png");
-  const timestamp = new Date().toISOString().replace(/[:]/g, '-');
+  const startBtn = document.getElementById("startBtn");
+  const skipBtn = document.getElementById("skipBtn");
+  const stopBtn = document.getElementById("stopBtn");
 
-  socket.emit("reportPorn", {
-    partnerId,
-    timestamp,
-    screenshot
+  const chatInput = document.getElementById("chatInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const chatMessages = document.getElementById("chatMessages");
+
+  const micBtn = document.getElementById("micBtn");
+  const reportBtn = document.getElementById("reportBtn");
+
+  // ========================================================
+  //  REPORT FUNCTION
+  // ========================================================
+
+  reportBtn.onclick = async () => {
+    if (!partnerId) return alert("لا يوجد شخص للإبلاغ عنه.");
+
+    if (!remoteVideo || remoteVideo.readyState < 2)
+      return alert("لا يمكن التقاط لقطة الآن.");
+
+    const canvas = document.createElement("canvas");
+    canvas.width = remoteVideo.videoWidth;
+    canvas.height = remoteVideo.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+
+    const screenshot = canvas.toDataURL("image/png");
+
+    socket.emit("reportPorn", {
+      partnerId,
+      timestamp: new Date().toISOString().replace(/[:]/g, "-"),
+      screenshot
+    });
+
+    alert("🚨 تم إرسال الإبلاغ بنجاح!");
+  };
+
+  socket.on("reportHandled", (msg) => {
+    console.log("Report response:", msg.message);
   });
 
-  alert("🚨 تم إرسال الإبلاغ بنجاح!");
-};
+  // ========================================================
+  //  MIC FUNCTIONS
+  // ========================================================
 
-socket.on("reportHandled", (msg) => {
-  console.log("Report server message:", msg.message);
-});
-
-// ====== SOCKET & GLOBALS ======
-const socket = io();
-let localStream = null;
-let peerConnection = null;
-let partnerId = null;
-let isInitiator = false;
-let autoReconnect = true;
-let isStopped = false;
-let micEnabled = true;
-
-const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
-
-// ====== DOM ======
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
-const localSpinner = document.getElementById("localSpinner");
-const remoteSpinner = document.getElementById("remoteSpinner");
-const statusText = document.getElementById("status");
-const startBtn = document.getElementById("startBtn");
-const skipBtn = document.getElementById("skipBtn");
-const stopBtn = document.getElementById("stopBtn");
-const chatInput = document.getElementById("chatInput");
-const sendBtn = document.getElementById("sendBtn");
-const chatMessages = document.getElementById("chatMessages");
-const micBtn = document.getElementById("micBtn");
-
-// ====== MIC BUTTON ======
-function updateMicButton() {
-  if (!micBtn) return;
-  if (micEnabled) {
-    micBtn.innerHTML = "🎤";
-    micBtn.title = "Mute microphone";
-  } else {
-    micBtn.innerHTML = "🔇";
-    micBtn.title = "Unmute microphone";
+  function updateMicButton() {
+    micBtn.textContent = micEnabled ? "🎤" : "🔇";
   }
-}
 
-function toggleMicrophone() {
-  if (!localStream) return;
-  micEnabled = !micEnabled;
+  function toggleMicrophone() {
+    if (!localStream) return;
 
-  localStream.getAudioTracks().forEach(track => {
-    track.enabled = micEnabled;
-  });
+    micEnabled = !micEnabled;
+    localStream.getAudioTracks().forEach(t => (t.enabled = micEnabled));
+    updateMicButton();
+  }
 
-  updateMicButton();
-}
+  micBtn.onclick = toggleMicrophone;
 
-window.toggleMicrophone = toggleMicrophone;
+  // ========================================================
+  //  UI HELPERS
+  // ========================================================
 
-window.setLocalStream = function (stream) {
-  localStream = stream;
-  updateMicButton();
-  micBtn.style.display = "flex";
-};
+  function showRemoteSpinnerOnly(show) {
+    remoteSpinner.style.display = show ? "block" : "none";
+    remoteVideo.style.display = show ? "none" : "block";
+  }
 
-// ====== SPINNERS ======
-function showRemoteSpinnerOnly(show) {
-  remoteSpinner.style.display = show ? "block" : "none";
-  remoteVideo.style.display = show ? "none" : "block";
-}
+  function hideAllSpinners() {
+    remoteSpinner.style.display = "none";
+    localSpinner.style.display = "none";
+    localVideo.style.display = "block";
+    remoteVideo.style.display = "block";
+  }
 
-function showBothSpinners() {
-  localSpinner.style.display = "block";
-  remoteSpinner.style.display = "block";
-  localVideo.style.display = "none";
-  remoteVideo.style.display = "none";
-}
+  function addMessage(msg, type = "system") {
+    const d = document.createElement("div");
+    d.className = `msg ${type}`;
+    d.textContent = msg;
+    chatMessages.appendChild(d);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
 
-function hideAllSpinners() {
-  localSpinner.style.display = "none";
-  remoteSpinner.style.display = "none";
-  localVideo.style.display = "block";
-  remoteVideo.style.display = "block";
-}
+  function enableChat() {
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+  }
 
-// ====== CHAT ======
-function addMessage(message, type = "system") {
-  const d = document.createElement("div");
+  function disableChat() {
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    chatInput.value = "";
+  }
 
-  if (type === "system") d.className = "msg system";
-  else if (type === "you") d.className = "msg you";
-  else d.className = "msg them";
+  function resetUI() {
+    disableChat();
+    addMessage("Disconnected. Press Start.", "system");
+    startBtn.disabled = false;
+    skipBtn.disabled = true;
+    stopBtn.disabled = true;
+    hideAllSpinners();
+  }
 
-  d.textContent = message;
-  chatMessages.appendChild(d);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
+  // ========================================================
+  //  MEDIA
+  // ========================================================
 
-function enableChat() {
-  chatInput.disabled = false;
-  sendBtn.disabled = false;
-  chatInput.focus();
-}
+  async function initMedia() {
+    if (localStream) return true;
 
-function disableChat() {
-  chatInput.disabled = true;
-  sendBtn.disabled = true;
-  chatInput.value = "";
-}
-
-// ====== RESET ======
-function closePeerConnection() {
-  try {
-    if (peerConnection) {
-      peerConnection.ontrack = null;
-      peerConnection.onicecandidate = null;
-      peerConnection.onconnectionstatechange = null;
-      peerConnection.close();
-    }
-  } catch {}
-
-  peerConnection = null;
-  remoteVideo.srcObject = null;
-}
-
-function resetUI() {
-  disableChat();
-  addMessage("Disconnected. Click 'Start' to find a new stranger.", "system");
-  skipBtn.disabled = true;
-  stopBtn.disabled = true;
-  startBtn.disabled = false;
-  hideAllSpinners();
-}
-
-// ====== MEDIA ======
-async function initMedia() {
-  if (!localStream) {
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -171,258 +146,237 @@ async function initMedia() {
       });
 
       localVideo.srcObject = localStream;
-      if (window.setLocalStream) window.setLocalStream(localStream);
+      updateMicButton();
+      return true;
 
     } catch (err) {
-      statusText.textContent = "Camera/mic access denied.";
+      statusText.textContent = "Camera/Mic access denied.";
       console.error(err);
       return false;
     }
   }
-  return true;
-}
 
-// ====== SEARCH LOOP ======
-let searchTimer = null;
-let pauseTimer = null;
+  // ========================================================
+  //  SEARCH SYSTEM
+  // ========================================================
 
-function startSearchLoop() {
-  if (isStopped || partnerId) return;
+  function startSearchLoop() {
+    if (isStopped || partnerId) return;
 
-  showRemoteSpinnerOnly(true);
-  statusText.textContent = "Searching for stranger...";
-  socket.emit("find-partner");
+    showRemoteSpinnerOnly(true);
+    statusText.textContent = "Searching...";
+    socket.emit("find-partner");
 
-  searchTimer = setTimeout(() => {
-    if (!partnerId && !isStopped) {
-      socket.emit("stop");
-      showRemoteSpinnerOnly(false);
-      statusText.textContent = "Pausing...";
+    searchTimer = setTimeout(() => {
+      if (!partnerId && !isStopped) {
+        socket.emit("stop");
+        showRemoteSpinnerOnly(false);
+        statusText.textContent = "Pausing...";
 
-      pauseTimer = setTimeout(() => {
-        startSearchLoop();
-      }, 2000);
-    }
-  }, 4000);
-}
-
-// ====== START ======
-async function startSearch() {
-  if (isStopped) return;
-
-  statusText.textContent = "Requesting camera & microphone...";
-  if (!(await initMedia())) return;
-
-  closePeerConnection();
-  partnerId = null;
-  isInitiator = false;
-  chatMessages.innerHTML = "";
-
-  showRemoteSpinnerOnly(true);
-  statusText.textContent = "Searching for stranger...";
-
-  skipBtn.disabled = false;
-  stopBtn.disabled = false;
-  startBtn.disabled = true;
-
-  startSearchLoop();
-}
-
-// ====== BUTTONS ======
-startBtn.onclick = () => {
-  isStopped = false;
-  autoReconnect = true;
-  startSearch();
-};
-
-skipBtn.onclick = () => {
-  statusText.textContent = "Skipping stranger...";
-  clearTimeout(searchTimer);
-  clearTimeout(pauseTimer);
-
-  socket.emit("skip");
-  closePeerConnection();
-
-  disableChat();
-  addMessage("You skipped the stranger.", "system");
-
-  showRemoteSpinnerOnly(true);
-  startSearchLoop();
-};
-
-stopBtn.onclick = () => {
-  statusText.textContent = "Stopped.";
-  isStopped = true;
-  autoReconnect = false;
-
-  clearTimeout(searchTimer);
-  clearTimeout(pauseTimer);
-  socket.emit("stop");
-
-  closePeerConnection();
-  resetUI();
-
-  if (localStream) {
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = null;
-    localVideo.srcObject = null;
-    micBtn.style.display = "none";
+        pauseTimer = setTimeout(startSearchLoop, 2000);
+      }
+    }, 4000);
   }
-};
 
-// ====== SEND MESSAGE ======
-sendBtn.onclick = sendMessage;
+  async function startSearch() {
+    if (!(await initMedia())) return;
 
-chatInput.onkeypress = (e) => {
-  if (e.key === "Enter") sendMessage();
-};
+    closePeerConnection();
+    partnerId = null;
+    isInitiator = false;
 
-function sendMessage() {
-  const message = chatInput.value.trim();
-  if (!message || !partnerId) return;
+    chatMessages.innerHTML = "";
+    showRemoteSpinnerOnly(true);
 
-  addMessage(message, "you");
-  socket.emit("chat-message", { to: partnerId, message });
+    startBtn.disabled = true;
+    skipBtn.disabled = false;
+    stopBtn.disabled = false;
 
-  chatInput.value = "";
-}
+    startSearchLoop();
+  }
 
-// ====== SOCKET EVENTS ======
-socket.on("waiting", (msg) => {
-  statusText.textContent = msg || "Waiting...";
-});
+  // ========================================================
+  //  BUTTONS
+  // ========================================================
 
-socket.on("chat-message", ({ from, message }) => {
-  addMessage(message, "them");
-});
+  startBtn.onclick = () => {
+    isStopped = false;
+    autoReconnect = true;
+    startSearch();
+  };
 
-socket.on("partner-disconnected", () => {
-  statusText.textContent = "Stranger disconnected.";
+  skipBtn.onclick = () => {
+    statusText.textContent = "Skipping...";
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
 
-  clearTimeout(searchTimer);
-  clearTimeout(pauseTimer);
-  closePeerConnection();
+    socket.emit("skip");
+    closePeerConnection();
+    disableChat();
+    addMessage("You skipped.", "system");
 
-  disableChat();
-  addMessage("Stranger disconnected.", "system");
-
-  partnerId = null;
-  isInitiator = false;
-
-  if (autoReconnect && !isStopped) {
-    statusText.textContent = "Searching for new stranger...";
     showRemoteSpinnerOnly(true);
     startSearchLoop();
-  } else {
+  };
+
+  stopBtn.onclick = () => {
+    statusText.textContent = "Stopped.";
+    isStopped = true;
+    autoReconnect = false;
+
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+    socket.emit("stop");
+
+    closePeerConnection();
     resetUI();
+
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+      localVideo.srcObject = null;
+    }
+  };
+
+  // ========================================================
+  //  CHAT
+  // ========================================================
+
+  function sendMessage() {
+    const msg = chatInput.value.trim();
+    if (!msg || !partnerId) return;
+
+    addMessage(msg, "you");
+    socket.emit("chat-message", { to: partnerId, message: msg });
+    chatInput.value = "";
   }
-});
 
-// ====== SIGNALING ======
-socket.on("partner-found", async ({ id, initiator }) => {
-  clearTimeout(searchTimer);
-  clearTimeout(pauseTimer);
+  sendBtn.onclick = sendMessage;
+  chatInput.onkeypress = e => e.key === "Enter" && sendMessage();
 
-  partnerId = id;
-  isInitiator = initiator;
+  // ========================================================
+  //  SOCKET EVENTS
+  // ========================================================
 
-  statusText.textContent = "Stranger found! Connecting...";
-  hideAllSpinners();
+  socket.on("waiting", msg => {
+    statusText.textContent = msg || "Waiting...";
+  });
 
-  createPeerConnection();
+  socket.on("chat-message", ({ message }) => {
+    addMessage(message, "them");
+  });
 
-  if (isInitiator) {
-    try {
+  socket.on("partner-disconnected", () => {
+    statusText.textContent = "Stranger disconnected.";
+    disableChat();
+    addMessage("Disconnected.", "system");
+
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+
+    partnerId = null;
+    closePeerConnection();
+
+    if (autoReconnect && !isStopped) startSearchLoop();
+    else resetUI();
+  });
+
+  socket.on("partner-found", async ({ id, initiator }) => {
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
+
+    partnerId = id;
+    isInitiator = initiator;
+
+    statusText.textContent = "Connecting...";
+    hideAllSpinners();
+
+    createPeerConnection();
+
+    if (isInitiator) {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
-
-      socket.emit("signal", {
-        to: partnerId,
-        data: peerConnection.localDescription
-      });
-    } catch (err) {
-      console.error("Offer error:", err);
+      socket.emit("signal", { to: partnerId, data: offer });
     }
-  }
-});
+  });
 
-socket.on("signal", async ({ from, data }) => {
-  if (!peerConnection) createPeerConnection();
+  socket.on("signal", async ({ from, data }) => {
+    if (!peerConnection) createPeerConnection();
 
-  try {
     if (data.type === "offer") {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+      await peerConnection.setRemoteDescription(data);
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
-      socket.emit("signal", {
-        to: from,
-        data: peerConnection.localDescription
-      });
+      socket.emit("signal", { to: from, data: answer });
 
     } else if (data.type === "answer") {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+      await peerConnection.setRemoteDescription(data);
 
     } else if (data.candidate) {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      await peerConnection.addIceCandidate(data.candidate);
+    }
+  });
+
+  // ========================================================
+  //  WEBRTC
+  // ========================================================
+
+  function createPeerConnection() {
+    peerConnection = new RTCPeerConnection(servers);
+
+    if (localStream) {
+      localStream.getTracks().forEach(track =>
+        peerConnection.addTrack(track, localStream)
+      );
     }
 
-  } catch (err) {
-    console.error("Signal error:", err);
-  }
-});
-
-// ====== WEBRTC ======
-function createPeerConnection() {
-  peerConnection = new RTCPeerConnection(servers);
-
-  if (localStream) {
-    localStream.getTracks().forEach(track =>
-      peerConnection.addTrack(track, localStream)
-    );
-  }
-
-  peerConnection.ontrack = (event) => {
-    remoteVideo.srcObject = event.streams[0];
-    statusText.textContent = "Connected!";
-    enableChat();
-    addMessage("Connected with a stranger. Say hi!", "system");
-    showRemoteSpinnerOnly(false);
-  };
-
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate && partnerId) {
-      socket.emit("signal", {
-        to: partnerId,
-        data: { candidate: event.candidate }
-      });
-    }
-  };
-
-  peerConnection.onconnectionstatechange = () => {
-    const state = peerConnection.connectionState;
-
-    if (state === "connected") {
+    peerConnection.ontrack = e => {
+      remoteVideo.srcObject = e.streams[0];
       statusText.textContent = "Connected!";
-    }
+      enableChat();
+      addMessage("Say hi!", "system");
+      showRemoteSpinnerOnly(false);
+    };
 
-    if (["disconnected", "failed", "closed"].includes(state)) {
-      statusText.textContent = "Connection lost.";
-
-      clearTimeout(searchTimer);
-      clearTimeout(pauseTimer);
-
-      closePeerConnection();
-      disableChat();
-      addMessage("Connection lost.", "system");
-
-      if (autoReconnect && !isStopped) {
-        statusText.textContent = "Reconnecting...";
-        showRemoteSpinnerOnly(true);
-        startSearchLoop();
-      } else {
-        resetUI();
+    peerConnection.onicecandidate = e => {
+      if (e.candidate) {
+        socket.emit("signal", {
+          to: partnerId,
+          data: { candidate: e.candidate }
+        });
       }
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      const s = peerConnection.connectionState;
+
+      if (s === "connected") statusText.textContent = "Connected!";
+
+      if (["disconnected", "failed", "closed"].includes(s)) {
+        statusText.textContent = "Connection lost.";
+
+        disableChat();
+        addMessage("Connection lost.", "system");
+
+        closePeerConnection();
+        partnerId = null;
+
+        if (autoReconnect && !isStopped) startSearchLoop();
+        else resetUI();
+      }
+    };
+  }
+
+  function closePeerConnection() {
+    if (peerConnection) {
+      peerConnection.ontrack = null;
+      peerConnection.onicecandidate = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
     }
-  };
-}
+    peerConnection = null;
+    remoteVideo.srcObject = null;
+  }
+
+};
