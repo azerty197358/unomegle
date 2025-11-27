@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="ltr">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,6 +15,7 @@
     }
 
     * { margin:0; padding:0; box-sizing:border-box; }
+
     body {
       background:#fff;
       font-family:Arial, Helvetica, sans-serif;
@@ -21,7 +23,7 @@
       overflow:hidden;
     }
 
-    /* 🎯 TOP BAR */
+    /* 🔹 TOP BAR */
     .topbar {
       height:60px;
       display:flex;
@@ -39,7 +41,6 @@
     }
     .logo span { color:#3fa0ff; }
 
-    /* 🎯 EXIT BUTTON — RED */
     #exitBtn {
       background:red;
       color:#fff;
@@ -50,7 +51,6 @@
       cursor:pointer;
     }
 
-    /* 🎯 نقل حالة الاتصال داخل منطقة الإدخال */
     #status {
       padding:6px 10px;
       font-size:14px;
@@ -61,6 +61,7 @@
       width:100%;
     }
 
+    /* 🔹 MAIN LAYOUT */
     .stage {
       position:absolute;
       top:60px;
@@ -102,7 +103,6 @@
       object-fit:cover;
     }
 
-    /* 🎯 شعار داخل الفيديو */
     .watermark {
       position:absolute;
       bottom:10px;
@@ -114,7 +114,6 @@
       pointer-events:none;
     }
 
-    /* 🎯 Spinners */
     #remoteSpinner, #localSpinner {
       position:absolute;
       width:45px;
@@ -140,7 +139,6 @@
       z-index:10;
     }
 
-    /* 🎯 زر الإبلاغ داخل الشاشة - يمين أسفل */
     #reportBtn {
       position:absolute;
       bottom:10px;
@@ -154,7 +152,6 @@
       z-index:20;
     }
 
-    /* 🎯 زر المايك داخل الشاشة - يمين أسفل */
     #micBtn {
       position:absolute;
       bottom:10px;
@@ -222,7 +219,6 @@
       border:1px solid #ccc;
       border-radius:8px;
       font-size:14px;
-      min-width:120px;
       width:100%;
     }
 
@@ -236,10 +232,71 @@
     }
 
     #startBtn { background:#2ea3ff; color:#fff; flex:1; }
-    #sendBtn  { background:#2ea3ff; color:#fff; }
     #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
     #stopBtn  { background:#ccc; color:#111; flex:1; }
+    #sendBtn  { background:#2ea3ff; color:#fff; }
 
+    /* 📱🔥 MOBILE RESPONSIVE */
+    @media (max-width: 768px) {
+
+      body {
+        overflow:auto;
+        height:auto;
+      }
+
+      .stage {
+        flex-direction:column;
+        gap:12px;
+        position:relative;
+        top:0;
+        padding:10px;
+        height:auto;
+      }
+
+      .left-col {
+        width:100%;
+        min-width:100%;
+      }
+
+      .video-frame.top,
+      .video-frame.bottom {
+        height:220px;
+      }
+
+      #reportBtn,
+      #micBtn {
+        bottom:8px;
+        right:8px;
+        padding:10px;
+        font-size:16px;
+      }
+
+      .right-col {
+        width:100%;
+        height:auto;
+        border-width:4px;
+      }
+
+      .chat-area {
+        height:300px;
+      }
+
+      .row-buttons {
+        flex-direction:column;
+        width:100%;
+      }
+
+      button {
+        width:100%;
+        padding:12px;
+        font-size:16px;
+      }
+
+      #chatInput {
+        width:100%;
+        font-size:16px;
+      }
+    }
   </style>
 </head>
 
@@ -283,7 +340,6 @@
     </div>
 
     <div class="chat-input-row">
-
       <div id="status">Ready</div>
 
       <div class="row-buttons">
