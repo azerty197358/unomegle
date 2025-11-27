@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="ar" dir="ltr">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -23,7 +22,7 @@
       overflow:hidden;
     }
 
-    /* 🔹 TOP BAR */
+    /* ---------------- TOP BAR ---------------- */
     .topbar {
       height:60px;
       display:flex;
@@ -32,6 +31,7 @@
       padding:0 16px;
       border-bottom:1px solid #eee;
       background:#fff;
+      flex-shrink:0;
     }
 
     .logo {
@@ -51,17 +51,7 @@
       cursor:pointer;
     }
 
-    #status {
-      padding:6px 10px;
-      font-size:14px;
-      background:#fafafa;
-      border-radius:6px;
-      border:1px solid #ddd;
-      text-align:center;
-      width:100%;
-    }
-
-    /* 🔹 MAIN LAYOUT */
+    /* ---------------- STAGE ---------------- */
     .stage {
       position:absolute;
       top:60px;
@@ -110,11 +100,12 @@
       font-size:18px;
       font-weight:bold;
       color:#ffffffaa;
-      z-index:15;
       pointer-events:none;
+      z-index:15;
     }
 
-    #remoteSpinner, #localSpinner {
+    #remoteSpinner,
+    #localSpinner {
       position:absolute;
       width:45px;
       height:45px;
@@ -127,16 +118,18 @@
       transform:translate(-50%, -50%);
       z-index:10;
     }
+
     @keyframes spin { to { transform:translate(-50%,-50%) rotate(360deg);} }
 
     .video-label {
       position:absolute;
-      top:8px; left:8px;
+      top:8px;
+      left:8px;
       background:#fff;
       padding:4px 10px;
       border-radius:6px;
       font-size:12px;
-      z-index:10;
+      z-index:20;
     }
 
     #reportBtn {
@@ -149,7 +142,7 @@
       font-size:18px;
       border-radius:50%;
       cursor:pointer;
-      z-index:20;
+      z-index:30;
     }
 
     #micBtn {
@@ -162,10 +155,8 @@
       font-size:18px;
       border-radius:50%;
       cursor:pointer;
-      z-index:20;
+      z-index:30;
     }
-
-    .remote-mute-btn { display:none !important; }
 
     .right-col {
       flex:1;
@@ -196,8 +187,6 @@
       border:1px solid #ffb3b3;
     }
 
-    .msg.system { text-align:center; color:#777; }
-
     .chat-input-row {
       display:flex;
       flex-direction:column;
@@ -207,6 +196,16 @@
       border-top:1px solid #ddd;
     }
 
+    #status {
+      padding:6px 10px;
+      font-size:14px;
+      background:#fafafa;
+      border-radius:6px;
+      border:1px solid #ddd;
+      width:100%;
+      text-align:center;
+    }
+
     .row-buttons {
       display:flex;
       gap:6px;
@@ -214,7 +213,6 @@
     }
 
     #chatInput {
-      flex:1;
       padding:10px;
       border:1px solid #ccc;
       border-radius:8px;
@@ -228,28 +226,34 @@
       padding:10px 14px;
       font-size:14px;
       cursor:pointer;
-      white-space:nowrap;
     }
 
     #startBtn { background:#2ea3ff; color:#fff; flex:1; }
     #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
     #stopBtn  { background:#ccc; color:#111; flex:1; }
-    #sendBtn  { background:#2ea3ff; color:#fff; }
+    #sendBtn  { background:#2ea3ff; color:#fff; width:100%; }
 
-    /* 📱🔥 MOBILE RESPONSIVE */
-    @media (max-width: 768px) {
+    /* ---------- RESPONSIVENESS ---------- */
 
-      body {
-        overflow:auto;
-        height:auto;
+    /* Tablets */
+    @media (max-width: 900px) {
+      .left-col {
+        width: 280px;
       }
+      .video-frame.top { height: 230px; }
+      .video-frame.bottom { height: 180px; }
+    }
+
+    /* Mobile layout */
+    @media (max-width: 768px) {
+      body { overflow:auto; }
 
       .stage {
         flex-direction:column;
-        gap:12px;
+        padding:8px;
+        gap:8px;
         position:relative;
-        top:0;
-        padding:10px;
+        top:60px;
         height:auto;
       }
 
@@ -260,43 +264,44 @@
 
       .video-frame.top,
       .video-frame.bottom {
-        height:220px;
-      }
-
-      #reportBtn,
-      #micBtn {
-        bottom:8px;
-        right:8px;
-        padding:10px;
-        font-size:16px;
+        width:100%;
+        height:260px;
       }
 
       .right-col {
         width:100%;
         height:auto;
-        border-width:4px;
+      }
+    }
+
+    /* Small phones */
+    @media (max-width: 480px) {
+      .logo { font-size:20px; }
+
+      .video-label { font-size:10px; }
+      .watermark { font-size:14px; }
+
+      #exitBtn {
+        padding:6px 12px;
+        font-size:13px;
       }
 
-      .chat-area {
-        height:300px;
+      button {
+        padding:8px 10px;
+        font-size:12px;
       }
 
       .row-buttons {
         flex-direction:column;
-        width:100%;
       }
 
-      button {
+      #startBtn,
+      #skipBtn,
+      #stopBtn {
         width:100%;
-        padding:12px;
-        font-size:16px;
-      }
-
-      #chatInput {
-        width:100%;
-        font-size:16px;
       }
     }
+
   </style>
 </head>
 
@@ -310,7 +315,6 @@
 <div class="stage">
 
   <div class="left-col">
-
     <!-- Stranger -->
     <div class="video-frame top">
       <button id="reportBtn">🚨</button>
@@ -328,7 +332,6 @@
       <video id="localVideo" autoplay muted playsinline></video>
       <div id="localSpinner"></div>
     </div>
-
   </div>
 
   <div class="right-col">
