@@ -85,7 +85,6 @@
       object-fit:cover;
     }
 
-    /* ---------- NEW SPINNER INSIDE STRANGER FRAME ONLY --------- */
     #remoteSpinner, #localSpinner{
       position:absolute;
       width:45px;
@@ -112,18 +111,22 @@
       z-index:10;
     }
 
-    .mute-btn{
+    /* ⛔ زر الإبلاغ الأحمر الصغير */
+    #reportBtn {
       position:absolute;
-      bottom:10px; right:10px;
-      background:rgba(0,0,0,0.55);
-      border:none;
-      padding:8px;
+      top:10px;
+      left:10px;
+      background:red;
       color:#fff;
-      font-size:18px;
+      padding:6px 8px;
+      font-size:16px;
       border-radius:50%;
       cursor:pointer;
-      z-index:10;
+      z-index:12;
     }
+
+    /* إزالة زر كتم الغريب بالكامل */
+    .remote-mute-btn { display:none !important; }
 
     .right-col{
       flex:1;
@@ -145,6 +148,19 @@
       flex-direction:column;
       gap:8px;
     }
+
+    /* ⚠️ رسالة التحذير */
+    .warning-msg {
+      background:#ffe1e1;
+      color:#b30000;
+      padding:10px;
+      border-radius:10px;
+      font-size:14px;
+      text-align:center;
+      border:1px solid #ffb3b3;
+      margin-bottom:10px;
+    }
+
     .msg.system {text-align:center;color:#777;}
     .msg.you, .msg.them{
       padding:10px 14px;
@@ -188,7 +204,6 @@
     #skipBtn{background:#ff9a00;color:#fff;}
     #stopBtn{background:#ccc;color:#111;}
 
-    /* ============ MOBILE FIXES ============ */
     @media(max-width:750px){
       body{overflow:auto;}
       .stage{
@@ -224,31 +239,42 @@
 
 <div class="stage">
 
-  <!-- LEFT VIDEOS -->
   <div class="left-col">
+
     <div class="video-frame top">
-      <button id="reportBtn" class="mute-btn" style="left:10px; background:red;">🚨</button>
+
+      <!-- ⛔ زر الإبلاغ -->
+      <button id="reportBtn">🚨</button>
 
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
 
-      <!-- NEW LOCAL SPINNER (Stranger searching) -->
       <div id="localSpinner"></div>
-      
       <div id="remoteSpinner"></div>
-      <button class="mute-btn" onclick="toggleRemoteMute()">🔇</button>
+
+      <!-- تم إخفاء زر الميوت الخاص بالغريب -->
+      <button class="mute-btn remote-mute-btn">🔇</button>
+
     </div>
-     
+
     <div class="video-frame bottom">
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
+
+      <!-- زر كتم المحلي فقط -->
       <button id="micBtn" class="mute-btn" onclick="toggleMicrophone()">🎤</button>
+
     </div>
   </div>
 
-  <!-- CHAT -->
   <div class="right-col">
     <div class="chat-area" id="chatMessages">
+
+      <!-- ⚠️ رسالة تحذيرية -->
+      <div class="warning-msg">
+        ⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.
+      </div>
+
       <div class="msg system">Click "Start" to begin.</div>
     </div>
 
@@ -268,6 +294,16 @@
 
 <script>
 document.getElementById("exitBtn").onclick = ()=>location.href="index.html";
+
+/* 🎯 زر الإبلاغ – يلتقط صورة للشاشتين */
+document.getElementById("reportBtn").onclick = async () => {
+    try {
+        await captureReport(); // هذه الدالة تنفذ داخل script.js
+        alert("تم إرسال البلاغ بنجاح");
+    } catch(e) {
+        alert("حدث خطأ أثناء الإبلاغ");
+    }
+};
 </script>
 
 </body>
