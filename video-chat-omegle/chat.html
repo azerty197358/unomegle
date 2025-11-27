@@ -220,7 +220,6 @@
       border-bottom:1px solid #ddd;
     }
 
-    /* Responsive */
     @media(max-width:900px){
       .stage{ flex-direction:column; overflow:auto; }
       body{ overflow:auto; }
@@ -237,10 +236,7 @@
 
 <div id="loading"></div>
 <div id="status">Ready</div>
-<!-- مؤشر تحميل محلي (اختياري) -->
 <div id="localSpinner" class="omegle-spinner" style="display:none;"></div>
-
-<!-- زر الميكروفون -->
 <button id="micBtn" style="display:none;" onclick="toggleMicrophone()">🎤</button>
 
 <div class="topbar">
@@ -287,19 +283,4 @@
 </div>
 
 <script>
-// exit
- document.getElementById("exitBtn").addEventListener("click",()=>{
-   window.location.href="index.html";
- });
-
-// fix spinner stop
-document.getElementById("stopBtn").addEventListener("click",()=>{
-  const sp=document.getElementById("remoteSpinner");
-  sp.style.display="none";
-});
-</script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
-</body>
-</html>
+ document.get
