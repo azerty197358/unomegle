@@ -12,11 +12,11 @@
       --light:#ffffff;
       --border:#e6d7c8;
     }
-    *{box-sizing:border-box;}
+    *{box-sizing:border-box;margin:0;padding:0;}
     body{
-      margin:0;
       background:#fff;
       font-family:Arial, Helvetica, sans-serif;
+      height:100vh;
       overflow:hidden;
     }
 
@@ -28,7 +28,6 @@
       padding:0 16px;
       border-bottom:1px solid #eee;
       background:#fff;
-      z-index:10;
     }
 
     .logo{
@@ -38,15 +37,23 @@
     }
     .logo span{color:#3fa0ff;}
 
+    #status{
+      text-align:center;
+      padding:6px;
+      font-size:15px;
+      border-bottom:1px solid #ddd;
+      background:#fafafa;
+    }
+
     .stage{
       position:absolute;
-      top:60px;
+      top:96px;
       bottom:0;
       left:0;
       right:0;
       display:flex;
-      gap:12px;
-      padding:12px;
+      gap:10px;
+      padding:10px;
       overflow:hidden;
     }
 
@@ -55,7 +62,7 @@
       min-width:260px;
       display:flex;
       flex-direction:column;
-      gap:12px;
+      gap:10px;
       flex-shrink:0;
     }
 
@@ -69,8 +76,8 @@
       justify-content:center;
       align-items:center;
     }
-    .video-frame.top{height:320px;}
-    .video-frame.bottom{height:260px;}
+    .video-frame.top{height:300px;}
+    .video-frame.bottom{height:240px;}
 
     video{
       width:100%;
@@ -78,7 +85,7 @@
       object-fit:cover;
     }
 
-    /* Spinner ONLY inside remote screen */
+    /* Spinner only inside stranger video */
     #remoteSpinner{
       position:absolute;
       width:45px;
@@ -88,21 +95,15 @@
       border-radius:50%;
       animation:spin 1s linear infinite;
       display:none;
-      top:50%;
-      left:50%;
+      top:50%;left:50%;
       transform:translate(-50%, -50%);
       z-index:10;
     }
-
-    @keyframes spin {
-      from {transform:translate(-50%,-50%) rotate(0deg);}
-      to   {transform:translate(-50%,-50%) rotate(360deg);}
-    }
+    @keyframes spin {to{transform:translate(-50%,-50%) rotate(360deg);} }
 
     .video-label{
       position:absolute;
-      top:8px;
-      left:8px;
+      top:8px; left:8px;
       background:#fff;
       padding:4px 10px;
       border-radius:6px;
@@ -112,8 +113,7 @@
 
     .mute-btn{
       position:absolute;
-      bottom:10px;
-      right:10px;
+      bottom:10px; right:10px;
       background:rgba(0,0,0,0.55);
       border:none;
       padding:8px;
@@ -132,14 +132,7 @@
       border-radius:10px;
       background:#fff;
       overflow:hidden;
-    }
-
-    #status{
-      text-align:center;
-      padding:6px;
-      font-size:15px;
-      background:#fafafa;
-      border-bottom:1px solid #ddd;
+      min-width:0;
     }
 
     .chat-area{
@@ -153,7 +146,7 @@
     }
 
     .msg.system {text-align:center;color:#777;}
-    .msg.you, .msg.them {
+    .msg.you, .msg.them{
       padding:10px 14px;
       border-radius:16px;
       max-width:75%;
@@ -167,10 +160,10 @@
       display:flex;
       align-items:center;
       gap:6px;
-      padding:12px;
+      padding:10px;
       border-top:1px solid #ddd;
       background:#fafafa;
-      flex-shrink:0;
+      flex-wrap:wrap;
     }
 
     #chatInput{
@@ -179,69 +172,51 @@
       border:1px solid #ccc;
       border-radius:8px;
       font-size:14px;
+      min-width:120px;
     }
 
-    .btn-skip, #sendBtn, .btn-stop{
-      padding:10px 14px;
+    button{
       border:none;
       border-radius:8px;
-      cursor:pointer;
+      padding:10px 14px;
       font-size:14px;
+      cursor:pointer;
       white-space:nowrap;
     }
 
-    .btn-skip{background:#ff9a00;color:#fff;}
+    #startBtn{background:#2ea3ff;color:#fff;}
     #sendBtn{background:#2ea3ff;color:#fff;}
-    .btn-stop{background:#ccc;color:#111;}
+    #skipBtn{background:#ff9a00;color:#fff;}
+    #stopBtn{background:#ccc;color:#111;}
 
-    #startBtn{
-      background:#2ea3ff;
-      color:#fff;
-      border:none;
-      padding:10px 16px;
-      border-radius:8px;
-      font-size:14px;
-      cursor:pointer;
-    }
-
-    /* Loading */
-    #loading{
-      display:none;
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      background:rgba(0,0,0,0.35);
-      backdrop-filter:blur(3px);
-      color:#fff;
-      font-size:26px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      z-index:9999;
-    }
-
-    /* 📱 RESPONSIVE FIX */
+    /* ===========================
+       📱 RESPONSIVE FOR MOBILE
+       =========================== */
     @media(max-width:750px){
       body{overflow:auto;}
+
       .stage{
         flex-direction:column;
         overflow:auto;
       }
+
       .left-col{
         width:100%;
-        flex-direction:column;
       }
+
       .video-frame.top,
       .video-frame.bottom{
-        height:220px;
+        height:230px;
       }
+
       .chat-input-row{
         flex-wrap:wrap;
       }
+
       #startBtn,
-      .btn-skip,
+      #skipBtn,
       #sendBtn,
-      .btn-stop{
+      #stopBtn{
         flex:1;
         text-align:center;
       }
@@ -249,12 +224,7 @@
 
     @media(max-width:450px){
       .video-frame.top,
-      .video-frame.bottom{
-        height:200px;
-      }
-      #chatInput{
-        font-size:13px;
-      }
+      .video-frame.bottom{height:200px;}
     }
 
   </style>
@@ -271,25 +241,19 @@
 
 <div class="stage">
 
-  <!-- LEFT: VIDEOS -->
+  <!-- LEFT (VIDEOS) -->
   <div class="left-col">
 
-    <!-- Stranger -->
     <div class="video-frame top">
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
-
-      <!-- SPINNER NOW ONLY HERE -->
-      <div id="remoteSpinner" class="omegle-spinner"></div>
-
+      <div id="remoteSpinner"></div>
       <button class="mute-btn" onclick="toggleRemoteMute()">🔇</button>
     </div>
 
-    <!-- You -->
     <div class="video-frame bottom">
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
-
       <button id="micBtn" class="mute-btn" onclick="toggleMicrophone()">🎤</button>
     </div>
 
@@ -298,33 +262,25 @@
   <!-- CHAT -->
   <div class="right-col">
     <div class="chat-area" id="chatMessages">
-      <div class="msg system">Click "Start" to begin the chat.</div>
+      <div class="msg system">Click "Start" to begin.</div>
     </div>
 
     <div class="chat-input-row">
-
       <button id="startBtn">Start</button>
-
-      <button id="skipBtn" class="btn-skip">Skip</button>
-
-      <input id="chatInput" placeholder="Type a message..." disabled />
-
+      <button id="skipBtn">Skip</button>
+      <input id="chatInput" placeholder="Type.." disabled />
       <button id="sendBtn" disabled>Send</button>
-      <button id="stopBtn" class="btn-stop">Stop</button>
-
+      <button id="stopBtn">Stop</button>
     </div>
   </div>
-</div>
 
-<div id="loading">Loading…</div>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
 <script>
-document.getElementById("exitBtn").onclick = () => {
-  window.location.href = "index.html";
-};
+document.getElementById("exitBtn").onclick = ()=>location.href="index.html";
 </script>
 
 </body>
