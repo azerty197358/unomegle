@@ -227,16 +227,18 @@
   <!-- LEFT VIDEOS -->
   <div class="left-col">
     <div class="video-frame top">
+      <button id="reportBtn" class="mute-btn" style="left:10px; background:red;">🚨</button>
+
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
 
       <!-- NEW LOCAL SPINNER (Stranger searching) -->
       <div id="localSpinner"></div>
-
+      
       <div id="remoteSpinner"></div>
       <button class="mute-btn" onclick="toggleRemoteMute()">🔇</button>
     </div>
-
+     
     <div class="video-frame bottom">
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
