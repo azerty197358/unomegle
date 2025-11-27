@@ -11,6 +11,7 @@
       --light:#ffffff;
       --border:#e6d7c8;
     }
+
     *{box-sizing:border-box;margin:0;padding:0;}
     body{
       background:#fff;
@@ -36,17 +37,23 @@
     }
     .logo span{color:#3fa0ff;}
 
-    #status{
-      text-align:center;
-      padding:6px;
-      font-size:15px;
-      border-bottom:1px solid #ddd;
-      background:#fafafa;
+    /* زر الخروج أحمر */
+    #exitBtn{
+      background:red;
+      color:white;
+      padding:10px 16px;
+      border-radius:10px;
+      border:none;
+      cursor:pointer;
+      font-size:16px;
     }
+
+    /* إزالة شريط الحالة الأصلي */
+    #status{ display:none !important; }
 
     .stage{
       position:absolute;
-      top:96px;
+      top:60px;
       bottom:0;
       left:0;
       right:0;
@@ -111,21 +118,34 @@
       z-index:10;
     }
 
-    /* ⛔ زر الإبلاغ الأحمر الصغير */
+    /* زر الإبلاغ أسفل الشاشة */
     #reportBtn {
-      position:absolute;
-      top:10px;
-      left:10px;
+      position:fixed;
+      bottom:20px;
+      left:20px;
       background:red;
       color:#fff;
-      padding:6px 8px;
-      font-size:16px;
+      padding:12px 14px;
+      font-size:18px;
       border-radius:50%;
       cursor:pointer;
-      z-index:12;
+      z-index:1000;
     }
 
-    /* إزالة زر كتم الغريب بالكامل */
+    /* زر المايك أسفل الشاشة */
+    #micBtn {
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      background:#2ea3ff;
+      color:#fff;
+      padding:12px 14px;
+      border-radius:50%;
+      font-size:20px;
+      cursor:pointer;
+      z-index:1000;
+    }
+
     .remote-mute-btn { display:none !important; }
 
     .right-col{
@@ -149,7 +169,18 @@
       gap:8px;
     }
 
-    /* ⚠️ رسالة التحذير */
+    /* منطقة حالة الاتصال الجديدة */
+    .connection-status {
+      background:#e7f1ff;
+      padding:8px;
+      border-radius:8px;
+      font-size:14px;
+      color:#005bbb;
+      text-align:center;
+      border:1px solid #bcd8ff;
+      margin-bottom:8px;
+    }
+
     .warning-msg {
       background:#ffe1e1;
       color:#b30000;
@@ -204,27 +235,6 @@
     #skipBtn{background:#ff9a00;color:#fff;}
     #stopBtn{background:#ccc;color:#111;}
 
-    @media(max-width:750px){
-      body{overflow:auto;}
-      .stage{
-        flex-direction:column;
-        overflow:auto;
-      }
-      .left-col{width:100%;}
-      .video-frame.top,
-      .video-frame.bottom{height:230px;}
-
-      .chat-input-row{flex-wrap:wrap;}
-      #startBtn,#skipBtn,#sendBtn,#stopBtn{
-        flex:1;
-        text-align:center;
-      }
-    }
-
-    @media(max-width:450px){
-      .video-frame.top,
-      .video-frame.bottom{height:200px;}
-    }
   </style>
 </head>
 
@@ -235,42 +245,30 @@
   <button class="exit-btn" id="exitBtn">Exit</button>
 </div>
 
-<div id="status">Ready</div>
-
 <div class="stage">
 
   <div class="left-col">
 
     <div class="video-frame top">
-
-      <!-- ⛔ زر الإبلاغ -->
-      <button id="reportBtn">🚨</button>
-
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
-
       <div id="localSpinner"></div>
       <div id="remoteSpinner"></div>
-
-      <!-- تم إخفاء زر الميوت الخاص بالغريب -->
-      <button class="mute-btn remote-mute-btn">🔇</button>
-
     </div>
 
     <div class="video-frame bottom">
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
-
-      <!-- زر كتم المحلي فقط -->
-      <button id="micBtn" class="mute-btn" onclick="toggleMicrophone()">🎤</button>
-
     </div>
+
   </div>
 
   <div class="right-col">
     <div class="chat-area" id="chatMessages">
 
-      <!-- ⚠️ رسالة تحذيرية -->
+      <!-- حالة الاتصال الجديدة -->
+      <div id="connectionState" class="connection-status">🟢 جاهز للاتصال</div>
+
       <div class="warning-msg">
         ⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.
       </div>
@@ -289,16 +287,21 @@
 
 </div>
 
+<!-- زر الإبلاغ أسفل الشاشة -->
+<button id="reportBtn">🚨</button>
+
+<!-- زر المايك أسفل الشاشة -->
+<button id="micBtn" onclick="toggleMicrophone()">🎤</button>
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
 <script>
 document.getElementById("exitBtn").onclick = ()=>location.href="index.html";
 
-/* 🎯 زر الإبلاغ – يلتقط صورة للشاشتين */
 document.getElementById("reportBtn").onclick = async () => {
     try {
-        await captureReport(); // هذه الدالة تنفذ داخل script.js
+        await captureReport();
         alert("تم إرسال البلاغ بنجاح");
     } catch(e) {
         alert("حدث خطأ أثناء الإبلاغ");
