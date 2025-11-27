@@ -1,3 +1,4 @@
+<!-- Updated responsive HTML with spinner stop fix. -->
 <!DOCTYPE html>
 <html lang="ar" dir="ltr">
 <head>
@@ -16,12 +17,11 @@
     body{
       margin:0;
       background:#fff;
-      font-family:Arial,Helvetica,sans-serif;
+      font-family:Arial, Helvetica, sans-serif;
       color:#111;
       overflow:hidden;
     }
 
-    /* Top bar */
     .topbar{
       height:64px;
       display:flex;
@@ -35,7 +35,7 @@
       font-weight:700;
       color:#ff9a00;
     }
-    .logo span{color:#3fa0ff;}
+    .logo span{ color:#3fa0ff; }
 
     .exit-btn{
       padding:10px 18px;
@@ -47,7 +47,6 @@
       cursor:pointer;
     }
 
-    /* MAIN LAYOUT */
     .stage{
       position:absolute;
       top:64px;
@@ -60,7 +59,6 @@
       overflow:hidden;
     }
 
-    /* Left videos */
     .left-col{
       width:360px;
       min-width:280px;
@@ -80,19 +78,14 @@
     .video-frame.bottom{height:260px;}
 
     video{
-      width:100%;
-      height:100%;
-      object-fit:cover;
+      width:100%; height:100%; object-fit:cover;
     }
 
-    /* Spinner */
     .omegle-spinner{
       position:absolute;
-      top:50%;
-      left:50%;
-      width:45px;
-      height:45px;
-      transform:translate(-50%,-50%);
+      top:50%; left:50%;
+      width:45px; height:45px;
+      transform:translate(-50%, -50%);
       border:5px solid #fff;
       border-top-color:transparent;
       border-radius:50%;
@@ -100,28 +93,26 @@
       display:none;
       opacity:0.9;
     }
-    @keyframes spin{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+    @keyframes spin { from{transform:translate(-50%, -50%) rotate(0deg);} to{transform:translate(-50%, -50%) rotate(360deg);} }
 
     .watermark{
       position:absolute;
-      left:10px;
-      bottom:8px;
+      left:10px; bottom:8px;
       color:#ff8a00;
       font-size:16px;
       font-weight:700;
       opacity:0.8;
     }
+
     .video-label{
       position:absolute;
-      top:8px;
-      left:8px;
+      top:8px; left:8px;
       background:#fff;
       padding:6px 10px;
       border-radius:8px;
       font-size:12px;
     }
 
-    /* Chat */
     .right-col{
       flex:1;
       display:flex;
@@ -130,6 +121,7 @@
       border-radius:10px;
       overflow:hidden;
     }
+
     .chat-area{
       flex:1;
       overflow:auto;
@@ -172,8 +164,7 @@
 
     .start-inside{
       position:absolute;
-      top:-32px;
-      left:0px;
+      top:-32px; left:0px;
       background:#2ea3ff;
       color:#fff;
       padding:8px 16px;
@@ -191,8 +182,8 @@
       font-size:15px;
     }
 
-    .left-buttons{display:flex; gap:8px; margin-left:8px;}
-    .chat-buttons{display:flex; gap:8px; margin-right:8px;}
+    .left-buttons{ display:flex; gap:8px; margin-left:8px; }
+    .chat-buttons{ display:flex; gap:8px; margin-right:8px; }
 
     .btn-skip{
       background:#ff9a00;
@@ -219,7 +210,7 @@
       cursor:pointer;
     }
 
-    #loading{display:none !important;}
+    #loading{display:none!important;}
     #status{
       text-align:center;
       padding:6px;
@@ -229,38 +220,19 @@
       border-bottom:1px solid #ddd;
     }
 
-    /* 📱 RESPONSIVE (MOBILE-READY) */
-    @media(max-width:768px){
-      body{overflow:auto;}
-
-      .stage{
-        flex-direction:column;
-        overflow:auto;
-      }
-
-      .left-col{
-        width:100%;
-        min-width:100%;
-      }
-
-      .video-frame.top{
-        height:260px;
-      }
-      .video-frame.bottom{
-        height:200px;
-      }
-
-      .right-col{
-        height:360px;
-      }
-
-      #chatInput{
-        font-size:14px;
-      }
+    /* Responsive */
+    @media(max-width:900px){
+      .stage{ flex-direction:column; overflow:auto; }
+      body{ overflow:auto; }
+      .left-col{ width:100%; flex-direction:row; }
+      .video-frame.top, .video-frame.bottom{ height:220px; }
+    }
+    @media(max-width:600px){
+      .left-col{ flex-direction:column; }
+      .video-frame.top, .video-frame.bottom{ height:190px; }
     }
   </style>
 </head>
-
 <body>
 
 <div id="loading"></div>
@@ -296,48 +268,31 @@
     </div>
 
     <div class="chat-input-row">
-
       <button id="startBtn" class="start-inside">Start</button>
-
       <div class="left-buttons">
         <button id="skipBtn" class="btn-skip">Skip</button>
       </div>
-
       <input id="chatInput" placeholder="Type a message..." disabled />
-
       <div class="chat-buttons">
         <button id="sendBtn" disabled>Send</button>
         <button id="stopBtn" class="btn-stop">Stop</button>
       </div>
-
     </div>
-
   </div>
-
 </div>
 
 <script>
-/* EXIT */
-document.getElementById("exitBtn").addEventListener("click", () => {
-  window.location.href = "index.html";
-});
+// exit
+ document.getElementById("exitBtn").addEventListener("click",()=>{
+   window.location.href="index.html";
+ });
 
-/* --- SPINNER FIX --- */
-const remoteSpinner = document.getElementById("remoteSpinner");
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
-
-/* Show spinner on Start */
-startBtn.addEventListener("click", () => {
-  remoteSpinner.style.display = "block";
-});
-
-/* Hide spinner on Stop */
-stopBtn.addEventListener("click", () => {
-  remoteSpinner.style.display = "none";
+// fix spinner stop
+document.getElementById("stopBtn").addEventListener("click",()=>{
+  const sp=document.getElementById("remoteSpinner");
+  sp.style.display="none";
 });
 </script>
-
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
