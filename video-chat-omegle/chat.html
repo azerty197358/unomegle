@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SparkChat</title>
-
   <style>
     :root {
       --blue:#2ea3ff;
@@ -76,6 +75,7 @@
       justify-content:center;
       align-items:center;
     }
+
     .video-frame.top{height:300px;}
     .video-frame.bottom{height:240px;}
 
@@ -85,8 +85,8 @@
       object-fit:cover;
     }
 
-    /* Spinner only inside stranger video */
-    #remoteSpinner{
+    /* ---------- NEW SPINNER INSIDE STRANGER FRAME ONLY --------- */
+    #remoteSpinner, #localSpinner{
       position:absolute;
       width:45px;
       height:45px;
@@ -95,7 +95,8 @@
       border-radius:50%;
       animation:spin 1s linear infinite;
       display:none;
-      top:50%;left:50%;
+      top:50%;
+      left:50%;
       transform:translate(-50%, -50%);
       z-index:10;
     }
@@ -144,7 +145,6 @@
       flex-direction:column;
       gap:8px;
     }
-
     .msg.system {text-align:center;color:#777;}
     .msg.you, .msg.them{
       padding:10px 14px;
@@ -183,40 +183,24 @@
       cursor:pointer;
       white-space:nowrap;
     }
-
     #startBtn{background:#2ea3ff;color:#fff;}
     #sendBtn{background:#2ea3ff;color:#fff;}
     #skipBtn{background:#ff9a00;color:#fff;}
     #stopBtn{background:#ccc;color:#111;}
 
-    /* ===========================
-       📱 RESPONSIVE FOR MOBILE
-       =========================== */
+    /* ============ MOBILE FIXES ============ */
     @media(max-width:750px){
       body{overflow:auto;}
-
       .stage{
         flex-direction:column;
         overflow:auto;
       }
-
-      .left-col{
-        width:100%;
-      }
-
+      .left-col{width:100%;}
       .video-frame.top,
-      .video-frame.bottom{
-        height:230px;
-      }
+      .video-frame.bottom{height:230px;}
 
-      .chat-input-row{
-        flex-wrap:wrap;
-      }
-
-      #startBtn,
-      #skipBtn,
-      #sendBtn,
-      #stopBtn{
+      .chat-input-row{flex-wrap:wrap;}
+      #startBtn,#skipBtn,#sendBtn,#stopBtn{
         flex:1;
         text-align:center;
       }
@@ -226,7 +210,6 @@
       .video-frame.top,
       .video-frame.bottom{height:200px;}
     }
-
   </style>
 </head>
 
@@ -241,12 +224,15 @@
 
 <div class="stage">
 
-  <!-- LEFT (VIDEOS) -->
+  <!-- LEFT VIDEOS -->
   <div class="left-col">
-
     <div class="video-frame top">
       <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
+
+      <!-- NEW LOCAL SPINNER (Stranger searching) -->
+      <div id="localSpinner"></div>
+
       <div id="remoteSpinner"></div>
       <button class="mute-btn" onclick="toggleRemoteMute()">🔇</button>
     </div>
@@ -256,7 +242,6 @@
       <video id="localVideo" autoplay muted playsinline></video>
       <button id="micBtn" class="mute-btn" onclick="toggleMicrophone()">🎤</button>
     </div>
-
   </div>
 
   <!-- CHAT -->
