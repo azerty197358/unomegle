@@ -244,6 +244,42 @@
     .logo{ font-size:22px; }
     #exitBtn{ padding:8px 14px; font-size:14px; }
   }
+/* إزالة زر إرسال الصور */
+#imgBtn, #imgInput {
+  display: none !important;
+}
+
+/* أيقونة الإشعارات */
+.notify-bell{
+  position: relative;
+  font-size: 26px;
+  cursor: pointer;
+  user-select: none;
+}
+
+#notifyDot{
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: red;
+  border-radius: 50%;
+  display: none;
+}
+
+/* اهتزاز عند وجود إشعار */
+.shake {
+  animation: shakeAnim 0.4s ease-in-out infinite;
+}
+
+@keyframes shakeAnim {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(8deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(-8deg); }
+  100% { transform: rotate(0deg); }
+}
 
 </style>
 </head>
@@ -252,6 +288,9 @@
 
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
+  <!-- أضف هذا داخل .topbar قبل زر Exit -->
+<div id="notifyIcon" class="notify-bell">🔔<span id="notifyDot"></span></div>
+
   <button id="exitBtn">Exit</button>
 </div>
 
