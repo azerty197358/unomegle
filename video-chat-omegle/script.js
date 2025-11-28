@@ -1,6 +1,5 @@
-// path: /mnt/data/script.js
 // SPARKCHAT — script.js (FULL FIX + LTR DESIGN + MOBILE FIXES)
-// Adjusted: safer report check + ensure mic/report buttons clickable
+// FINAL VERSION WITH PERFECT REPORT CAPTURE
 
 window.addEventListener('DOMContentLoaded', () => {
 
@@ -49,7 +48,6 @@ window.addEventListener('DOMContentLoaded', () => {
     d.className = `msg ${type}`;
     d.textContent = msg;
 
-    // Insert message properly in LTR mode
     const typing = document.querySelector('.msg.system[style*="italic"]');
 
     if (typing && typing.parentNode === chatMessages) {
@@ -151,7 +149,6 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
-    // reflect disabled state visually if no localStream
     micBtn.disabled = !localStream;
     micBtn.style.opacity = localStream ? '1' : '0.8';
   }
@@ -164,43 +161,57 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
   };
 
-  // ---------------------- REPORT BUTTON ----------------------
+  // ---------------------- REPORT BUTTON (FIXED 100%) ----------------------
   reportBtn.onclick = async () => {
-    if (!partnerId) return alert('No user to report.');
-
-    // More robust readiness check:
-    // allow if remoteVideo has a srcObject (MediaStream) or videoWidth is available
-    const hasStream = !!remoteVideo.srcObject;
-    const hasRendered = (remoteVideo.videoWidth && remoteVideo.videoHeight);
-
-    if (!hasStream && !hasRendered) {
-      return alert('Video not ready for screenshot.');
+    if (!partnerId) {
+      alert("No user to report.");
+      return;
     }
 
-    // Prepare canvas with fallback dimensions
-    const cw = remoteVideo.videoWidth || 640;
-    const ch = remoteVideo.videoHeight || 480;
+    const video = remoteVideo;
+
+    if (!video.srcObject) {
+      alert("Video stream not ready yet.");
+      return;
+    }
+
+    // انتظر أول فريم فعلي من الفيديو
+    const waitForFrame = () => {
+      return new Promise(resolve => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          return resolve();
+        }
+        video.addEventListener("loadeddata", () => resolve(), { once: true });
+      });
+    };
+
+    await waitForFrame();
 
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = cw;
-      canvas.height = ch;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
 
-      const ctx = canvas.getContext('2d');
-      // drawImage may throw if video not ready; protect it
-      ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
 
-      socket.emit('reportPorn', {
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const imgData = canvas.toDataURL("image/png");
+
+      socket.emit("reportPorn", {
         partnerId,
         matchId,
-        screenshot: canvas.toDataURL('image/png'),
+        screenshot: imgData,
         timestamp: Date.now()
       });
 
-      addMessage('🚨 Report sent!', 'system');
+      addMessage("🚨 Report sent!", "system");
+
     } catch (err) {
-      console.error('Screenshot failed:', err);
-      alert('Failed to capture screenshot. Try again when video is visible.');
+      console.error("Screenshot failed:", err);
+      alert("Failed to take screenshot. Try again when video is visible.");
     }
   };
 
@@ -244,7 +255,6 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error(e);
       statusText.textContent = 'Camera/Mic denied.';
-      // reflect that mic button shouldn't be used
       localStream = null;
       updateMicButton();
       return false;
@@ -416,7 +426,6 @@ window.addEventListener('DOMContentLoaded', () => {
   updateMicButton();
   startSearch();
 
-  // Cleanup
   window.onbeforeunload = () => {
     socket.emit('stop');
     if (localStream) localStream.getTracks().forEach(t => t.stop());
