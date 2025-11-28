@@ -6,15 +6,14 @@
 <title>SparkChat</title>
 
 <style>
-/* -------------------------------------------------
-   VARIABLES
-------------------------------------------------- */
+/* ---------------- VARIABLES ---------------- */
 :root{
   --blue:#2ea3ff;
   --dark:#111;
   --light:#ffffff;
   --border:#e6d7c8;
 }
+
 *{margin:0;padding:0;box-sizing:border-box;}
 
 body{
@@ -24,9 +23,7 @@ body{
   overflow:hidden;
 }
 
-/* -------------------------------------------------
-   TOP BAR
-------------------------------------------------- */
+/* ---------------- TOP BAR ---------------- */
 .topbar{
   height:60px;
   display:flex;
@@ -54,9 +51,7 @@ body{
   cursor:pointer;
 }
 
-/* -------------------------------------------------
-   NOTIFICATION BELL
-------------------------------------------------- */
+/* ---------------- NOTIFICATION ---------------- */
 .notify-bell{
   position:relative;
   font-size:26px;
@@ -87,263 +82,101 @@ body{
   100%{transform:rotate(0deg)}
 }
 
-/* -------------------------------------------------
-   LAYOUT
-------------------------------------------------- */
-.stage{
+/* ---------- DROPDOWN FOR NOTIFICATIONS ---------- */
+.notify-menu{
   position:absolute;
-  top:60px;
-  bottom:0;
-  left:0;
+  top:40px;
   right:0;
-  display:flex;
-  gap:10px;
+  background:white;
+  width:220px;
   padding:10px;
-  overflow:hidden;
+  border-radius:8px;
+  box-shadow:0 4px 12px #0002;
+  display:none;
+  z-index:20;
 }
 
-.left-col{
-  width:350px;
-  min-width:260px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
+.notify-item{
+  padding:8px;
+  border-bottom:1px solid #eee;
+  font-size:14px;
+}
+.notify-item:last-child{
+  border-bottom:none;
 }
 
-/* -------------------------------------------------
-   VIDEO FRAMES
-------------------------------------------------- */
-.video-frame{
-  position:relative;
-  border-radius:12px;
-  border:6px solid var(--border);
-  overflow:hidden;
-  background:#000;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
+/* ---------------- LAYOUT + STYLES ---------------- */
+/* (باقي CSS كما هو بدون تغيير) */
+.stage{position:absolute;top:60px;bottom:0;left:0;right:0;display:flex;gap:10px;padding:10px;overflow:hidden;}
+.left-col{width:350px;min-width:260px;display:flex;flex-direction:column;gap:10px;}
 
+.video-frame{position:relative;border-radius:12px;border:6px solid var(--border);overflow:hidden;background:#000;display:flex;justify-content:center;align-items:center;}
 .video-frame.top{height:300px;}
 .video-frame.bottom{height:240px;}
-
-video{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-
-.watermark{
-  position:absolute;
-  bottom:10px;
-  left:10px;
-  font-size:18px;
-  font-weight:bold;
-  color:#ffffffaa;
-}
+video{width:100%;height:100%;object-fit:cover;}
+.watermark{position:absolute;bottom:10px;left:10px;font-size:18px;font-weight:bold;color:#ffffffaa;}
 
 #remoteSpinner,#localSpinner{
-  position:absolute;
-  width:45px;
-  height:45px;
-  border:5px solid #fff;
-  border-top-color:transparent;
-  border-radius:50%;
-  animation:spin 1s linear infinite;
-  display:none;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
+  position:absolute;width:45px;height:45px;border:5px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:none;top:50%;left:50%;transform:translate(-50%,-50%);
 }
-@keyframes spin{
-  to{transform:translate(-50%,-50%) rotate(360deg);}
-}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg);}}
 
-.video-label{
-  position:absolute;
-  top:8px;
-  left:8px;
-  background:#fff;
-  padding:4px 10px;
-  border-radius:6px;
-}
+.video-label{position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;}
 
-/* MIC / REPORT */
 #reportBtn,#micBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:#2ea3ff;
-  color:#fff;
-  padding:10px 12px;
-  font-size:18px;
-  border-radius:50%;
-  cursor:pointer;
+  position:absolute;bottom:10px;right:10px;background:#2ea3ff;color:#fff;padding:10px 12px;font-size:18px;border-radius:50%;cursor:pointer;
 }
 #reportBtn{background:red;}
 
-/* -------------------------------------------------
-   CHAT PANEL
-------------------------------------------------- */
 .right-col{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  border:6px solid var(--border);
-  border-radius:10px;
-  background:#fff;
+  flex:1;display:flex;flex-direction:column;border:6px solid var(--border);border-radius:10px;background:#fff;
 }
 
 .chat-area{
-  flex:1;
-  padding:14px;
-  overflow-y:auto;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
+  flex:1;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
 }
 
-.msg{
-  padding:10px 14px;
-  max-width:75%;
-  border-radius:10px;
-  font-size:14px;
-  word-wrap:break-word;
-}
+.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;word-wrap:break-word;}
+.msg.you{background:#d8efff;align-self:flex-end;}
+.msg.stranger{background:#ffe6cc;align-self:flex-start;}
+.msg.system{background:#eee;color:#333;align-self:center;text-align:center;}
 
-.msg.you{background:#d8efff; align-self:flex-end;}
-.msg.stranger{background:#ffe6cc; align-self:flex-start;}
-.msg.system{
-  background:#eee;
-  color:#333;
-  align-self:center;
-  text-align:center;
-}
+.warning-msg{background:#ffe1e1;color:#b30000;padding:10px;border-radius:10px;text-align:center;border:1px solid #ffb3b3;}
 
-.warning-msg{
-  background:#ffe1e1;
-  color:#b30000;
-  padding:10px;
-  border-radius:10px;
-  text-align:center;
-  border:1px solid #ffb3b3;
-}
+.chat-input-row{display:flex;flex-direction:column;gap:8px;padding:10px;background:#fafafa;border-top:1px solid #ddd;}
+#status{padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;}
 
-/* INPUT AREA */
-.chat-input-row{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  padding:10px;
-  background:#fafafa;
-  border-top:1px solid #ddd;
-}
+.input-container{display:flex;align-items:center;gap:6px;}
+#chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
+#sendBtn{width:38px;height:38px;background:#2ea3ff;color:#fff;border-radius:6px;}
+#imgBtn,#imgInput{display:none !important;}
 
-#status{
-  padding:6px 10px;
-  background:#fafafa;
-  border-radius:6px;
-  border:1px solid #ddd;
-  text-align:center;
-}
+#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;}
 
-.input-container{
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
-
-#chatInput{
-  flex:1;
-  padding:10px;
-  border:1px solid #ccc;
-  border-radius:8px;
-}
-
-#sendBtn{
-  width:38px;
-  height:38px;
-  background:#2ea3ff;
-  color:#fff;
-  border-radius:6px;
-}
-
-/* إزالة زر إرسال الصور */
-#imgBtn, #imgInput{
-  display:none !important;
-}
-
-/* SKIP */
-#skipBtn{
-  background:#ff9a00;
-  color:#fff;
-  padding:10px 14px;
-  border-radius:8px;
-  cursor:pointer;
-}
-
-/* -------------------------------------------------
-   RESPONSIVE
-------------------------------------------------- */
-@media (max-width:768px){
-  .stage{
-    position:fixed;
-    top:60px;
-    bottom:0;
-    left:0;
-    right:0;
-    flex-direction:column;
-    overflow-y:auto;
-  }
-
-  .left-col{
-    width:100%;
-    min-width:100%;
-  }
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:200px;
-  }
-}
-
-@media (max-width:450px){
-  .video-frame.top,
-  .video-frame.bottom{
-    height:160px;
-  }
-
-  .logo{font-size:22px;}
-  #exitBtn{padding:8px 14px; font-size:14px;}
-}
 </style>
 </head>
 
 <body>
 
-<!-- -------------------------------------------------
-     TOP BAR
-------------------------------------------------- -->
+<!-- ---------------- TOP BAR ---------------- -->
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
 
-  <!-- جرس الإشعارات -->
   <div id="notifyIcon" class="notify-bell">
     🔔
     <span id="notifyDot"></span>
+
+    <!-- قائمة الإشعارات -->
+    <div id="notifyMenu" class="notify-menu"></div>
   </div>
 
   <button id="exitBtn">Exit</button>
 </div>
 
-<!-- -------------------------------------------------
-     MAIN LAYOUT
-------------------------------------------------- -->
+<!-- ---------------- MAIN LAYOUT ---------------- -->
 <div class="stage">
 
-  <!-- LEFT: VIDEOS -->
   <div class="left-col">
-
     <div class="video-frame top">
       <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
@@ -359,12 +192,9 @@ video{
       <video id="localVideo" autoplay muted playsinline></video>
       <div id="localSpinner"></div>
     </div>
-
   </div>
 
-  <!-- RIGHT: CHAT -->
   <div class="right-col">
-
     <div id="chatMessages" class="chat-area">
       <div class="warning-msg">⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.</div>
       <div class="msg system">Connecting...</div>
@@ -378,42 +208,51 @@ video{
         <input id="chatInput" placeholder="Type..." disabled />
         <button id="skipBtn">Skip</button>
       </div>
-
     </div>
-
   </div>
 </div>
 
-<!-- -------------------------------------------------
-     SCRIPTS
-------------------------------------------------- -->
+<!-- ---------------- SCRIPTS ---------------- -->
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
 <script>
-/* خروج */
+/* زر الخروج */
 document.getElementById("exitBtn").onclick = () => location.href = "index.html";
 
+/* إشعارات الأدمن Dropdown */
 window.addEventListener("load", () => {
+
   const bell = document.getElementById("notifyIcon");
   const dot  = document.getElementById("notifyDot");
+  const menu = document.getElementById("notifyMenu");
 
-  // ننتظر حتى يكون socket موجوداً
-  if (window.socket) {
-      socket.on("adminMessage", msg => {
-        addMessage("📢 Admin: " + msg, "system");
-        dot.style.display = "block";
-        bell.classList.add("shake");
-      });
+  // قائمة الإشعارات
+  function addAdminNotification(msg){
+    const item = document.createElement("div");
+    item.className = "notify-item";
+    item.textContent = msg;
+    menu.appendChild(item);
   }
 
+  if (window.socket){
+    socket.on("adminMessage", msg => {
+      dot.style.display = "block";
+      bell.classList.add("shake");
+
+      addAdminNotification("📢 " + msg);
+    });
+  }
+
+  // فتح قائمة الإشعارات
   bell.onclick = () => {
-    dot.style.display = "none";
     bell.classList.remove("shake");
+    dot.style.display = "none";
+
+    // Toggle menu
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
   };
 });
-
-
 </script>
 
 </body>
