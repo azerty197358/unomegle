@@ -346,6 +346,17 @@ window.onload = () => {
         startChat(); 
     }
 };
+  socket.on("adminMessage", (msg) => {
+    addMessage("system", "📢 Admin: " + msg);
+
+    // إشعار يهتز
+    const bell = document.getElementById("notifyIcon");
+    const dot = document.getElementById("notifyDot");
+
+    dot.style.display = "block";
+    bell.classList.add("shake");
+});
+
 </script>
 
 <script src="/socket.io/socket.io.js"></script>
