@@ -2,7 +2,7 @@
 <html lang="ar" dir="ltr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>SparkChat</title>
 
 <style>
@@ -75,18 +75,66 @@
 
   .right-col{
     flex:1;display:flex;flex-direction:column;border:6px solid var(--border);border-radius:10px;background:#fff;overflow:hidden;
+    height:100%;
   }
 
+  /* ================= CHAT AREA ================= */
   .chat-area{
-    flex:1;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;background:#fff;
+    flex:1;
+    padding:14px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    background:#fff;
+    height:100%;
   }
 
   .warning-msg{
     background:#ffe1e1;color:#b30000;padding:10px;border-radius:10px;text-align:center;border:1px solid #ffb3b3;
   }
 
+  /* رسائل */
+  .msg{
+    padding:10px 12px;
+    border-radius:10px;
+    max-width:80%;
+    font-size:15px;
+    line-height:1.4;
+    word-break:break-word;
+  }
+
+  .msg.me{
+    background:#2ea3ff;
+    color:#fff;
+    margin-left:auto;
+  }
+
+  .msg.them{
+    background:#f1f1f1;
+    color:#000;
+    margin-right:auto;
+  }
+
+  .msg.system{
+    background:#eee;
+    font-size:14px;
+    text-align:center;
+  }
+
+  .msg img{
+    max-width:180px;
+    border-radius:8px;
+  }
+
   .chat-input-row{
-    display:flex;flex-direction:column;gap:8px;padding:10px;background:#fafafa;border-top:1px solid #ddd;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:10px;
+    background:#fafafa;
+    border-top:1px solid #ddd;
+    flex-shrink:0;
   }
 
   #status{
@@ -108,15 +156,18 @@
     font-size:14px;
   }
 
-  #sendBtn{
-    width:38px;
-    height:38px;
+  #sendBtn, #imageBtn{
+    width:40px;
+    height:40px;
     background:#2ea3ff;
     color:#fff;
     border-radius:6px;
     padding:0;
-    font-size:14px;
+    font-size:18px;
     cursor:pointer;
+    display:flex;
+    justify-content:center;
+    align-items:center;
   }
 
   #skipBtn{
@@ -130,15 +181,10 @@
 
   #startBtn, #stopBtn { display:none !important; }
 
+  /* ================= RESPONSIVE ================= */
 
-/* ====================== RESPONSIVE DESIGN ====================== */
-
-  /* الهواتف — width أقل من 768px */
   @media (max-width: 768px) {
-
-    body{
-      overflow:auto; 
-    }
+    body{ overflow:hidden; }
 
     .stage{
       flex-direction:column;
@@ -146,36 +192,18 @@
       gap:6px;
       position:relative;
       top:0;
-      height:auto;
-    }
-
-    .left-col{
-      width:100%;
-      min-width:100%;
-      flex-direction:column;
-      gap:10px;
-    }
-
-    .video-frame.top,
-    .video-frame.bottom{
-      height:200px;
-    }
-
-    #reportBtn,#micBtn{
-      width:40px;
-      height:40px;
-      font-size:18px;
+      bottom:0;
+      height:calc(100vh - 60px);
     }
 
     .right-col{
-      width:100%;
-      height:auto;
-      flex:unset;
+      height:100%;
     }
 
     .chat-area{
-      max-height:260px;
-      padding:10px;
+      height:100%;
+      flex:1;
+      overflow-y:auto;
     }
 
     .chat-input-row{
@@ -184,41 +212,6 @@
       background:#fff;
       z-index:20;
     }
-
-    #status{
-      font-size:13px;
-    }
-
-    .input-container{
-      flex-direction:row-reverse;
-    }
-
-    #sendBtn{
-      width:42px;
-      height:42px;
-      font-size:16px;
-    }
-
-    #chatInput{
-      font-size:16px;
-      padding:10px;
-    }
-
-    #skipBtn{
-      font-size:14px;
-      padding:8px 12px;
-    }
-  }
-
-  /* الشاشات الصغيرة جداً — أقل من 450px */
-  @media (max-width: 450px){
-    .video-frame.top,
-    .video-frame.bottom{
-      height:160px;
-    }
-
-    .logo{ font-size:22px; }
-    #exitBtn{ padding:8px 14px; font-size:14px; }
   }
 
 </style>
@@ -261,27 +254,55 @@
       <div id="status">Loading...</div>
 
       <div class="input-container">
+
         <button id="sendBtn" disabled>➤</button>
+        <button id="imageBtn">📷</button>
+
         <input id="chatInput" placeholder="Type..." disabled />
         <button id="skipBtn">Skip</button>
+
       </div>
 
     </div>
   </div>
 </div>
 
+<input type="file" id="imageInput" accept="image/*" hidden />
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
 <script>
 document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
 window.onload = () => {
     if (typeof startChat === "function") {
-        startChat(); 
+        startChat();
     }
 };
-</script>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
+/* ========== SEND IMAGE BUTTON ========== */
+document.getElementById("imageBtn").onclick = () => {
+    document.getElementById("imageInput").click();
+};
+
+document.getElementById("imageInput").onchange = function(){
+    const file = this.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt){
+        socket.emit("chatMessage", { type:"image", data:evt.target.result });
+    };
+    reader.readAsDataURL(file);
+};
+
+/* ========== LINK AUTO-DETECTION ========== */
+function linkify(text){
+    return text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+}
+
+</script>
 
 </body>
 </html>
