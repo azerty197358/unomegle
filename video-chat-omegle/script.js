@@ -1,10 +1,15 @@
 // ========================================================
-//  SPARKCHAT — Updated to work with NO Start/Stop buttons
+//  SPARKCHAT — Updated + FIXED SOCKET GLOBAL REFERENCE
 // ========================================================
 
 // ======================
 //  ADMIN NOTIFICATIONS
 // ======================
+
+// socket أصبح متاحاً عالمياً قبل كل شيء
+window.socket = io();
+const socket = window.socket;
+
 const notifyBell = document.getElementById("notifyIcon");
 const notifyDot = document.getElementById("notifyDot");
 
@@ -13,9 +18,9 @@ let unreadCount = 0;
 // عند وصول رسالة من الأدمن
 socket.on("adminMessage", msg => {
     unreadCount++;
-    notifyDot.style.display = "block";  
+    notifyDot.style.display = "block";
     notifyBell.classList.add("shake");
-    addMessage("system", msg);
+    addMessage("📢 Admin: " + msg, "system");
 });
 
 // عند الضغط على الأيقونة
@@ -34,8 +39,6 @@ notifyBell.onclick = () => {
 window.onload = () => {
 
   // ===== Global Variables =====
-  const socket = io();
-
   let localStream = null;
   let peerConnection = null;
   let partnerId = null;
@@ -68,7 +71,6 @@ window.onload = () => {
   const micBtn = document.getElementById("micBtn");
   const reportBtn = document.getElementById("reportBtn");
 
-  // (لا يوجد Start/Stop أصلاً)
   const startBtn = { disabled: true };
   const stopBtn = { disabled: true, style: { display: "none" } };
 
@@ -356,33 +358,7 @@ window.onload = () => {
     statusText.textContent = "Connecting...";
     showRemoteSpinnerOnly(true);
 
-    if (matchId) {
-      socket.emit("match-ack", { to: partnerId, matchId });
-
-      let confirmed = false;
-      const CONFIRM_TIMEOUT = 6000;
-
-      const onConfirm = d => {
-        if (!d || d.matchId !== matchId) return;
-
-        confirmed = true;
-        socket.off("match-confirmed", onConfirm);
-        proceedAfterMatch();
-      };
-
-      socket.on("match-confirmed", onConfirm);
-
-      // fallback: لو ما وصل التأكيد
-      setTimeout(() => {
-        if (!confirmed) {
-          socket.off("match-confirmed", onConfirm);
-          proceedAfterMatch();
-        }
-      }, CONFIRM_TIMEOUT);
-
-    } else {
-      proceedAfterMatch();
-    }
+    proceedAfterMatch();
   });
 
   async function proceedAfterMatch() {
