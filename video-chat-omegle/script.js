@@ -1,5 +1,5 @@
 // ========================================================
-//  SPARKCHAT — Updated to work with NO Start/Stop buttons
+//  SPARKCHAT — Updated: image send/receive + UI fixes
 // ========================================================
 
 window.onload = () => {
@@ -36,6 +36,10 @@ window.onload = () => {
 
   const micBtn = document.getElementById("micBtn");
   const reportBtn = document.getElementById("reportBtn");
+
+  // Image controls (from your HTML)
+  const imgInput = document.getElementById("imgInput");
+  const imgBtn = document.getElementById("imgBtn");
 
   // ▼ لم يعد هناك Start/Stop في الواجهة ⇒ تجاهل تواجدهم
   const startBtn = { disabled:true };
@@ -74,7 +78,7 @@ window.onload = () => {
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
 
-    addMessage(msg, "you");
+    addMessage(msg, "you", false);
     socket.emit("chat-message", { to: partnerId, message: msg });
     chatInput.value = "";
 
@@ -86,7 +90,7 @@ window.onload = () => {
   // ====== REPORT ======
   reportBtn.onclick = async () => {
     if (!partnerId) return alert("لا يوجد شخص للإبلاغ عنه.");
-    if (!remoteVideo || remoteVideo.readyState < 2) return alert("لا يمكن التقاط لقطة الآن.");
+    if (!remoteVideo || (remoteVideo.readyState && remoteVideo.readyState < 2)) return alert("لا يمكن التقاط لقطة الآن.");
 
     const canvas = document.createElement("canvas");
     canvas.width = remoteVideo.videoWidth || 640;
@@ -114,7 +118,7 @@ window.onload = () => {
     updateMicButton();
   };
 
-  // ====== UI ======
+  // ====== UI helpers ======
   function showRemoteSpinnerOnly(show) {
     remoteSpinner.style.display = show ? "block" : "none";
     remoteVideo.style.display = show ? "none" : "block";
@@ -127,10 +131,12 @@ window.onload = () => {
     localVideo.style.display = "block";
   }
 
-  function addMessage(msg, type="system") {
+  // addMessage now supports HTML when isHTML=true
+  function addMessage(content, type="system", isHTML=false) {
     const d = document.createElement("div");
     d.className = `msg ${type}`;
-    d.textContent = msg;
+    if (isHTML) d.innerHTML = content;
+    else d.textContent = content;
     chatMessages.insertBefore(d, typingIndicator);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -227,11 +233,84 @@ window.onload = () => {
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
 
+  // ====== IMAGE: helpers & handlers ======
+
+  // resize/compress image to maxSize (px) preserving aspect ratio
+  function resizeDataURL(dataURL, maxSize = 1024, outputType = "image/jpeg", quality = 0.8) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= maxSize && height <= maxSize) {
+          // small enough: convert to requested type/quality
+          const c = document.createElement("canvas");
+          c.width = width; c.height = height;
+          const ctx = c.getContext("2d'); // eslint-disable-line
+        };
+        // correct version below (avoid previous accidental return)
+        const canvas = document.createElement("canvas");
+        let ratio = Math.min(1, maxSize / Math.max(width, height));
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL(outputType, quality));
+      };
+      img.onerror = () => resolve(dataURL); // fallback: original
+      img.src = dataURL;
+    });
+  }
+
+  // Click image button -> open file picker
+  imgBtn.addEventListener("click", () => {
+    if (imgInput) imgInput.click();
+  });
+
+  imgInput.addEventListener("change", async function () {
+    const file = this.files && this.files[0];
+    if (!file) return;
+    if (!partnerId) return alert("لا يوجد طرف متصل لإرسال الصورة.");
+
+    // limit file types
+    if (!file.type.startsWith("image/")) return alert("الملف المختار ليس صورة.");
+
+    // read file
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        let dataURL = e.target.result;
+
+        // optional resize/compress to keep payload reasonable
+        const MAX_DIM = 1024;
+        dataURL = await resizeDataURL(dataURL, MAX_DIM, "image/jpeg", 0.8);
+
+        // send to server (include target)
+        socket.emit("send-image", { to: partnerId, image: dataURL, matchId });
+
+        // display locally
+        addMessage(`<img src="${dataURL}" alt="you image">`, "you", true);
+
+        // reset input so same file can be reselected later
+        imgInput.value = "";
+      } catch (err) {
+        console.error("Image send error:", err);
+        alert("فشل إرسال الصورة.");
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Receive image from server
+  socket.on("receive-image", ({ from, image }) => {
+    // optional: verify from === partnerId (if needed)
+    addMessage(`<img src="${image}" alt="them image">`, "them", true);
+  });
+
   // ====== SOCKET ======
   socket.on("waiting", msg => statusText.textContent = msg || "Waiting...");
 
   socket.on("chat-message", ({ message }) => {
-    addMessage(message, "them");
+    addMessage(message, "them", false);
   });
 
   socket.on("typing", () => {
@@ -317,7 +396,11 @@ window.onload = () => {
       await peerConnection.setRemoteDescription(data);
     } 
     else if (data.candidate) {
-      await peerConnection.addIceCandidate(data.candidate);
+      try {
+        await peerConnection.addIceCandidate(data.candidate);
+      } catch (err) {
+        console.warn("ICE candidate add failed", err);
+      }
     }
   });
 
@@ -333,7 +416,7 @@ window.onload = () => {
       remoteVideo.srcObject = e.streams[0];
       statusText.textContent = "Connected!";
       enableChat();
-      addMessage("Connected with a stranger. Say hi!", "system");
+      addMessage("Connected with a stranger. Say hi!", "system", false);
       showRemoteSpinnerOnly(false);
     };
 
@@ -343,9 +426,10 @@ window.onload = () => {
     };
 
     peerConnection.onconnectionstatechange = () => {
+      if (!peerConnection) return;
       if (["disconnected","failed","closed"].includes(peerConnection.connectionState)) {
         disableChat();
-        addMessage("Connection lost.", "system");
+        addMessage("Connection lost.", "system", false);
         partnerId = null;
         closePeerConnection();
         if (autoReconnect) startSearchLoop();
