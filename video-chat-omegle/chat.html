@@ -2,7 +2,7 @@
 <html lang="ar" dir="ltr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SparkChat</title>
 
 <style>
@@ -63,6 +63,7 @@
   }
   @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg);}}
 
+
   .video-label{
     position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;font-size:12px;z-index:20;
   }
@@ -75,66 +76,57 @@
 
   .right-col{
     flex:1;display:flex;flex-direction:column;border:6px solid var(--border);border-radius:10px;background:#fff;overflow:hidden;
-    height:100%;
   }
 
-  /* ================= CHAT AREA ================= */
   .chat-area{
-    flex:1;
-    padding:14px;
-    overflow-y:auto;
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    background:#fff;
-    height:100%;
+    flex:1;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;background:#fff;
+  }
+
+  /* رسائل ملونة */
+  .msg{
+    padding:10px 14px;
+    max-width:75%;
+    border-radius:10px;
+    font-size:14px;
+    word-wrap:break-word;
+  }
+
+  .msg.you{
+    background:#d8efff;
+    align-self:flex-end;
+  }
+
+  .msg.stranger{
+    background:#ffe6cc;
+    align-self:flex-start;
+  }
+
+  .msg.system{
+    background:#eee;
+    color:#333;
+    align-self:center;
+    text-align:center;
+  }
+
+  /* الصور في الشات */
+  .msg img{
+    max-width:200px;
+    border-radius:10px;
+  }
+
+  /* الروابط */
+  .msg a{
+    color:#2ea3ff;
+    font-weight:bold;
+    word-break:break-all;
   }
 
   .warning-msg{
     background:#ffe1e1;color:#b30000;padding:10px;border-radius:10px;text-align:center;border:1px solid #ffb3b3;
   }
 
-  /* رسائل */
-  .msg{
-    padding:10px 12px;
-    border-radius:10px;
-    max-width:80%;
-    font-size:15px;
-    line-height:1.4;
-    word-break:break-word;
-  }
-
-  .msg.me{
-    background:#2ea3ff;
-    color:#fff;
-    margin-left:auto;
-  }
-
-  .msg.them{
-    background:#f1f1f1;
-    color:#000;
-    margin-right:auto;
-  }
-
-  .msg.system{
-    background:#eee;
-    font-size:14px;
-    text-align:center;
-  }
-
-  .msg img{
-    max-width:180px;
-    border-radius:8px;
-  }
-
   .chat-input-row{
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    padding:10px;
-    background:#fafafa;
-    border-top:1px solid #ddd;
-    flex-shrink:0;
+    display:flex;flex-direction:column;gap:8px;padding:10px;background:#fafafa;border-top:1px solid #ddd;
   }
 
   #status{
@@ -156,18 +148,27 @@
     font-size:14px;
   }
 
-  #sendBtn, #imageBtn{
-    width:40px;
-    height:40px;
+  #sendBtn{
+    width:38px;
+    height:38px;
     background:#2ea3ff;
     color:#fff;
     border-radius:6px;
     padding:0;
-    font-size:18px;
+    font-size:14px;
     cursor:pointer;
-    display:flex;
-    justify-content:center;
-    align-items:center;
+  }
+
+  /* زر إرسال صور */
+  #imgBtn{
+    width:38px;
+    height:38px;
+    background:#ff9a00;
+    color:#fff;
+    border-radius:6px;
+    padding:0;
+    font-size:20px;
+    cursor:pointer;
   }
 
   #skipBtn{
@@ -181,29 +182,49 @@
 
   #startBtn, #stopBtn { display:none !important; }
 
-  /* ================= RESPONSIVE ================= */
+  /* ====================== RESPONSIVE DESIGN ====================== */
 
   @media (max-width: 768px) {
-    body{ overflow:hidden; }
+
+    body{
+      height:100vh;
+      overflow:hidden;
+    }
 
     .stage{
+      position:fixed;
+      top:60px;
+      bottom:0;
+      left:0;
+      right:0;
+      overflow-y:auto;
       flex-direction:column;
       padding:6px;
       gap:6px;
-      position:relative;
-      top:0;
-      bottom:0;
-      height:calc(100vh - 60px);
+    }
+
+    .left-col{
+      width:100%;
+      min-width:100%;
+      flex-direction:column;
+    }
+
+    .video-frame.top,
+    .video-frame.bottom{
+      height:200px;
     }
 
     .right-col{
+      width:100%;
       height:100%;
+      display:flex;
+      flex-direction:column;
     }
 
     .chat-area{
-      height:100%;
       flex:1;
-      overflow-y:auto;
+      overflow-y:scroll;
+      max-height:none;
     }
 
     .chat-input-row{
@@ -212,6 +233,16 @@
       background:#fff;
       z-index:20;
     }
+  }
+
+  @media (max-width: 450px){
+    .video-frame.top,
+    .video-frame.bottom{
+      height:160px;
+    }
+
+    .logo{ font-size:22px; }
+    #exitBtn{ padding:8px 14px; font-size:14px; }
   }
 
 </style>
@@ -255,54 +286,31 @@
 
       <div class="input-container">
 
-        <button id="sendBtn" disabled>➤</button>
-        <button id="imageBtn">📷</button>
+        <!-- زر إرسال صورة -->
+        <input type="file" id="imgInput" accept="image/*" style="display:none">
+        <button id="imgBtn">📷</button>
 
+        <button id="sendBtn" disabled>➤</button>
         <input id="chatInput" placeholder="Type..." disabled />
         <button id="skipBtn">Skip</button>
-
       </div>
 
     </div>
   </div>
 </div>
 
-<input type="file" id="imageInput" accept="image/*" hidden />
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
 <script>
 document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
 window.onload = () => {
     if (typeof startChat === "function") {
-        startChat();
+        startChat(); 
     }
 };
-
-/* ========== SEND IMAGE BUTTON ========== */
-document.getElementById("imageBtn").onclick = () => {
-    document.getElementById("imageInput").click();
-};
-
-document.getElementById("imageInput").onchange = function(){
-    const file = this.files[0];
-    if(!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(evt){
-        socket.emit("chatMessage", { type:"image", data:evt.target.result });
-    };
-    reader.readAsDataURL(file);
-};
-
-/* ========== LINK AUTO-DETECTION ========== */
-function linkify(text){
-    return text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-}
-
 </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
 
 </body>
 </html>
