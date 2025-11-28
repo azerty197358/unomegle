@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -16,16 +16,14 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-body{
-  background:#fff;
+
+html, body{
+  height:100%;
+  overflow:hidden; /* منع تمدد الصفحة */
   font-family:Arial, Helvetica, sans-serif;
-  min-height:100vh;
-  height:100vh;
-  overflow:hidden;
-  direction:rtl;
 }
 
-/* TOP BAR */
+/* ---------- TOP BAR ---------- */
 .topbar{
   height:60px;
   display:flex;
@@ -34,11 +32,10 @@ body{
   padding:0 12px;
   border-bottom:1px solid #eee;
   background:#fff;
-  gap:8px;
 }
 
 .logo{
-  font-size:22px;
+  font-size:24px;
   font-weight:bold;
   color:#ff9a00;
 }
@@ -54,40 +51,52 @@ body{
   cursor:pointer;
 }
 
-/* NOTIFICATION */
+/* ---------- NOTIFICATIONS ---------- */
 .notify-bell{
   position:relative;
   font-size:22px;
   cursor:pointer;
   user-select:none;
-  display:flex;
-  align-items:center;
 }
-#notifyDot{position:absolute;top:-3px;left:-3px;width:10px;height:10px;background:red;border-radius:50%;display:none;}
-.shake{animation:shakeAnim 0.4s ease-in-out infinite;}
-@keyframes shakeAnim{0%{transform:rotate(0deg)}25%{transform:rotate(8deg)}50%{transform:rotate(0deg)}75%{transform:rotate(-8deg)}100%{transform:rotate(0deg)}}
 
-/* Notification dropdown */
+#notifyDot{
+  position:absolute;
+  top:-4px;
+  right:-4px;
+  width:10px;
+  height:10px;
+  background:red;
+  border-radius:50%;
+  display:none;
+}
+
+.shake{
+  animation:shakeAnim 0.4s ease-in-out infinite;
+}
+@keyframes shakeAnim{
+  0%{transform:rotate(0deg)}
+  25%{transform:rotate(8deg)}
+  50%{transform:rotate(0deg)}
+  75%{transform:rotate(-8deg)}
+  100%{transform:rotate(0deg)}
+}
+
 .notify-menu{
   position:absolute;
-  top:44px;
-  left:0;
-  right:auto;
+  top:42px;
+  right:0;
   background:#fff;
-  width:260px;
+  width:240px;
   max-height:320px;
-  overflow:auto;
+  overflow-y:auto;
   padding:8px;
   border-radius:8px;
   box-shadow:0 8px 24px rgba(0,0,0,0.12);
   display:none;
   z-index:50;
 }
-.notify-item{padding:8px;border-bottom:1px solid #f0f0f0;font-size:14px;white-space:normal}
-.notify-item:last-child{border-bottom:none}
-.notify-empty{text-align:center;color:#666;padding:12px;font-size:13px}
 
-/* LAYOUT */
+/* ---------- LAYOUT ---------- */
 .stage{
   position:absolute;
   top:60px;
@@ -102,13 +111,13 @@ body{
 
 .left-col{
   width:340px;
-  min-width:220px;
+  min-width:240px;
   display:flex;
   flex-direction:column;
   gap:var(--gap);
 }
 
-/* VIDEO */
+/* ---------- VIDEO ---------- */
 .video-frame{
   position:relative;
   border-radius:var(--radius);
@@ -119,115 +128,183 @@ body{
   justify-content:center;
   align-items:center;
 }
-.video-frame.top{height:320px;}
+.video-frame.top{height:300px;}
 .video-frame.bottom{height:220px;}
 
 video{width:100%;height:100%;object-fit:cover;}
-.watermark{position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;}
-.video-label{position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;font-size:13px;}
 
-/* Buttons on videos */
-#reportBtn,#micBtn{
-  position:absolute;bottom:10px;right:10px;background:var(--blue);color:#fff;padding:10px;border-radius:50%;cursor:pointer;border:none;font-size:16px;
+.video-label{
+  position:absolute;
+  top:8px;
+  left:8px;
+  background:#fff;
+  padding:4px 10px;
+  border-radius:6px;
 }
-#reportBtn{background:#d23a3a;}
 
-/* CHAT PANEL */
+.watermark{
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  font-size:14px;
+  color:#ffffffaa;
+  font-weight:bold;
+}
+
+#remoteSpinner,#localSpinner{
+  position:absolute;width:45px;height:45px;border:5px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:none;top:50%;left:50%;transform:translate(-50%,-50%);
+}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg);}}
+
+/* ---------- BUTTONS ---------- */
+#reportBtn,#micBtn{
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:#2ea3ff;
+  color:#fff;
+  padding:10px;
+  font-size:18px;
+  border-radius:50%;
+  cursor:pointer;
+  border:none;
+}
+#reportBtn{background:#e23838;}
+
+/* ---------- CHAT PANEL ---------- */
 .right-col{
-  flex:1;display:flex;flex-direction:column;border:6px solid var(--border);border-radius:10px;background:#fff;min-width:260px;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  border:6px solid var(--border);
+  border-radius:10px;
+  background:#fff;
+  min-width:240px;
 }
 
 .chat-area{
-  flex:1;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  flex:1;
+  padding:12px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  height:100%;
 }
 
-.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;word-wrap:break-word;}
+.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;}
 .msg.you{background:#d8efff;align-self:flex-end;}
 .msg.stranger{background:#ffe6cc;align-self:flex-start;}
-.msg.system{background:#eee;color:#333;align-self:center;text-align:center;}
+.msg.system{background:#eee;color:#333;align-self:center;}
 
-.warning-msg{background:#ffe1e1;color:#b30000;padding:10px;border-radius:10px;text-align:center;border:1px solid #ffb3b3;}
+.chat-input-row{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px;
+  background:#fafafa;
+  border-top:1px solid #ddd;
+}
 
-.chat-input-row{display:flex;flex-direction:column;gap:8px;padding:10px;background:#fafafa;border-top:1px solid #ddd;}
-#status{padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;font-size:14px;}
+#status{
+  padding:6px 10px;
+  background:#fafafa;
+  border-radius:6px;
+  border:1px solid #ddd;
+  text-align:center;
+}
 
-.input-container{display:flex;align-items:center;gap:8px;}
-#chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px;}
-#sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;font-size:18px;}
-#imgBtn,#imgInput{display:none !important;}
-#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;font-weight:600;}
+.input-container{
+  display:flex;
+  gap:8px;
+}
 
-/* SPINNERS */
-#remoteSpinner,#localSpinner{position:absolute;width:45px;height:45px;border:5px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:none;top:50%;left:50%;transform:translate(-50%,-50%);}
-@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg);}}
+#chatInput{
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+}
 
-/* RESPONSIVE (mobile improvements) */
+#sendBtn{
+  width:42px;
+  height:42px;
+  background:var(--blue);
+  color:#fff;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+}
+
+#skipBtn{
+  background:#ff9a00;
+  color:#fff;
+  padding:10px 14px;
+  border-radius:8px;
+  cursor:pointer;
+  border:none;
+}
+
+/* ---------- MOBILE FIX ---------- */
 @media (max-width:900px){
-  .stage{flex-direction:column;top:60px;overflow:auto;padding:10px;}
-  .left-col{width:100%;min-width:unset;order:0;}
+  .stage{
+    flex-direction:column;
+    overflow-y:auto;
+  }
+
+  .left-col{
+    width:100%;
+    min-width:100%;
+  }
+
   .video-frame.top{height:220px;}
   .video-frame.bottom{height:160px;}
-  .right-col{order:1;padding-top:8px;}
-  .topbar{padding:0 8px;}
-  .logo{font-size:20px;}
-  #exitBtn{padding:6px 10px;font-size:14px;}
-  .notify-menu{left:auto;right:8px;width:220px;top:44px;}
-  #sendBtn{width:44px;height:44px;}
-  #chatInput{font-size:15px;}
-  body{overflow:auto;}
+
+  .right-col{min-height:320px;}
 }
 
-/* tiny screens */
-@media (max-width:450px){
-  .video-frame.top{height:180px;}
-  .video-frame.bottom{height:120px;}
-  .logo{font-size:18px;}
-  #exitBtn{padding:6px 8px;font-size:13px;}
-}
 </style>
 </head>
 
 <body>
 
-<!-- TOP BAR -->
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
 
-  <div style="display:flex;gap:8px;align-items:center;">
-    <div id="notifyIcon" class="notify-bell" aria-label="Notifications" role="button" tabindex="0">
-      🔔
-      <span id="notifyDot" aria-hidden="true"></span>
-      <div id="notifyMenu" class="notify-menu" aria-live="polite"></div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div id="notifyIcon" class="notify-bell">
+      🔔 <span id="notifyDot"></span>
+      <div id="notifyMenu" class="notify-menu"></div>
     </div>
 
-    <button id="exitBtn" aria-label="Exit">Exit</button>
+    <button id="exitBtn">Exit</button>
   </div>
 </div>
 
-<!-- MAIN -->
 <div class="stage">
 
   <div class="left-col">
+
     <div class="video-frame top">
-      <button id="reportBtn" title="Report">🚨</button>
+      <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
-      <div class="video-label">المقابل</div>
+      <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
       <div id="remoteSpinner"></div>
     </div>
 
     <div class="video-frame bottom">
-      <button id="micBtn" title="Mute/Unmute">🎤</button>
+      <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
-      <div class="video-label">أنت</div>
+      <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
       <div id="localSpinner"></div>
     </div>
+
   </div>
 
   <div class="right-col">
     <div id="chatMessages" class="chat-area">
-      <div class="warning-msg">⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.</div>
       <div class="msg system">Connecting...</div>
     </div>
 
@@ -235,15 +312,15 @@ video{width:100%;height:100%;object-fit:cover;}
       <div id="status">Loading...</div>
 
       <div class="input-container">
-        <button id="sendBtn" disabled aria-label="Send">➤</button>
-        <input id="chatInput" placeholder="اكتب رسالة..." disabled aria-label="Chat input"/>
-        <button id="skipBtn" title="Skip">Skip</button>
+        <button id="sendBtn" disabled>➤</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="skipBtn">Skip</button>
       </div>
     </div>
   </div>
+
 </div>
 
-<!-- SCRIPTS -->
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
