@@ -1,35 +1,41 @@
 // ========================================================
 //  SPARKCHAT — Updated to work with NO Start/Stop buttons
 // ========================================================
+
+// ======================
+//  ADMIN NOTIFICATIONS
+// ======================
 const notifyBell = document.getElementById("notifyIcon");
 const notifyDot = document.getElementById("notifyDot");
 
 let unreadCount = 0;
 
-// عندما تصل رسالة من الأدمن
+// عند وصول رسالة من الأدمن
 socket.on("adminMessage", msg => {
     unreadCount++;
-
     notifyDot.style.display = "block";  
     notifyBell.classList.add("shake");
-
-    // عرض الرسالة في الشات
     addMessage("system", msg);
 });
 
-// عند الضغط على الجرس = إزالة الإشعارات
+// عند الضغط على الأيقونة
 notifyBell.onclick = () => {
     unreadCount = 0;
     notifyDot.style.display = "none";
     notifyBell.classList.remove("shake");
-
     alert("لا توجد إشعارات جديدة");
 };
 
+
+
+// ========================
+//        MAIN LOGIC
+// ========================
 window.onload = () => {
 
-  // ====== GLOBALS ======
+  // ===== Global Variables =====
   const socket = io();
+
   let localStream = null;
   let peerConnection = null;
   let partnerId = null;
@@ -45,7 +51,8 @@ window.onload = () => {
 
   const servers = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
 
-  // ====== DOM ======
+
+  // ===== DOM Elements =====
   const localVideo = document.getElementById("localVideo");
   const remoteVideo = document.getElementById("remoteVideo");
   const localSpinner = document.getElementById("localSpinner");
@@ -61,11 +68,14 @@ window.onload = () => {
   const micBtn = document.getElementById("micBtn");
   const reportBtn = document.getElementById("reportBtn");
 
-  // ▼ لم يعد هناك Start/Stop في الواجهة ⇒ تجاهل تواجدهم
-  const startBtn = { disabled:true };
-  const stopBtn = { disabled:true, style:{ display:"none" } };
+  // (لا يوجد Start/Stop أصلاً)
+  const startBtn = { disabled: true };
+  const stopBtn = { disabled: true, style: { display: "none" } };
 
-  // ====== Typing Indicator ======
+
+  // ======================
+  //  Typing Indicator
+  // ======================
   const typingIndicator = document.createElement("div");
   typingIndicator.className = "msg system";
   typingIndicator.style.fontStyle = "italic";
@@ -77,12 +87,15 @@ window.onload = () => {
   let typingTimer = null;
   const TYPING_DEBOUNCE = 1500;
 
+
   function sendTyping() {
     if (!partnerId) return;
+
     if (!typing) {
       typing = true;
       socket.emit("typing", { to: partnerId });
     }
+
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => {
       typing = false;
@@ -94,12 +107,17 @@ window.onload = () => {
     if (!chatInput.disabled) sendTyping();
   });
 
+
+  // ======================
+  //   Sending Messages
+  // ======================
   function sendMessage() {
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
 
     addMessage(msg, "you");
     socket.emit("chat-message", { to: partnerId, message: msg });
+
     chatInput.value = "";
 
     typing = false;
@@ -107,14 +125,23 @@ window.onload = () => {
     socket.emit("stop-typing", { to: partnerId });
   }
 
-  // ====== REPORT ======
+  sendBtn.onclick = sendMessage;
+  chatInput.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
+
+
+
+  // ======================
+  //       REPORT
+  // ======================
   reportBtn.onclick = async () => {
     if (!partnerId) return alert("لا يوجد شخص للإبلاغ عنه.");
-    if (!remoteVideo || remoteVideo.readyState < 2) return alert("لا يمكن التقاط لقطة الآن.");
+    if (!remoteVideo || remoteVideo.readyState < 2)
+      return alert("لا يمكن التقاط لقطة الآن.");
 
     const canvas = document.createElement("canvas");
     canvas.width = remoteVideo.videoWidth || 640;
     canvas.height = remoteVideo.videoHeight || 480;
+
     const ctx = canvas.getContext("2d");
     ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
 
@@ -128,8 +155,14 @@ window.onload = () => {
     alert("🚨 تم إرسال الإبلاغ بنجاح!");
   };
 
-  // ====== MIC ======
-  function updateMicButton() { micBtn.textContent = micEnabled ? "🎤" : "🔇"; }
+
+
+  // ======================
+  //        MIC
+  // ======================
+  function updateMicButton() {
+    micBtn.textContent = micEnabled ? "🎤" : "🔇";
+  }
 
   micBtn.onclick = () => {
     if (!localStream) return;
@@ -138,7 +171,11 @@ window.onload = () => {
     updateMicButton();
   };
 
-  // ====== UI ======
+
+
+  // ======================
+  //          UI
+  // ======================
   function showRemoteSpinnerOnly(show) {
     remoteSpinner.style.display = show ? "block" : "none";
     remoteVideo.style.display = show ? "none" : "block";
@@ -151,10 +188,11 @@ window.onload = () => {
     localVideo.style.display = "block";
   }
 
-  function addMessage(msg, type="system") {
+  function addMessage(msg, type = "system") {
     const d = document.createElement("div");
     d.className = `msg ${type}`;
     d.textContent = msg;
+
     chatMessages.insertBefore(d, typingIndicator);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -181,14 +219,24 @@ window.onload = () => {
     typingIndicator.style.display = "none";
   }
 
-  // ====== Media ======
+
+
+  // ======================
+  //     MEDIA ACCESS
+  // ======================
   async function initMedia() {
     if (localStream) return true;
+
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
       localVideo.srcObject = localStream;
       updateMicButton();
       return true;
+
     } catch (err) {
       statusText.textContent = "Camera/Mic access denied.";
       console.error(err);
@@ -196,7 +244,11 @@ window.onload = () => {
     }
   }
 
-  // ====== Matching System ======
+
+
+  // =========================================
+  //         MATCHMAKING SYSTEM
+  // =========================================
   function startSearchLoop() {
     if (isStopped || partnerId) return;
 
@@ -204,16 +256,18 @@ window.onload = () => {
     statusText.textContent = "Searching...";
 
     socket.emit("find-partner", {
-      locale:"ar",
-      version:"1.0",
-      timestamp:Date.now()
+      locale: "ar",
+      version: "1.0",
+      timestamp: Date.now()
     });
 
     searchTimer = setTimeout(() => {
       if (!partnerId && !isStopped) {
         socket.emit("stop");
+
         showRemoteSpinnerOnly(false);
         statusText.textContent = "Pausing...";
+
         pauseTimer = setTimeout(startSearchLoop, 2000);
       }
     }, 4000);
@@ -227,6 +281,7 @@ window.onload = () => {
     matchId = null;
     matchAcked = false;
     isInitiator = false;
+
     chatMessages.innerHTML = "";
     chatMessages.appendChild(typingIndicator);
 
@@ -236,23 +291,34 @@ window.onload = () => {
     startSearchLoop();
   }
 
-  // ====== Buttons (Skip only) ======
+
+
+  // ======================
+  //        SKIP
+  // ======================
   skipBtn.onclick = () => {
     statusText.textContent = "Skipping...";
+
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
+
     socket.emit("skip");
+
     closePeerConnection();
     disableChat();
     addMessage("You skipped.", "system");
+
     startSearchLoop();
   };
 
-  sendBtn.onclick = sendMessage;
-  chatInput.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
 
-  // ====== SOCKET ======
-  socket.on("waiting", msg => statusText.textContent = msg || "Waiting...");
+
+  // ======================
+  //       SOCKET.IO
+  // ======================
+  socket.on("waiting", msg => {
+    statusText.textContent = msg || "Waiting...";
+  });
 
   socket.on("chat-message", ({ message }) => {
     addMessage(message, "them");
@@ -271,14 +337,15 @@ window.onload = () => {
     statusText.textContent = "Stranger disconnected.";
     disableChat();
     addMessage("Disconnected.", "system");
+
     partnerId = null;
     closePeerConnection();
+
     if (autoReconnect) startSearchLoop();
     else resetUI();
   });
 
   socket.on("partner-found", async payload => {
-
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
 
@@ -297,6 +364,7 @@ window.onload = () => {
 
       const onConfirm = d => {
         if (!d || d.matchId !== matchId) return;
+
         confirmed = true;
         socket.off("match-confirmed", onConfirm);
         proceedAfterMatch();
@@ -304,6 +372,7 @@ window.onload = () => {
 
       socket.on("match-confirmed", onConfirm);
 
+      // fallback: لو ما وصل التأكيد
       setTimeout(() => {
         if (!confirmed) {
           socket.off("match-confirmed", onConfirm);
@@ -319,12 +388,18 @@ window.onload = () => {
   async function proceedAfterMatch() {
     statusText.textContent = "Connecting...";
     hideAllSpinners();
+
     createPeerConnection();
 
     if (isInitiator) {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
-      socket.emit("signal", { to: partnerId, data: offer, matchId });
+
+      socket.emit("signal", {
+        to: partnerId,
+        data: offer,
+        matchId
+      });
     }
   }
 
@@ -333,45 +408,62 @@ window.onload = () => {
 
     if (data.type === "offer") {
       await peerConnection.setRemoteDescription(data);
+
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
+
       socket.emit("signal", { to: from, data: answer, matchId });
-    } 
-    else if (data.type === "answer") {
+
+    } else if (data.type === "answer") {
       await peerConnection.setRemoteDescription(data);
-    } 
-    else if (data.candidate) {
+
+    } else if (data.candidate) {
       await peerConnection.addIceCandidate(data.candidate);
     }
   });
 
-  // ====== WebRTC ======
+
+
+  // ======================
+  //        WEBRTC
+  // ======================
   function createPeerConnection() {
     peerConnection = new RTCPeerConnection(servers);
 
     if (localStream) {
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      localStream.getTracks().forEach(track =>
+        peerConnection.addTrack(track, localStream)
+      );
     }
 
     peerConnection.ontrack = e => {
       remoteVideo.srcObject = e.streams[0];
+
       statusText.textContent = "Connected!";
       enableChat();
       addMessage("Connected with a stranger. Say hi!", "system");
+
       showRemoteSpinnerOnly(false);
     };
 
     peerConnection.onicecandidate = e => {
-      if (e.candidate)
-        socket.emit("signal", { to: partnerId, data: { candidate:e.candidate }, matchId });
+      if (e.candidate) {
+        socket.emit("signal", {
+          to: partnerId,
+          data: { candidate: e.candidate },
+          matchId
+        });
+      }
     };
 
     peerConnection.onconnectionstatechange = () => {
-      if (["disconnected","failed","closed"].includes(peerConnection.connectionState)) {
+      if (["disconnected", "failed", "closed"].includes(peerConnection.connectionState)) {
         disableChat();
         addMessage("Connection lost.", "system");
+
         partnerId = null;
         closePeerConnection();
+
         if (autoReconnect) startSearchLoop();
       }
     };
@@ -385,10 +477,18 @@ window.onload = () => {
     remoteVideo.srcObject = null;
   }
 
-  // ====== Auto-start (no Start button needed) ======
+
+
+  // ======================
+  //   AUTO START CHAT
+  // ======================
   startSearch();
 
-  // ====== Cleanup ======
+
+
+  // ======================
+  //       CLEANUP
+  // ======================
   window.addEventListener("beforeunload", () => {
     socket.emit("stop");
     if (localStream) localStream.getTracks().forEach(t => t.stop());
