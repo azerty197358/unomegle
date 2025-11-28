@@ -393,23 +393,27 @@ video{
 <script>
 /* خروج */
 document.getElementById("exitBtn").onclick = () => location.href = "index.html";
+<script>
+window.addEventListener("load", () => {
+  const bell = document.getElementById("notifyIcon");
+  const dot  = document.getElementById("notifyDot");
 
-/* إشعار الأدمن */
-const bell = document.getElementById("notifyIcon");
-const dot  = document.getElementById("notifyDot");
+  // ننتظر حتى يكون socket موجوداً
+  if (window.socket) {
+      socket.on("adminMessage", msg => {
+        addMessage("📢 Admin: " + msg, "system");
+        dot.style.display = "block";
+        bell.classList.add("shake");
+      });
+  }
 
-socket.on("adminMessage", msg => {
-  addMessage("📢 Admin: " + msg, "system");
-
-  dot.style.display = "block";
-  bell.classList.add("shake");
+  bell.onclick = () => {
+    dot.style.display = "none";
+    bell.classList.remove("shake");
+  };
 });
+</script>
 
-/* عند الضغط على الجرس */
-bell.onclick = () => {
-  dot.style.display = "none";
-  bell.classList.remove("shake");
-};
 </script>
 
 </body>
