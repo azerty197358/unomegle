@@ -1,6 +1,6 @@
-// ========================================================
+// path: /mnt/data/script.js
 // SPARKCHAT — script.js (FULL FIX + LTR DESIGN + MOBILE FIXES)
-// ========================================================
+// Adjusted: safer report check + ensure mic/report buttons clickable
 
 window.addEventListener('DOMContentLoaded', () => {
 
@@ -151,6 +151,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
+    // reflect disabled state visually if no localStream
+    micBtn.disabled = !localStream;
+    micBtn.style.opacity = localStream ? '1' : '0.8';
   }
 
   micBtn.onclick = () => {
@@ -165,25 +168,40 @@ window.addEventListener('DOMContentLoaded', () => {
   reportBtn.onclick = async () => {
     if (!partnerId) return alert('No user to report.');
 
-    if (!remoteVideo || remoteVideo.readyState < 2) {
+    // More robust readiness check:
+    // allow if remoteVideo has a srcObject (MediaStream) or videoWidth is available
+    const hasStream = !!remoteVideo.srcObject;
+    const hasRendered = (remoteVideo.videoWidth && remoteVideo.videoHeight);
+
+    if (!hasStream && !hasRendered) {
       return alert('Video not ready for screenshot.');
     }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = remoteVideo.videoWidth || 640;
-    canvas.height = remoteVideo.videoHeight || 480;
+    // Prepare canvas with fallback dimensions
+    const cw = remoteVideo.videoWidth || 640;
+    const ch = remoteVideo.videoHeight || 480;
 
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
 
-    socket.emit('reportPorn', {
-      partnerId,
-      matchId,
-      screenshot: canvas.toDataURL('image/png'),
-      timestamp: Date.now()
-    });
+      const ctx = canvas.getContext('2d');
+      // drawImage may throw if video not ready; protect it
+      ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
 
-    addMessage('🚨 Report sent!', 'system');
+      socket.emit('reportPorn', {
+        partnerId,
+        matchId,
+        screenshot: canvas.toDataURL('image/png'),
+        timestamp: Date.now()
+      });
+
+      addMessage('🚨 Report sent!', 'system');
+    } catch (err) {
+      console.error('Screenshot failed:', err);
+      alert('Failed to capture screenshot. Try again when video is visible.');
+    }
   };
 
   // ---------------------- UI ----------------------
@@ -226,6 +244,9 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error(e);
       statusText.textContent = 'Camera/Mic denied.';
+      // reflect that mic button shouldn't be used
+      localStream = null;
+      updateMicButton();
       return false;
     }
   }
