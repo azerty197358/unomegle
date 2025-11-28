@@ -1,6 +1,30 @@
 // ========================================================
 //  SPARKCHAT — Updated to work with NO Start/Stop buttons
 // ========================================================
+const notifyBell = document.getElementById("notifyIcon");
+const notifyDot = document.getElementById("notifyDot");
+
+let unreadCount = 0;
+
+// عندما تصل رسالة من الأدمن
+socket.on("adminMessage", msg => {
+    unreadCount++;
+
+    notifyDot.style.display = "block";  
+    notifyBell.classList.add("shake");
+
+    // عرض الرسالة في الشات
+    addMessage("system", msg);
+});
+
+// عند الضغط على الجرس = إزالة الإشعارات
+notifyBell.onclick = () => {
+    unreadCount = 0;
+    notifyDot.style.display = "none";
+    notifyBell.classList.remove("shake");
+
+    alert("لا توجد إشعارات جديدة");
+};
 
 window.onload = () => {
 
