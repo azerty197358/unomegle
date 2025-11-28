@@ -4,23 +4,13 @@
 
 window.onload = () => {
 
-  // تشغيل الكاميرا والمايك تلقائيًا عند فتح الصفحة
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-      const localVideo = document.getElementById("localVideo");
-      localVideo.srcObject = stream;
-    })
-    .catch(err => {
-      console.error("Camera/Mic access denied:", err);
-    });
-
   // ====== GLOBALS ======
   const socket = io();
   let localStream = null;
   let peerConnection = null;
-  let partnerId = null;        
-  let matchId = null;          
-  let matchAcked = false;      
+  let partnerId = null;        // partner socket id
+  let matchId = null;          // server matching token (if provided)
+  let matchAcked = false;      // we acked match
   let isInitiator = false;
   let autoReconnect = true;
   let isStopped = false;
@@ -50,7 +40,7 @@ window.onload = () => {
   const micBtn = document.getElementById("micBtn");
   const reportBtn = document.getElementById("reportBtn");
 
-  // typing indicator
+  // typing indicator element
   const typingIndicator = document.createElement("div");
   typingIndicator.className = "msg system";
   typingIndicator.style.fontStyle = "italic";
@@ -58,10 +48,10 @@ window.onload = () => {
   typingIndicator.textContent = "الشخص الآخر يكتب الآن...";
   chatMessages.appendChild(typingIndicator);
 
-  // ====== TYPING SYSTEM ======
+  // ====== TYPING STATE ======
   let typing = false;
   let typingTimer = null;
-  const TYPING_DEBOUNCE = 1500;
+  const TYPING_DEBOUNCE = 1500; // ms
 
   function sendTyping() {
     if (!partnerId) return;
@@ -81,6 +71,7 @@ window.onload = () => {
     sendTyping();
   });
 
+  // when sending message, send stop-typing immediately
   function sendMessage() {
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
@@ -89,12 +80,13 @@ window.onload = () => {
     socket.emit("chat-message", { to: partnerId, message: msg });
     chatInput.value = "";
 
+    // stop typing
     typing = false;
     clearTimeout(typingTimer);
     socket.emit("stop-typing", { to: partnerId });
   }
 
-  // ====== REPORT ======
+  // ====== REPORT FUNCTION ======
   reportBtn.onclick = async () => {
     if (!partnerId) return alert("لا يوجد شخص للإبلاغ عنه.");
     if (!remoteVideo || remoteVideo.readyState < 2) return alert("لا يمكن التقاط لقطة الآن.");
@@ -120,7 +112,7 @@ window.onload = () => {
     console.log("Report response:", msg && msg.message);
   });
 
-  // ====== MIC ======
+  // ====== MIC FUNCTIONS ======
   function updateMicButton() { micBtn.textContent = micEnabled ? "🎤" : "🔇"; }
   function toggleMicrophone() {
     if (!localStream) return;
@@ -130,7 +122,7 @@ window.onload = () => {
   }
   micBtn.onclick = toggleMicrophone;
 
-  // ====== UI ======
+  // ====== UI HELPERS ======
   function showRemoteSpinnerOnly(show) {
     remoteSpinner.style.display = show ? "block" : "none";
     remoteVideo.style.display = show ? "none" : "block";
@@ -145,6 +137,7 @@ window.onload = () => {
     const d = document.createElement("div");
     d.className = `msg ${type}`;
     d.textContent = msg;
+    // insert before typingIndicator so indicator stays at bottom
     chatMessages.insertBefore(d, typingIndicator);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
@@ -178,13 +171,14 @@ window.onload = () => {
     }
   }
 
-  // ====== SEARCH SYSTEM ======
+  // ====== SEARCH SYSTEM (improved) ======
   function startSearchLoop() {
     if (isStopped || partnerId) return;
 
     showRemoteSpinnerOnly(true);
     statusText.textContent = "Searching...";
 
+    // send lightweight client hints to improve server matching
     const clientInfo = {
       locale: "ar",
       version: "1.0",
@@ -256,14 +250,16 @@ window.onload = () => {
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
 
-  // ====== SOCKET EVENTS ======
+  // ====== SOCKET HANDLERS ======
   socket.on("waiting", msg => { statusText.textContent = msg || "Waiting..."; });
 
   socket.on("chat-message", ({ from, message }) => {
+    // optionally verify from === partnerId (if provided)
     addMessage(message, "them");
   });
 
   socket.on("typing", ({ from }) => {
+    // show indicator only if from matches current partner (if partnerId known)
     if (!partnerId || (from && from !== partnerId)) return;
     typingIndicator.style.display = "block";
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -288,10 +284,12 @@ window.onload = () => {
     else resetUI();
   });
 
+  // partner-found may be old format ({ id }) or new ({ partnerId, matchId, initiator })
   socket.on("partner-found", async (payload) => {
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
 
+    // normalize payload
     let pid = null;
     let mid = null;
     let initiator = false;
@@ -310,6 +308,7 @@ window.onload = () => {
     }
 
     if (!pid) {
+      // nothing usable — fallback: ignore
       console.warn("partner-found payload missing id", payload);
       return;
     }
@@ -321,14 +320,19 @@ window.onload = () => {
     statusText.textContent = "Match found. Waiting confirmation...";
     showRemoteSpinnerOnly(true);
 
+    // If server provided a matchId, perform handshake to ensure both sides ready
     if (matchId) {
+      // ack back to server
       socket.emit("match-ack", { to: partnerId, matchId });
 
+      // wait for server to emit match-confirmed for this matchId
+      // set a fallback timeout: if nothing within 6s, proceed anyway (graceful)
       let confirmed = false;
       const CONFIRM_TIMEOUT = 6000;
 
       const onConfirmed = (data) => {
-        if (!data || data.matchId !== matchId) return;
+        if (!data) return;
+        if (data.matchId !== matchId) return;
         confirmed = true;
         socket.off("match-confirmed", onConfirmed);
         proceedAfterMatch();
@@ -339,20 +343,24 @@ window.onload = () => {
       setTimeout(() => {
         if (!confirmed) {
           socket.off("match-confirmed", onConfirmed);
+          console.warn("match-confirm timeout — proceeding (fallback).");
           proceedAfterMatch();
         }
       }, CONFIRM_TIMEOUT);
 
     } else {
+      // no matchId provided — proceed as before
       proceedAfterMatch();
     }
   });
 
+  // helper to proceed after match handshake
   async function proceedAfterMatch() {
     statusText.textContent = "Connecting...";
     hideAllSpinners();
     createPeerConnection();
 
+    // if initiator create offer
     if (isInitiator) {
       try {
         const offer = await peerConnection.createOffer();
@@ -431,7 +439,7 @@ window.onload = () => {
     remoteVideo.srcObject = null;
   }
 
-  // ====== CLEANUP ======
+  // ====== CLEANUP on unload ======
   window.addEventListener("beforeunload", () => {
     try { socket.emit("stop"); } catch {}
     if (localStream) localStream.getTracks().forEach(t => t.stop());
