@@ -93,7 +93,6 @@
     padding:6px 10px;font-size:14px;background:#fafafa;border-radius:6px;border:1px solid #ddd;width:100%;text-align:center;
   }
 
-  /* ---------------- INPUT + BUTTONS NEW LAYOUT ---------------- */
   .input-container{
     width:100%;
     display:flex;
@@ -114,7 +113,7 @@
     height:38px;
     background:#2ea3ff;
     color:#fff;
-    border-radius:6px;   /* مربع مثل Omegle */
+    border-radius:6px;
     padding:0;
     font-size:14px;
     cursor:pointer;
@@ -129,8 +128,98 @@
     white-space:nowrap;
   }
 
-  /* إزالة start و stop */
   #startBtn, #stopBtn { display:none !important; }
+
+
+/* ====================== RESPONSIVE DESIGN ====================== */
+
+  /* الهواتف — width أقل من 768px */
+  @media (max-width: 768px) {
+
+    body{
+      overflow:auto; 
+    }
+
+    .stage{
+      flex-direction:column;
+      padding:6px;
+      gap:6px;
+      position:relative;
+      top:0;
+      height:auto;
+    }
+
+    .left-col{
+      width:100%;
+      min-width:100%;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .video-frame.top,
+    .video-frame.bottom{
+      height:200px;
+    }
+
+    #reportBtn,#micBtn{
+      width:40px;
+      height:40px;
+      font-size:18px;
+    }
+
+    .right-col{
+      width:100%;
+      height:auto;
+      flex:unset;
+    }
+
+    .chat-area{
+      max-height:260px;
+      padding:10px;
+    }
+
+    .chat-input-row{
+      position:sticky;
+      bottom:0;
+      background:#fff;
+      z-index:20;
+    }
+
+    #status{
+      font-size:13px;
+    }
+
+    .input-container{
+      flex-direction:row-reverse;
+    }
+
+    #sendBtn{
+      width:42px;
+      height:42px;
+      font-size:16px;
+    }
+
+    #chatInput{
+      font-size:16px;
+      padding:10px;
+    }
+
+    #skipBtn{
+      font-size:14px;
+      padding:8px 12px;
+    }
+  }
+
+  /* الشاشات الصغيرة جداً — أقل من 450px */
+  @media (max-width: 450px){
+    .video-frame.top,
+    .video-frame.bottom{
+      height:160px;
+    }
+
+    .logo{ font-size:22px; }
+    #exitBtn{ padding:8px 14px; font-size:14px; }
+  }
 
 </style>
 </head>
@@ -169,7 +258,6 @@
     </div>
 
     <div class="chat-input-row">
-
       <div id="status">Loading...</div>
 
       <div class="input-container">
@@ -185,10 +273,9 @@
 <script>
 document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
-/* تشغيل auto start */
 window.onload = () => {
     if (typeof startChat === "function") {
-        startChat(); // يبدأ تلقائياً
+        startChat(); 
     }
 };
 </script>
