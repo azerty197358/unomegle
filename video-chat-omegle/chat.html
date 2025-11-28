@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="ar" dir="ltr">
 <head>
   <meta charset="UTF-8" />
@@ -6,207 +6,356 @@
   <title>SparkChat</title>
 
   <style>
-/* ======================== */
-/*   MOBILE FIRST LAYOUT   */
-/* ======================== */
+    :root {
+      --blue:#2ea3ff;
+      --dark:#111;
+      --light:#ffffff;
+      --border:#e6d7c8;
+    }
 
-:root {
-  --blue:#2ea3ff;
-  --dark:#111;
-  --light:#ffffff;
-  --border:#e6d7c8;
-}
+    * { margin:0; padding:0; box-sizing:border-box; }
 
-* { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:#fff;
+      font-family:Arial, Helvetica, sans-serif;
+      height:100vh;
+      overflow:hidden;
+    }
 
-body {
-  font-family:Arial, Helvetica, sans-serif;
-  background:#fff;
-  height:100vh;
-  overflow:hidden;
-  display:flex;
-  flex-direction:column;
-}
+    /* ---------------- TOP BAR ---------------- */
+    .topbar {
+      height:60px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:0 16px;
+      border-bottom:1px solid #eee;
+      background:#fff;
+      flex-shrink:0;
+    }
 
-/* ========== TOP BAR ========== */
-.topbar {
-  height:55px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:0 12px;
-  border-bottom:1px solid #eee;
-  flex-shrink:0;
-}
+    .logo {
+      font-size:26px;
+      font-weight:bold;
+      color:#ff9a00;
+    }
+    .logo span { color:#3fa0ff; }
 
-.logo { font-size:22px; font-weight:bold; color:#ff9a00; }
-.logo span { color:#3fa0ff; }
+    #exitBtn {
+      background:red;
+      color:#fff;
+      padding:10px 18px;
+      border:none;
+      border-radius:8px;
+      font-weight:bold;
+      cursor:pointer;
+    }
 
-#exitBtn {
-  padding:8px 12px;
-  font-size:14px;
-  background:red;
-  color:#fff;
-  border:none;
-  border-radius:6px;
-}
+    /* ---------------- STAGE ---------------- */
+    .stage {
+      position:absolute;
+      top:60px;
+      bottom:0;
+      left:0;
+      right:0;
+      display:flex;
+      gap:10px;
+      padding:10px;
+      overflow:hidden;
+    }
 
-/* ========== MAIN STAGE (FULL SCREEN) ========== */
-.stage {
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  padding:6px;
-  overflow:hidden;
-}
+    .left-col {
+      width:350px;
+      min-width:260px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      flex-shrink:0;
+    }
 
-/* ========== VIDEO AREA ========== */
-.left-col {
-  width:100%;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  flex:1;
-  min-height:0;
-}
+    .video-frame {
+      position:relative;
+      border-radius:12px;
+      border:6px solid var(--border);
+      overflow:hidden;
+      background:#000;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
 
-/* Each video gets half screen height */
-.video-frame {
-  position:relative;
-  border-radius:10px;
-  border:4px solid var(--border);
-  overflow:hidden;
-  background:#000;
-  flex:1;
-  min-height:0;
-}
+    .video-frame.top { height:300px; }
+    .video-frame.bottom { height:240px; }
 
-video {
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
+    video {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+    }
 
-.watermark {
-  position:absolute;
-  bottom:8px;
-  left:8px;
-  font-size:14px;
-  color:#ffffffaa;
-}
+    .watermark {
+      position:absolute;
+      bottom:10px;
+      left:10px;
+      font-size:18px;
+      font-weight:bold;
+      color:#ffffffaa;
+      pointer-events:none;
+      z-index:15;
+    }
 
-.video-label {
-  position:absolute;
-  top:6px;
-  left:6px;
-  font-size:11px;
-  background:#fff;
-  padding:3px 8px;
-  border-radius:6px;
-}
+    #remoteSpinner,
+    #localSpinner {
+      position:absolute;
+      width:45px;
+      height:45px;
+      border:5px solid #fff;
+      border-top-color:transparent;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      display:none;
+      top:50%; left:50%;
+      transform:translate(-50%, -50%);
+      z-index:10;
+    }
 
-/* Icon buttons (mic + report) */
-#reportBtn,
-#micBtn {
-  position:absolute;
-  bottom:8px;
-  right:8px;
-  padding:8px 10px;
-  font-size:15px;
-  border-radius:50%;
-  border:none;
-  color:#fff;
-  z-index:20;
-}
+    @keyframes spin { to { transform:translate(-50%,-50%) rotate(360deg);} }
 
-#reportBtn { background:red; }
-#micBtn    { background:#2ea3ff; }
+    .video-label {
+      position:absolute;
+      top:8px;
+      left:8px;
+      background:#fff;
+      padding:4px 10px;
+      border-radius:6px;
+      font-size:12px;
+      z-index:20;
+    }
 
-/* ========== CHAT AREA (BOTTOM) ========== */
-.right-col {
-  width:100%;
-  border:4px solid var(--border);
-  border-radius:10px;
-  background:#fff;
-  display:flex;
-  flex-direction:column;
-  flex-shrink:0;
-  max-height:38%;
-  min-height:160px;
-}
+    #reportBtn {
+      position:absolute;
+      bottom:10px;
+      right:10px;
+      background:red;
+      color:#fff;
+      padding:10px 12px;
+      font-size:18px;
+      border-radius:50%;
+      cursor:pointer;
+      z-index:30;
+    }
 
-.chat-area {
-  flex:1;
-  overflow-y:auto;
-  padding:8px;
-}
+    #micBtn {
+      position:absolute;
+      bottom:10px;
+      right:10px;
+      background:#2ea3ff;
+      color:#fff;
+      padding:10px 12px;
+      font-size:18px;
+      border-radius:50%;
+      cursor:pointer;
+      z-index:30;
+    }
 
-.chat-input-row {
-  padding:8px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
+    .right-col {
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      border:6px solid var(--border);
+      border-radius:10px;
+      background:#fff;
+      overflow:hidden;
+    }
 
-.row-buttons {
-  display:flex;
-  gap:6px;
-}
+    .chat-area {
+      flex:1;
+      padding:14px;
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background:#fff;
+    }
 
-button {
-  padding:10px;
-  font-size:14px;
-  border:none;
-  border-radius:8px;
-  cursor:pointer;
-}
+    .warning-msg {
+      background:#ffe1e1;
+      color:#b30000;
+      padding:10px;
+      border-radius:10px;
+      text-align:center;
+      border:1px solid #ffb3b3;
+    }
 
-#startBtn { background:#2ea3ff; color:#fff; flex:1; }
-#skipBtn  { background:#ff9a00; color:#fff; flex:1; }
-#stopBtn  { background:#ccc; color:#111; flex:1; }
+    .chat-input-row {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:10px;
+      background:#fafafa;
+      border-top:1px solid #ddd;
+    }
 
-#sendBtn  { background:#2ea3ff; color:#fff; width:100%; }
-#chatInput { padding:10px; border-radius:6px; border:1px solid #ccc; }
+    #status {
+      padding:6px 10px;
+      font-size:14px;
+      background:#fafafa;
+      border-radius:6px;
+      border:1px solid #ddd;
+      width:100%;
+      text-align:center;
+    }
 
-/* ======================== */
-/*  SMALL SCREENS OPTIMIZE  */
-/* ======================== */
+    .row-buttons {
+      display:flex;
+      gap:6px;
+      width:100%;
+    }
 
-@media (max-height: 700px) {
-  .right-col { max-height:42%; }
-}
+    #chatInput {
+      padding:10px;
+      border:1px solid #ccc;
+      border-radius:8px;
+      font-size:14px;
+      width:100%;
+    }
 
-@media (max-height: 600px) {
-  .right-col { max-height:48%; }
-}
+    button {
+      border:none;
+      border-radius:8px;
+      padding:10px 14px;
+      font-size:14px;
+      cursor:pointer;
+    }
 
-@media (max-height: 520px) {
-  .right-col { display:none; } /* Auto-hide chat on tiny phones */
-}
+    #startBtn { background:#2ea3ff; color:#fff; flex:1; }
+    #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
+    #stopBtn  { background:#ccc; color:#111; flex:1; }
+    #sendBtn  { background:#2ea3ff; color:#fff; width:100%; }
+
+    /* ---------- RESPONSIVENESS ---------- */
+
+    /* Tablets */
+    @media (max-width: 900px) {
+      .left-col {
+        width: 280px;
+      }
+      .video-frame.top { height: 230px; }
+      .video-frame.bottom { height: 180px; }
+    }
+
+    /* ---------- MOBILE — NO SCROLL FULL FIT ---------- */
+    @media (max-width: 768px) {
+
+      body {
+        overflow: hidden;
+        height: 100vh;
+      }
+
+      .stage {
+        position: absolute;
+        top: 60px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow: hidden;
+      }
+
+      .left-col {
+        width: 100%;
+        min-width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 0 0 70%;
+      }
+
+      .video-frame.top {
+        flex: 0 0 40%;
+        height: auto;
+      }
+
+      .video-frame.bottom {
+        flex: 0 0 30%;
+        height: auto;
+      }
+
+      .video-frame video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .right-col {
+        flex: 0 0 30%;
+        display: flex;
+        flex-direction: column;
+        border: 4px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .chat-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px;
+      }
+
+      .chat-input-row {
+        padding: 6px;
+        gap: 6px;
+      }
+
+      .row-buttons {
+        display: flex;
+        gap: 4px;
+      }
+
+      #startBtn, #skipBtn, #stopBtn {
+        padding: 8px;
+        font-size: 14px;
+      }
+
+      #chatInput,
+      #sendBtn {
+        font-size: 14px;
+        padding: 8px;
+      }
+    }
+
+    /* Small phones */
+    @media (max-width: 480px) {
+
+      .video-frame.top { flex: 0 0 38%; }
+      .video-frame.bottom { flex: 0 0 28%; }
+
+      .logo { font-size: 20px; }
+      button { padding: 6px 8px; font-size: 12px; }
+
+      .row-buttons { flex-direction: column; }
+      #startBtn, #skipBtn, #stopBtn { width: 100%; }
+    }
+
   </style>
-
 </head>
 
 <body>
 
-<!-- ===================== -->
-<!--       TOP BAR         -->
-<!-- ===================== -->
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
   <button id="exitBtn">Exit</button>
 </div>
 
-<!-- ===================== -->
-<!--       MAIN AREA       -->
-<!-- ===================== -->
 <div class="stage">
 
   <div class="left-col">
-
     <!-- Stranger -->
-    <div class="video-frame">
+    <div class="video-frame top">
       <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
@@ -215,17 +364,15 @@ button {
     </div>
 
     <!-- You -->
-    <div class="video-frame">
+    <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
       <div id="localSpinner"></div>
     </div>
-
   </div>
 
-  <!-- CHAT AREA -->
   <div class="right-col">
     <div id="chatMessages" class="chat-area">
       <div class="warning-msg">
@@ -249,9 +396,6 @@ button {
   </div>
 </div>
 
-<!-- ===================== -->
-<!--       SCRIPTS         -->
-<!-- ===================== -->
 <script>
 document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
