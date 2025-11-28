@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ar" dir="ltr">
 <head>
   <meta charset="UTF-8" />
@@ -189,11 +189,11 @@
 
     .chat-input-row {
       display:flex;
-      flex-direction:column;
       gap:8px;
       padding:10px;
       background:#fafafa;
       border-top:1px solid #ddd;
+      align-items:center;
     }
 
     #status {
@@ -202,14 +202,8 @@
       background:#fafafa;
       border-radius:6px;
       border:1px solid #ddd;
-      width:100%;
+      flex:0 0 100%;
       text-align:center;
-    }
-
-    .row-buttons {
-      display:flex;
-      gap:6px;
-      width:100%;
     }
 
     #chatInput {
@@ -217,128 +211,29 @@
       border:1px solid #ccc;
       border-radius:8px;
       font-size:14px;
-      width:100%;
+      flex:1;
     }
 
-    button {
-      border:none;
-      border-radius:8px;
+    #sendBtn {
+      background:#2ea3ff;
+      color:#fff;
       padding:10px 14px;
-      font-size:14px;
+      border-radius:8px;
       cursor:pointer;
     }
 
-    #startBtn { background:#2ea3ff; color:#fff; flex:1; }
-    #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
-    #stopBtn  { background:#ccc; color:#111; flex:1; }
-    #sendBtn  { background:#2ea3ff; color:#fff; width:100%; }
-
-    /* ---------- RESPONSIVENESS ---------- */
-
-    /* Tablets */
-    @media (max-width: 900px) {
-      .left-col {
-        width: 280px;
-      }
-      .video-frame.top { height: 230px; }
-      .video-frame.bottom { height: 180px; }
+    #skipBtn {
+      background:#ff9a00;
+      color:#fff;
+      padding:10px 14px;
+      border-radius:8px;
+      cursor:pointer;
     }
 
-    /* ---------- MOBILE — NO SCROLL FULL FIT ---------- */
-    @media (max-width: 768px) {
-
-      body {
-        overflow: hidden;
-        height: 100vh;
-      }
-
-      .stage {
-        position: absolute;
-        top: 60px;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 0;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        overflow: hidden;
-      }
-
-      .left-col {
-        width: 100%;
-        min-width: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        flex: 0 0 70%;
-      }
-
-      .video-frame.top {
-        flex: 0 0 40%;
-        height: auto;
-      }
-
-      .video-frame.bottom {
-        flex: 0 0 30%;
-        height: auto;
-      }
-
-      .video-frame video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .right-col {
-        flex: 0 0 30%;
-        display: flex;
-        flex-direction: column;
-        border: 4px solid var(--border);
-        border-radius: 10px;
-        overflow: hidden;
-      }
-
-      .chat-area {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-      }
-
-      .chat-input-row {
-        padding: 6px;
-        gap: 6px;
-      }
-
-      .row-buttons {
-        display: flex;
-        gap: 4px;
-      }
-
-      #startBtn, #skipBtn, #stopBtn {
-        padding: 8px;
-        font-size: 14px;
-      }
-
-      #chatInput,
-      #sendBtn {
-        font-size: 14px;
-        padding: 8px;
-      }
-    }
-
-    /* Small phones */
-    @media (max-width: 480px) {
-
-      .video-frame.top { flex: 0 0 38%; }
-      .video-frame.bottom { flex: 0 0 28%; }
-
-      .logo { font-size: 20px; }
-      button { padding: 6px 8px; font-size: 12px; }
-
-      .row-buttons { flex-direction: column; }
-      #startBtn, #skipBtn, #stopBtn { width: 100%; }
+    /* ---------- RESPONSIVE ---------- */
+    @media(max-width:768px){
+      .chat-input-row { flex-wrap:wrap; }
+      #chatInput { flex:100%; }
     }
 
   </style>
@@ -354,7 +249,6 @@
 <div class="stage">
 
   <div class="left-col">
-    <!-- Stranger -->
     <div class="video-frame top">
       <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
@@ -363,7 +257,6 @@
       <div id="remoteSpinner"></div>
     </div>
 
-    <!-- You -->
     <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
@@ -378,22 +271,18 @@
       <div class="warning-msg">
         ⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.
       </div>
-      <div class="msg system">Click "Start" to begin.</div>
+      <div class="msg system">يجري تهيئة الاتصال...</div>
     </div>
 
     <div class="chat-input-row">
-      <div id="status">Ready</div>
+      <div id="status">Initializing...</div>
 
-      <div class="row-buttons">
-        <button id="startBtn">Start</button>
-        <button id="skipBtn">Skip</button>
-        <button id="stopBtn">Stop</button>
-      </div>
-
-      <input id="chatInput" placeholder="Type.." disabled />
+      <input id="chatInput" placeholder="Type..." disabled />
       <button id="sendBtn" disabled>Send</button>
+      <button id="skipBtn">Skip</button>
     </div>
   </div>
+
 </div>
 
 <script>
