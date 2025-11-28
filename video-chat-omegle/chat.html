@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="ar" dir="ltr">
 <head>
   <meta charset="UTF-8" />
@@ -22,7 +22,6 @@
       overflow:hidden;
     }
 
-    /* ---------------- TOP BAR ---------------- */
     .topbar {
       height:60px;
       display:flex;
@@ -51,7 +50,6 @@
       cursor:pointer;
     }
 
-    /* ---------------- STAGE ---------------- */
     .stage {
       position:absolute;
       top:60px;
@@ -189,11 +187,11 @@
 
     .chat-input-row {
       display:flex;
+      flex-direction:column;
       gap:8px;
       padding:10px;
       background:#fafafa;
       border-top:1px solid #ddd;
-      align-items:center;
     }
 
     #status {
@@ -202,8 +200,14 @@
       background:#fafafa;
       border-radius:6px;
       border:1px solid #ddd;
-      flex:0 0 100%;
+      width:100%;
       text-align:center;
+    }
+
+    .row-buttons {
+      display:flex;
+      gap:6px;
+      width:100%;
     }
 
     #chatInput {
@@ -211,30 +215,21 @@
       border:1px solid #ccc;
       border-radius:8px;
       font-size:14px;
-      flex:1;
+      width:100%;
     }
 
-    #sendBtn {
-      background:#2ea3ff;
-      color:#fff;
-      padding:10px 14px;
+    button {
+      border:none;
       border-radius:8px;
+      padding:10px 14px;
+      font-size:14px;
       cursor:pointer;
     }
 
-    #skipBtn {
-      background:#ff9a00;
-      color:#fff;
-      padding:10px 14px;
-      border-radius:8px;
-      cursor:pointer;
-    }
-
-    /* ---------- RESPONSIVE ---------- */
-    @media(max-width:768px){
-      .chat-input-row { flex-wrap:wrap; }
-      #chatInput { flex:100%; }
-    }
+    #startBtn { background:#2ea3ff; color:#fff; flex:1; }
+    #skipBtn  { background:#ff9a00; color:#fff; flex:1; }
+    #stopBtn  { background:#ccc; color:#111; flex:1; }
+    #sendBtn  { background:#2ea3ff; color:#fff; width:100%; }
 
   </style>
 </head>
@@ -271,29 +266,39 @@
       <div class="warning-msg">
         ⚠️ الرجاء الإبلاغ فوراً عن أي شخص يقوم بحركات إباحية أو غير لائقة.
       </div>
-      <div class="msg system">يجري تهيئة الاتصال...</div>
+      <div class="msg system">Connecting...</div>
     </div>
 
     <div class="chat-input-row">
-      <div id="status">Initializing...</div>
+      <div id="status">Connecting...</div>
 
-      <input id="chatInput" placeholder="Type..." disabled />
+      <!-- تعديل بسيط فقط: وضع skip بجانب حقل الكتابة -->
+      <div class="row-buttons" style="justify-content:flex-start;">
+        <button id="skipBtn" style="width:auto;">Skip</button>
+      </div>
+
+      <input id="chatInput" placeholder="Type.." disabled />
       <button id="sendBtn" disabled>Send</button>
-      <button id="skipBtn">Skip</button>
+
     </div>
   </div>
-
 </div>
 
 <script>
 document.getElementById("exitBtn").onclick = () => location.href="index.html";
 
-document.getElementById("reportBtn").onclick = async () => {
-    try {
-        await captureReport();
-        alert("تم إرسال البلاغ بنجاح");
-    } catch (e) {
-        alert("حدث خطأ أثناء الإبلاغ");
+/* تشغيل الدردشة تلقائياً */
+window.onload = () => {
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+
+    /* إخفاء Start & Stop فقط */
+    if (startBtn) startBtn.style.display = "none";
+    if (stopBtn) stopBtn.style.display = "none";
+
+    /* استدعاء startChat() تلقائياً */
+    if (typeof startChat === "function") {
+        startChat();
     }
 };
 </script>
