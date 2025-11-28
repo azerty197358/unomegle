@@ -1,350 +1,365 @@
- const express = require("express");
-const path = require("path"); // New: For absolute paths
-const fs = require("fs"); // New: For file system operations
-const basicAuth = require('express-basic-auth'); // New: For basic authentication
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const basicAuth = require('express-basic-auth');
+
 const app = express();
-app.set('trust proxy', true); // Trust proxies for correct IP handling
+app.set('trust proxy', true);
+
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
+
 app.use(express.static(__dirname));
-// Serve reports folder statically (but we'll secure it via admin page)
+
 const reportDir = path.join(__dirname, 'reports');
 if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir);
+
 app.use('/reports', express.static(reportDir));
-// Middleware for basic auth on admin routes
+
+app.use(express.urlencoded({ extended: true }));
+
 const getUnauthorizedResponse = (req) => {
   return req.auth
     ? ('Credentials ' + req.auth.user + ':' + req.auth.password + ' rejected')
     : 'No credentials provided';
 };
+
 const adminAuth = basicAuth({
-  users: { 'admin': 'admin' }, // Change this to your desired username and password
-  challenge: true, // Add this to force the authentication popup
-  realm: 'Admin Area', // Optional: Sets the realm for the auth dialog
+  users: { 'admin': 'admin' },
+  challenge: true,
+  realm: 'Admin Area',
   unauthorizedResponse: getUnauthorizedResponse
 });
-app.use(express.urlencoded({ extended: true })); // For parsing POST forms
+
 const waitingQueue = [];
 const partners = new Map();
 const bannedIps = new Map();
-// Admin page route (secured)
+
+
+// ============================================
+//              ADMIN PANEL
+// ============================================
 app.get('/admin', adminAuth, (req, res) => {
   try {
-    let files = fs.readdirSync(reportDir);
+    const files = fs.readdirSync(reportDir);
     let html = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Admin Reports</title>
-        <style>
-          body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-          h1 { color: #f60; }
-          .report { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; background: #fff; border-radius: 5px; }
-          img { max-width: 500px; height: auto; }
-          form { display: inline; }
-          button { background: #ff0000; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-          button:hover { background: #cc0000; }
-          select { margin-right: 5px; }
-          .banned-list { margin-top: 40px; }
-          .banned-item { margin-bottom: 10px; }
-        </style>
+      <meta charset="UTF-8">
+      <title>Admin Panel</title>
+      <style>
+        body { font-family:Arial; padding:20px; background:#f5f5f5; }
+        img { max-width:450px; border:1px solid #ccc; display:block; margin-bottom:10px; }
+        .report { background:#fff; padding:15px; border-radius:8px; margin-bottom:20px; }
+        button { padding:6px 10px; border:none; color:white; cursor:pointer; }
+        .ban-btn { background:#d00; }
+        .unban-btn { background:#28a745; }
+      </style>
       </head>
       <body>
-        <h1>Reported Screenshots</h1>
+      <h1>Reports</h1>
+
+      <h2>Broadcast Message</h2>
+      <form method="POST" action="/admin-broadcast">
+        <textarea name="message" rows="3" style="width:300px"></textarea><br><br>
+        <button type="submit" style="background:#28a745;padding:10px 14px;color:#fff;">Send</button>
+      </form>
     `;
-    let activeReports = [];
-    files.forEach(file => {
-      const [timestamp, partnerId, reporterIp, reportedIp] = file.replace('.png', '').split('_');
+
+    let validReports = [];
+
+    for (const file of files) {
+      if (!file.endsWith(".png")) continue;
+
+      const parts = file.replace(".png", "").split("_");
+      if (parts.length !== 4) continue;
+
+      const [timestamp, partnerId, reporterIp, reportedIp] = parts;
+
       const banExpire = bannedIps.get(reportedIp);
+
+      // Skip expired bans & delete files
       if (banExpire && banExpire <= Date.now()) {
-        // Delete expired report file
         fs.unlinkSync(path.join(reportDir, file));
         bannedIps.delete(reportedIp);
-      } else {
-        activeReports.push({ file, timestamp, partnerId, reporterIp, reportedIp, banExpire });
+        continue;
       }
-    });
-    if (activeReports.length === 0) {
-      html += '<p>No reports yet.</p>';
+
+      validReports.push({
+        file,
+        timestamp,
+        partnerId,
+        reporterIp,
+        reportedIp,
+        banExpire
+      });
+    }
+
+    if (validReports.length === 0) {
+      html += `<p>No reports.</p>`;
     } else {
-      activeReports.forEach(report => {
+      for (const r of validReports) {
         html += `
           <div class="report">
-            <img src="/reports/${report.file}" alt="Reported Screenshot">
-            <p><strong>Timestamp:</strong> ${report.timestamp}</p>
-            <p><strong>Partner ID:</strong> ${report.partnerId}</p>
-            <p><strong>Reporter IP:</strong> ${report.reporterIp}</p>
-            <p><strong>Reported IP:</strong> ${report.reportedIp}</p>
+            <img src="/reports/${r.file}">
+            <p><b>Timestamp:</b> ${r.timestamp}</p>
+            <p><b>Partner ID:</b> ${r.partnerId}</p>
+            <p><b>Reporter IP:</b> ${r.reporterIp}</p>
+            <p><b>Reported IP:</b> ${r.reportedIp}</p>
         `;
-        if (report.banExpire) {
-          const expireStr = report.banExpire === Infinity ? 'Permanent' : new Date(report.banExpire).toLocaleString();
+
+        if (r.banExpire) {
+          const expStr =
+            r.banExpire === Infinity
+              ? "Permanent"
+              : new Date(r.banExpire).toLocaleString();
+
           html += `
-            <p><strong>Ban Expires:</strong> ${expireStr}</p>
-            <form action="/unban" method="POST">
-              <input type="hidden" name="ip" value="${report.reportedIp}">
-              <button type="submit">Unban IP</button>
+            <p><b>Ban Expires:</b> ${expStr}</p>
+            <form method="POST" action="/unban">
+              <input type="hidden" name="ip" value="${r.reportedIp}">
+              <button class="unban-btn">Unban</button>
             </form>
           `;
         } else {
           html += `
-            <form action="/ban" method="POST">
-              <input type="hidden" name="ip" value="${report.reportedIp}">
+            <form method="POST" action="/ban">
+              <input type="hidden" name="ip" value="${r.reportedIp}">
               <select name="duration">
                 <option value="24h">24 Hours</option>
                 <option value="permanent">Permanent</option>
               </select>
-              <button type="submit">Ban IP</button>
+              <button class="ban-btn">Ban</button>
             </form>
           `;
         }
-        html += '</div>';
-      });
-    }
-    // Banned users section (for IPs banned without reports, if any)
-    html += '<div class="banned-list"><h2>Banned IPs</h2>';
-    if (bannedIps.size === 0) {
-      html += '<p>No banned IPs.</p>';
-    } else {
-      let hasBanned = false;
-      for (const [ip, expire] of bannedIps) {
-        if (expire === Infinity || expire > Date.now()) {
-          const expireStr = expire === Infinity ? 'Permanent' : new Date(expire).toLocaleString();
-          html += `
-            <div class="banned-item">
-              <p><strong>IP:</strong> ${ip} - <strong>Expires:</strong> ${expireStr}</p>
-              <form action="/unban" method="POST">
-                <input type="hidden" name="ip" value="${ip}">
-                <button type="submit">Unban</button>
-              </form>
-            </div>
-          `;
-          hasBanned = true;
-        } else {
-          bannedIps.delete(ip); // Clean up expired bans
-        }
+
+        html += `</div>`;
       }
-      if (!hasBanned) html += '<p>No active banned IPs.</p>';
     }
-    html += '</div></body></html>';
+
+    // BANNED IP LIST
+    html += `<h2>Banned IPs</h2>`;
+    let hasBanned = false;
+
+    for (const [ip, exp] of bannedIps) {
+      if (exp === Infinity || exp > Date.now()) {
+        hasBanned = true;
+        const show =
+          exp === Infinity ? "Permanent" : new Date(exp).toLocaleString();
+
+        html += `
+          <p><b>${ip}</b> — ${show}</p>
+          <form method="POST" action="/unban">
+            <input type="hidden" name="ip" value="${ip}">
+            <button class="unban-btn">Unban</button>
+          </form>
+          <hr>
+        `;
+      }
+    }
+
+    if (!hasBanned) html += `<p>No banned IPs.</p>`;
+
+    html += `</body></html>`;
     res.send(html);
-  } catch (error) {
-    console.error('Error loading admin page:', error);
-    res.status(500).send('Error loading reports.');
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Admin page error.");
   }
 });
-// Ban route (secured, POST)
-app.post('/ban', adminAuth, (req, res) => {
+
+
+// =====================
+//  BROADCAST SYSTEM
+// =====================
+app.post('/admin-broadcast', adminAuth, (req, res) => {
+  const msg = req.body.message;
+
+  if (!msg || msg.trim() === "") return res.send("Empty message.");
+
+  io.emit("adminMessage", msg.trim());
+  console.log("Admin broadcast:", msg);
+
+  res.redirect("/admin");
+});
+// =====================
+//  BAN / UNBAN
+// =====================
+app.post("/ban", adminAuth, (req, res) => {
   const ip = req.body.ip;
   const duration = req.body.duration;
-  if (!ip) {
-    return res.status(400).send('Invalid IP.');
-  }
-  let banExpire;
-  let banMessage = 'You have been banned for engaging in pornographic activities.';
-  if (duration === 'permanent') {
-    banExpire = Infinity;
-    banMessage = 'You have been permanently banned for engaging in pornographic activities.';
-  } else if (duration === '24h') {
-    banExpire = Date.now() + 24 * 60 * 60 * 1000;
-    banMessage = 'You have been banned for 24 hours for engaging in pornographic activities.';
+
+  if (!ip) return res.send("Invalid IP.");
+
+  let expire;
+  if (duration === "24h") {
+    expire = Date.now() + 24 * 60 * 60 * 1000;
   } else {
-    return res.status(400).send('Invalid duration.');
+    expire = Infinity;
   }
-  bannedIps.set(ip, banExpire);
-  console.log(`Banned IP ${ip} ${duration === 'permanent' ? 'permanently' : 'for 24 hours'}.`);
-  // Immediately disconnect any connected sockets with this IP
-  for (const [socketId, socket] of io.sockets.sockets) {
-    const socketIp = socket.handshake.headers['cf-connecting-ip'] ||
-                     (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
-    if (socketIp === ip) {
-      socket.emit("banned", { message: banMessage });
-      socket.disconnect(true);
-    }
-  }
-  res.redirect('/admin');
+
+  bannedIps.set(ip, expire);
+  res.redirect("/admin");
 });
-// Unban route (secured, POST)
-app.post('/unban', adminAuth, (req, res) => {
+
+app.post("/unban", adminAuth, (req, res) => {
   const ip = req.body.ip;
-  if (!ip) {
-    return res.status(400).send('Invalid IP.');
-  }
-  bannedIps.delete(ip);
-  console.log(`Unbanned IP ${ip}.`);
-  res.redirect('/admin');
+  if (bannedIps.has(ip)) bannedIps.delete(ip);
+  res.redirect("/admin");
 });
+
+
+// ======================================
+//             SOCKET.IO
+// ======================================
 io.on("connection", (socket) => {
-  // Get real client IP considering proxies (e.g., Render, Cloudflare)
-  const clientIp = socket.handshake.headers['cf-connecting-ip'] ||
-                   (socket.handshake.headers['x-forwarded-for'] ? socket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : socket.handshake.address);
-  // Check for ban
+
+  const clientIp =
+    socket.handshake.headers['cf-connecting-ip'] ||
+    (socket.handshake.headers['x-forwarded-for']
+      ? socket.handshake.headers['x-forwarded-for'].split(",")[0].trim()
+      : socket.handshake.address);
+
   const banExpire = bannedIps.get(clientIp);
   if (banExpire && (banExpire === Infinity || banExpire > Date.now())) {
-    const banMessage = banExpire === Infinity ? 'You have been permanently banned for engaging in pornographic activities.' : 'You have been banned for 24 hours for engaging in pornographic activities.';
-    socket.emit("banned", { message: banMessage });
-    socket.disconnect(true);
+    socket.emit("banned", {
+      message:
+        banExpire === Infinity
+          ? "You are permanently banned."
+          : "You are banned for 24 hours."
+    });
+    socket.disconnect();
     return;
   }
+
   console.log("Connected:", socket.id, "IP:", clientIp);
+
+
+  // Find partner
   socket.on("find-partner", () => {
     if (partners.has(socket.id)) return;
     if (waitingQueue.includes(socket.id)) return;
+
     if (waitingQueue.length > 0) {
       const otherId = waitingQueue.shift();
       const otherSocket = io.sockets.sockets.get(otherId);
- 
+
       if (!otherSocket) {
-        socket.emit("waiting", "Looking for a stranger...");
-        if (waitingQueue.length > 0) socket.emit("find-partner");
+        waitingQueue.push(socket.id);
+        socket.emit("waiting", "Looking...");
         return;
       }
+
       partners.set(socket.id, otherId);
       partners.set(otherId, socket.id);
+
       socket.emit("partner-found", { id: otherId, initiator: true });
       otherSocket.emit("partner-found", { id: socket.id, initiator: false });
-      console.log(`Paired ${socket.id} <-> ${otherId}`);
+
     } else {
       waitingQueue.push(socket.id);
-      socket.emit("waiting", "Looking for a stranger...");
+      socket.emit("waiting", "Looking...");
     }
   });
-  socket.on("signal", (payload) => {
-    const to = payload.to;
-    const data = payload.data;
-    if (!to) return;
+
+
+  // WebRTC Signals
+  socket.on("signal", ({ to, data }) => {
     const target = io.sockets.sockets.get(to);
-    if (target) {
-      target.emit("signal", { from: socket.id, data });
-    }
+    if (target) target.emit("signal", { from: socket.id, data });
   });
-  // Handle chat messages
-  socket.on("chat-message", (payload) => {
-    const to = payload.to;
-    const message = payload.message;
-    if (!to) return;
+
+
+  // Chat messages
+  socket.on("chat-message", ({ to, message }) => {
     const target = io.sockets.sockets.get(to);
-    if (target) {
-      target.emit("chat-message", { from: socket.id, message });
-    }
+    if (target) target.emit("chat-message", { from: socket.id, message });
   });
-  // Handle report porn: save screenshot for manual review and automatically skip the reported partner
-  socket.on("reportPorn", async (payload) => {
-    const { screenshot, timestamp, partnerId } = payload;
-    if (!partnerId || !screenshot) return;
-    const reportedSocket = io.sockets.sockets.get(partnerId);
-    // Get real reported IP similarly
-    const reportedIp = reportedSocket ?
-      (reportedSocket.handshake.headers['cf-connecting-ip'] ||
-       (reportedSocket.handshake.headers['x-forwarded-for'] ? reportedSocket.handshake.headers['x-forwarded-for'].split(',')[0].trim() : reportedSocket.handshake.address))
+
+
+  // REPORT PORN
+  socket.on("reportPorn", ({ screenshot, timestamp, partnerId }) => {
+    if (!screenshot || !timestamp || !partnerId) return;
+
+    const reported = io.sockets.sockets.get(partnerId);
+
+    const reportedIp = reported
+      ? (reported.handshake.headers["cf-connecting-ip"] ||
+          reported.handshake.headers["x-forwarded-for"] ||
+          reported.handshake.address)
       : "Unknown";
+
     const reporterIp = clientIp;
+
     if (reportedIp === "Unknown") {
-      socket.emit("reportHandled", { message: "Could not identify the reported user." });
+      socket.emit("reportHandled", { message: "Cannot identify user." });
       return;
     }
-    try {
-      // Save screenshot to reports folder with metadata in filename
-      const base64Data = screenshot.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      const safeTimestamp = timestamp.replace(/[:]/g, '-');
-      const fileName = `${safeTimestamp}_${partnerId}_${reporterIp}_${reportedIp}.png`;
-      const filePath = path.join(reportDir, fileName);
-      fs.writeFileSync(filePath, imageBuffer);
-      console.log(`Saved report screenshot: ${fileName}`);
-      socket.emit("reportHandled", { message: "Report submitted for admin review. Skipping partner..." });
 
-      // Automatically skip the reported partner
-      if (partnerId) {
-        const partnerSocket = io.sockets.sockets.get(partnerId);
-        if (partnerSocket) {
-          partnerSocket.emit("partner-disconnected", { reason: "skipped" });
-          partners.delete(partnerId);
-        }
-        partners.delete(socket.id);
-      }
-      if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-      socket.emit("waiting", "Looking for a new stranger...");
-      // Pair if queue has 2+
-      if (waitingQueue.length >= 2) {
-        const first = waitingQueue.shift();
-        const second = waitingQueue.shift();
-        const s1 = io.sockets.sockets.get(first);
-        const s2 = io.sockets.sockets.get(second);
-        if (s1 && s2) {
-          partners.set(first, second);
-          partners.set(second, first);
-          s1.emit("partner-found", { id: second, initiator: true });
-          s2.emit("partner-found", { id: first, initiator: false });
-        } else {
-          if (s1 && !waitingQueue.includes(first)) waitingQueue.push(first);
-          if (s2 && !waitingQueue.includes(second)) waitingQueue.push(second);
-        }
-      }
-    } catch (error) {
-      console.error("Error saving report:", error);
-      socket.emit("reportHandled", { message: "Error submitting report. Try again.", error: true });
+    try {
+      const img = screenshot.replace(/^data:image\/png;base64,/, "");
+      const safeTime = timestamp.replace(/:/g, "-");
+
+      const file = `${safeTime}_${partnerId}_${reporterIp}_${reportedIp}.png`;
+      fs.writeFileSync(path.join(reportDir, file), img, "base64");
+
+      socket.emit("reportHandled", {
+        message: "Report submitted. Skipping..."
+      });
+
+      // Disconnect partner
+      const other = io.sockets.sockets.get(partnerId);
+      if (other) other.emit("partner-disconnected", { reason: "reported" });
+
+      partners.delete(partnerId);
+      partners.delete(socket.id);
+
+      waitingQueue.push(socket.id);
+      socket.emit("waiting", "Looking...");
+
+    } catch (err) {
+      console.error(err);
     }
   });
+
+
+  // Skip
   socket.on("skip", () => {
     const partnerId = partners.get(socket.id);
     if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "skipped" });
-        partners.delete(partnerId);
-      }
+      const other = io.sockets.sockets.get(partnerId);
+      if (other) other.emit("partner-disconnected", { reason: "skipped" });
+      partners.delete(partnerId);
       partners.delete(socket.id);
     }
-    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-    socket.emit("waiting", "Looking for a new stranger...");
-    // Pair if queue has 2+
-    if (waitingQueue.length >= 2) {
-      const first = waitingQueue.shift();
-      const second = waitingQueue.shift();
-      const s1 = io.sockets.sockets.get(first);
-      const s2 = io.sockets.sockets.get(second);
-      if (s1 && s2) {
-        partners.set(first, second);
-        partners.set(second, first);
-        s1.emit("partner-found", { id: second, initiator: true });
-        s2.emit("partner-found", { id: first, initiator: false });
-      } else {
-        if (s1 && !waitingQueue.includes(first)) waitingQueue.push(first);
-        if (s2 && !waitingQueue.includes(second)) waitingQueue.push(second);
-      }
-    }
-  });
-  socket.on("stop", () => {
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-    const partnerId = partners.get(socket.id);
-    if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "stopped" });
-        partners.delete(partnerId);
-      }
-      partners.delete(socket.id);
-    }
-    socket.emit("stopped", "Stopped searching");
-  });
-  socket.on("disconnect", () => {
-    console.log("Disconnected:", socket.id);
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-    const partnerId = partners.get(socket.id);
-    if (partnerId) {
-      const partnerSocket = io.sockets.sockets.get(partnerId);
-      if (partnerSocket) {
-        partnerSocket.emit("partner-disconnected", { reason: "peer-left" });
-        partners.delete(partnerId);
-      }
-      partners.delete(socket.id);
-    }
-  });
-});
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+    waitingQueue.push(socket.id);
+    socket.emit("waiting", "Looking...");
+  });
+
+
+  // Disconnect
+  socket.on("disconnect", () => {
+    const idx = waitingQueue.indexOf(socket.id);
+    if (idx !== -1) waitingQueue.splice(idx, 1);
+
+    const partnerId = partners.get(socket.id);
+    if (partnerId) {
+      const other = io.sockets.sockets.get(partnerId);
+      if (other) other.emit("partner-disconnected", { reason: "peer-left" });
+      partners.delete(partnerId);
+    }
+
+    partners.delete(socket.id);
+
+    console.log("Disconnected:", socket.id);
+  });
+
+});
+
+
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => console.log("Server running on port", PORT));
