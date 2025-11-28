@@ -1,4 +1,4 @@
-اضف لي في صفحه الادمن حقل للارسال الرسائل الى جميع المستخدمين الذي في الموقع const express = require("express");
+ const express = require("express");
 const path = require("path"); // New: For absolute paths
 const fs = require("fs"); // New: For file system operations
 const basicAuth = require('express-basic-auth'); // New: For basic authentication
@@ -347,3 +347,4 @@ io.on("connection", (socket) => {
 });
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
