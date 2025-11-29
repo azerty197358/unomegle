@@ -1,8 +1,6 @@
-// ==============================================
-// FULL SERVER — AUTO BAN (IP + Fingerprint Only)
-// CLEAN ADMIN PANEL + BROADCAST + UNBAN SYSTEM
-// NO MANUAL REPORTING — AUTO-DETECTION ONLY
-// ==============================================
+// ==============================================================
+// SERVER.JS — REPORT SYSTEM + ACTIVE BAN LIST + ADMIN PANEL
+// ==============================================================
 
 const express = require("express");
 const path = require("path");
@@ -15,52 +13,115 @@ app.set("trust proxy", true);
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
-// ==========================
+// ==============================================================
 // STATIC
-// ==========================
+// ==============================================================
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 
-// ==========================
-// ADMIN AUTH
-// ==========================
+// ==============================================================
+// ADMIN LOGIN
+// ==============================================================
 const adminAuth = basicAuth({
   users: { admin: "admin" },
   challenge: true,
-  realm: "Admin Area",
+  realm: "Admin Panel",
 });
 
-// ==========================
-// MATCHMAKING
-// ==========================
+// ==============================================================
+// MATCHMAKING DATA
+// ==============================================================
 const waitingQueue = [];
-const partners = new Map();
+const partners = new Map(); // socket.id → partner.id
 
-// ==========================
-// BAN LISTS (IP + Fingerprint)
-// ==========================
-const bannedIps = new Map();
-const bannedFingerprints = new Map();
+// ==============================================================
+// BAN + REPORT DATA
+// ==============================================================
+const bannedIps = new Map();           // ip → expiryTime
+const bannedFingerprints = new Map();  // fp → expiryTime
 
-// ==============================================
-// ADMIN PANEL — CLEAN / NO REPORTS PAGE
-// ==============================================
+const reports = new Map();  // targetId → Set(reporters)
+                            // نسجل السوكيتات المبلّغة لمنع التكرار
+
+const userFingerprint = new Map();     // socket.id → fp
+const userIp = new Map();              // socket.id → ip
+
+const BAN_DURATION = 24 * 60 * 60 * 1000; // 24 ساعة
+
+// ==============================================================
+// HELPER FUNCTIONS
+// ==============================================================
+
+// حظر المستخدم (يشمل IP + Fingerprint)
+function banUser(ip, fp) {
+  const expiry = Date.now() + BAN_DURATION;
+  bannedIps.set(ip, expiry);
+  if (fp) bannedFingerprints.set(fp, expiry);
+}
+
+// إزالة الحظر
+function unbanUser(ip, fp) {
+  if (ip) bannedIps.delete(ip);
+  if (fp) bannedFingerprints.delete(fp);
+}
+
+// ==============================================================
+// ADMIN PANEL — CLEAN & ORGANIZED
+// ==============================================================
 app.get("/admin", adminAuth, (req, res) => {
-  let html = `
+
+  let bannedHTML = "";
+  for (const [ip, exp] of bannedIps) {
+    if (exp > Date.now()) {
+      bannedHTML += `
+        <div>
+          <b>IP:</b> ${ip} — expires: ${new Date(exp).toLocaleString()}
+          <form method="POST" action="/unban-ip" style="display:inline">
+            <input type="hidden" name="ip" value="${ip}">
+            <button class="unban-btn">Unban</button>
+          </form>
+        </div><hr>`;
+    }
+  }
+
+  let fingerprintHTML = "";
+  for (const [fp, exp] of bannedFingerprints) {
+    if (exp > Date.now()) {
+      fingerprintHTML += `
+        <div>
+          <b>Device:</b> ${fp} — expires: ${new Date(exp).toLocaleString()}
+          <form method="POST" action="/unban-fingerprint" style="display:inline">
+            <input type="hidden" name="fp" value="${fp}">
+            <button class="unban-btn">Unban</button>
+          </form>
+        </div><hr>`;
+    }
+  }
+
+  let reportsHTML = "";
+  for (const [target, reporters] of reports.entries()) {
+    reportsHTML += `
+      <div>
+        <b>User ID:</b> ${target}  
+        <b>Reports:</b> ${reporters.size}
+      </div><hr>`;
+  }
+
+  res.send(`
   <!DOCTYPE html>
   <html>
   <head>
-    <meta charset="utf-8" />
     <title>Admin Panel</title>
     <style>
-      body { font-family: Arial; background: #f5f5f5; padding: 20px; }
-      button { padding: 6px 10px; border: none; color: #fff; cursor: pointer; }
-      .ban-btn { background: #d00; }
-      .unban-btn { background: #28a745; }
-      textarea { width: 300px; }
+      body { font-family:Arial; padding:20px; background:#f5f5f5; }
       .section { background:#fff; padding:15px; margin-bottom:20px; border-radius:6px; }
+      textarea { width:300px; }
+      button { padding:6px 10px; border:none; cursor:pointer; color:#fff; }
+      .unban-btn { background:#28a745; }
+      .broadcast-btn { background:#007bff; }
     </style>
   </head>
+
   <body>
     <h1>Admin Panel</h1>
 
@@ -68,163 +129,170 @@ app.get("/admin", adminAuth, (req, res) => {
       <h2>Broadcast Message</h2>
       <form method="POST" action="/admin-broadcast">
         <textarea name="message" rows="3"></textarea><br><br>
-        <button style="background:#28a745;padding:10px 14px">Send</button>
+        <button class="broadcast-btn">Send</button>
       </form>
     </div>
 
     <div class="section">
-      <h2>Banned IPs</h2>`;
-
-  for (const [ip, exp] of bannedIps) {
-    if (exp === Infinity || exp > Date.now()) {
-      html += `<p><b>${ip}</b> — ${exp === Infinity ? "Permanent" : new Date(exp).toLocaleString()}</p>`;
-      html += `
-      <form method='POST' action='/unban-ip'>
-        <input type='hidden' name='ip' value='${ip}'>
-        <button class='unban-btn'>Unban IP</button>
-      </form><hr>`;
-    }
-  }
-
-  html += `</div>
+      <h2>Active Bans (IP)</h2>
+      ${bannedHTML || "No active IP bans"}
+    </div>
 
     <div class="section">
-      <h2>Banned Devices (Fingerprints)</h2>`;
+      <h2>Active Device Bans (Fingerprint)</h2>
+      ${fingerprintHTML || "No active device bans"}
+    </div>
 
-  for (const [fp, exp] of bannedFingerprints) {
-    if (exp === Infinity || exp > Date.now()) {
-      html += `<p><b>${fp}</b> — ${exp === Infinity ? "Permanent" : new Date(exp).toLocaleString()}</p>`;
-      html += `
-      <form method='POST' action='/unban-fingerprint'>
-        <input type='hidden' name='fp' value='${fp}'>
-        <button class='unban-btn'>Unban Device</button>
-      </form><hr>`;
-    }
-  }
+    <div class="section">
+      <h2>Reported Users</h2>
+      ${reportsHTML || "No reported users yet"}
+    </div>
 
-  html += `</div></body></html>`;
-
-  res.send(html);
+  </body>
+  </html>
+  `);
 });
 
-// ==============================================
+// ==============================================================
 // ADMIN ACTIONS
-// ==============================================
-app.post('/admin-broadcast', adminAuth, (req, res) => {
-  const msg = req.body.message;
-  if (!msg || msg.trim() === '') return res.send('Empty');
-  io.emit('adminMessage', msg.trim());
-  res.redirect('/admin');
+// ==============================================================
+app.post("/admin-broadcast", adminAuth, (req, res) => {
+  if (req.body.message?.trim()) {
+    io.emit("adminMessage", req.body.message.trim());
+  }
+  res.redirect("/admin");
 });
 
-app.post('/unban-ip', adminAuth, (req, res) => {
-  const ip = req.body.ip;
-  bannedIps.delete(ip);
-  res.redirect('/admin');
+app.post("/unban-ip", adminAuth, (req, res) => {
+  bannedIps.delete(req.body.ip);
+  res.redirect("/admin");
 });
 
-app.post('/unban-fingerprint', adminAuth, (req, res) => {
-  const fp = req.body.fp;
-  bannedFingerprints.delete(fp);
-  res.redirect('/admin');
+app.post("/unban-fingerprint", adminAuth, (req, res) => {
+  bannedFingerprints.delete(req.body.fp);
+  res.redirect("/admin");
 });
 
-// ==============================================
+// ==============================================================
 // SOCKET HANDLING
-// ==============================================
-io.on('connection', (socket) => {
-  const ip = socket.handshake.headers['cf-connecting-ip'] || socket.handshake.address;
+// ==============================================================
+io.on("connection", (socket) => {
 
-  // IP Ban Check
-  const ipBan = bannedIps.get(ip);
-  if (ipBan && (ipBan === Infinity || ipBan > Date.now())) {
-    socket.emit('banned', { message: 'You are banned (IP).' });
+  // ------------------ IDENTIFY IP ------------------
+  const ip =
+    socket.handshake.headers["cf-connecting-ip"] ||
+    socket.handshake.address;
+
+  userIp.set(socket.id, ip);
+
+  // Ban check (IP)
+  const banExpire = bannedIps.get(ip);
+  if (banExpire && banExpire > Date.now()) {
+    socket.emit("banned", { message: "You are banned." });
     socket.disconnect();
     return;
   }
 
-  // Identify device
-  socket.on('identify', ({ fingerprint }) => {
+  // ------------------ IDENTIFY FINGERPRINT ------------------
+  socket.on("identify", ({ fingerprint }) => {
+    userFingerprint.set(socket.id, fingerprint);
+
     const fpBan = bannedFingerprints.get(fingerprint);
-    if (fpBan && (fpBan === Infinity || fpBan > Date.now())) {
-      socket.emit('banConfirmed', { fingerprint });
+    if (fpBan && fpBan > Date.now()) {
+      socket.emit("banned", { message: "Your device is banned." });
       socket.disconnect();
     }
   });
 
-  // Find partner
-  socket.on('find-partner', () => {
+  // ------------------ MATCHMAKING ------------------
+  socket.on("find-partner", () => {
     if (partners.has(socket.id)) return;
-    if (waitingQueue.includes(socket.id)) return;
+    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
 
-    if (waitingQueue.length > 0) {
-      const other = waitingQueue.shift();
-      partners.set(socket.id, other);
-      partners.set(other, socket.id);
+    if (waitingQueue.length >= 2) {
+      const a = waitingQueue.shift();
+      const b = waitingQueue.shift();
 
-      socket.emit('partner-found', { id: other, initiator: true });
-      io.to(other).emit('partner-found', { id: socket.id, initiator: false });
-    } else {
-      waitingQueue.push(socket.id);
-      socket.emit('waiting', 'Looking...');
+      partners.set(a, b);
+      partners.set(b, a);
+
+      io.to(a).emit("partner-found", { id: b, initiator: true });
+      io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   });
 
-  // WebRTC relay
-  socket.on('signal', ({ to, data }) => {
-    const t = io.sockets.sockets.get(to);
-    if (t) t.emit('signal', { from: socket.id, data });
-  });
+  // ------------------ REPORT SYSTEM ------------------
+  socket.on("report", ({ partnerId }) => {
+    if (!partnerId) return;
 
-  // Chat
-  socket.on('chat-message', ({ to, message }) => {
-    const t = io.sockets.sockets.get(to);
-    if (t) t.emit('chat-message', { from: socket.id, message });
-  });
+    if (!reports.has(partnerId)) reports.set(partnerId, new Set());
 
-  // AUTO BAN (IP + fingerprint)
-  socket.on('requestBan', ({ partnerId, fingerprint }) => {
-    if (fingerprint) bannedFingerprints.set(fingerprint, Infinity);
+    const reporterSet = reports.get(partnerId);
 
-    const other = io.sockets.sockets.get(partnerId);
-    if (other) {
-      const otherIp = other.handshake.headers['cf-connecting-ip'] || other.handshake.address;
-      bannedIps.set(otherIp, Infinity);
-      other.emit('banned', { message: 'Auto-ban applied.' });
-      other.disconnect();
+    // لمنع التبليغ مرتين من نفس المستخدم
+    reporterSet.add(socket.id);
+
+    // إذا وصل عدد البلاغات ≥ 3 يتم الحظر
+    if (reporterSet.size >= 3) {
+      const targetSocket = io.sockets.sockets.get(partnerId);
+
+      if (targetSocket) {
+        const targetIp = userIp.get(partnerId);
+        const targetFp = userFingerprint.get(partnerId);
+
+        banUser(targetIp, targetFp);
+
+        targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
+        targetSocket.disconnect();
+      }
     }
   });
 
-  // Skip
-  socket.on('skip', () => {
+  // ------------------ RELAY ------------------
+  socket.on("signal", ({ to, data }) => {
+    const t = io.sockets.sockets.get(to);
+    if (t) t.emit("signal", { from: socket.id, data });
+  });
+
+  socket.on("chat-message", ({ to, message }) => {
+    const t = io.sockets.sockets.get(to);
+    if (t) t.emit("chat-message", { message });
+  });
+
+  // ------------------ SKIP ------------------
+  socket.on("skip", () => {
     const p = partners.get(socket.id);
     if (p) {
       const other = io.sockets.sockets.get(p);
-      if (other) other.emit('partner-disconnected');
+      if (other) other.emit("partner-disconnected");
       partners.delete(p);
       partners.delete(socket.id);
     }
-    waitingQueue.push(socket.id);
-    socket.emit('waiting', 'Looking...');
+
+    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
   });
 
-  // Disconnect
-  socket.on('disconnect', () => {
+  // ------------------ DISCONNECT ------------------
+  socket.on("disconnect", () => {
     const idx = waitingQueue.indexOf(socket.id);
     if (idx !== -1) waitingQueue.splice(idx, 1);
 
     const p = partners.get(socket.id);
     if (p) {
       const other = io.sockets.sockets.get(p);
-      if (other) other.emit('partner-disconnected');
+      if (other) other.emit("partner-disconnected");
       partners.delete(p);
     }
 
     partners.delete(socket.id);
+    reports.delete(socket.id);
+    userFingerprint.delete(socket.id);
+    userIp.delete(socket.id);
   });
+
 });
 
-// ==============================================
+// ==============================================================
 // START SERVER
-// ==============================================
+// ==============================================================
 http.listen(3000, () => console.log("Server running on port 3000"));
