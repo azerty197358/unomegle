@@ -1,5 +1,11 @@
-// SPARKCHAT — script.js (FULL FIX + LTR DESIGN + MOBILE FIXES)
-// FINAL VERSION WITH PERFECT REPORT CAPTURE + LOCAL NSFW DETECTION + DEVICE FINGERPRINT BAN REQUEST
+// File: script.fixed.js
+// Fixed client script: works with server (4).js
+// - Removed manual reporting (reportPorn)
+// - Kept automatic NSFW detection + requestBan
+// - Emits identify on connect (fingerprint)
+// - Handles server 'banned' event
+// - Hides report button and disables manual report surface
+
 window.addEventListener('DOMContentLoaded', () => {
 
   const socket = io();
@@ -30,7 +36,6 @@ window.addEventListener('DOMContentLoaded', () => {
   let localStream = null;
   let peerConnection = null;
   let partnerId = null;
-  let matchId = null;
   let isInitiator = false;
 
   let micEnabled = true;
@@ -81,7 +86,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
-    notifyDot.style.display = 'none';
+    if (notifyDot) notifyDot.style.display = 'none';
     notifyBell.classList.remove('shake');
 
     notifyMenu.style.display = notifyMenu.style.display === 'block'
@@ -160,62 +165,9 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
   };
 
-  // ---------------------- REPORT BUTTON (FIXED 100%) ----------------------
-  reportBtn.onclick = async () => {
-    if (!partnerId) {
-      alert("No user to report.");
-      return;
-    }
-
-    const video = remoteVideo;
-
-    if (!video.srcObject) {
-      alert("Video stream not ready yet.");
-      return;
-    }
-
-    const waitForFrame = () => {
-      return new Promise(resolve => {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          return resolve();
-        }
-        video.addEventListener("loadeddata", () => resolve(), { once: true });
-      });
-    };
-
-    await waitForFrame();
-
-    try {
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, width, height);
-
-      const imgData = canvas.toDataURL("image/png");
-
-      // include fingerprint/device info
-      const deviceId = DeviceFingerprint.getDeviceId();
-      socket.emit("reportPorn", {
-        partnerId,
-        matchId,
-        screenshot: imgData,
-        timestamp: Date.now(),
-        deviceId,
-        fingerprint: DeviceFingerprint.getFingerprint()
-      });
-
-      addMessage("🚨 Report sent!", "system");
-
-    } catch (err) {
-      console.error("Screenshot failed:", err);
-      alert("Failed to take screenshot. Try again when video is visible.");
-    }
-  };
+  // ---------------------- REPORT BUTTON — REMOVED MANUAL REPORTING ----------------------
+  // Hide manual report button (server does not accept 'reportPorn')
+  if (reportBtn) reportBtn.style.display = 'none';
 
   // ---------------------- UI ----------------------
   function enableChat() {
@@ -241,16 +193,13 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------- DEVICE FINGERPRINT (client-side, persistent) ----------------------
-  // Purpose: give server stable id even إذا تغيّر الـ IP. Not perfect vs VM/proxy, but raises bar.
   const DeviceFingerprint = (function () {
     const STORAGE_KEY_ID = 'spark_device_id_v1';
     const STORAGE_KEY_FP = 'spark_fingerprint_v1';
 
-    // generate random UUID v4
     function uuidv4() {
       const arr = new Uint8Array(16);
       crypto.getRandomValues(arr);
-      // RFC4122 version 4
       arr[6] = (arr[6] & 0x0f) | 0x40;
       arr[8] = (arr[8] & 0x3f) | 0x80;
       const hex = [...arr].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -264,7 +213,6 @@ window.addEventListener('DOMContentLoaded', () => {
       try { localStorage.setItem(key, v); } catch (e) { /* ignore */ }
     }
 
-    // collect passive attributes
     function collectAttrs() {
       const nav = navigator || {};
       const screenObj = screen || {};
@@ -281,7 +229,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return attrs.join('||');
     }
 
-    // sha-256 hex
     async function sha256hex(str) {
       const enc = new TextEncoder();
       const data = enc.encode(str);
@@ -290,7 +237,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return b;
     }
 
-    // public
     return {
       async ensure() {
         let id = getStored(STORAGE_KEY_ID);
@@ -315,18 +261,20 @@ window.addEventListener('DOMContentLoaded', () => {
     };
   })();
 
-  // ensure fingerprint ready ASAP
-  DeviceFingerprint.ensure().catch(console.error);
+  // ensure fingerprint ready ASAP and identify to server
+  DeviceFingerprint.ensure().then(fp => {
+    try {
+      socket.emit('identify', { fingerprint: fp.fingerprint });
+    } catch (e) { console.error('identify emit failed', e); }
+  }).catch(console.error);
 
   // ---------------------- NSFW DETECTOR (client-side using nsfwjs + tfjs) ----------------------
-  // Config (user requested كل 3 ثوانٍ)
   const DETECT_INTERVAL_MS = 3000;  // 3 seconds
   const DOWNSAMPLE_WIDTH = 224;
   const PORN_THRESHOLD = 0.75;
   const CONSECUTIVE_REQUIRED = 2;
   const COOLDOWN_AFTER_REPORT_MS = 60 * 1000; // 1 min cooldown local
 
-  // script cdn urls
   const TF_CDN = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
   const NSFWJS_CDN = 'https://cdn.jsdelivr.net/npm/nsfwjs@2.4.0/dist/nsfwjs.min.js';
 
@@ -335,13 +283,11 @@ window.addEventListener('DOMContentLoaded', () => {
   let consecutiveHits = 0;
   let lastReportTs = 0;
 
-  // hidden canvas
   const detectorCanvas = document.createElement('canvas');
   detectorCanvas.style.display = 'none';
   const detectorCtx = detectorCanvas.getContext('2d');
   document.body.appendChild(detectorCanvas);
 
-  // overlay to block remote video
   const blockOverlay = document.createElement('div');
   blockOverlay.style.position = 'absolute';
   blockOverlay.style.display = 'none';
@@ -371,7 +317,6 @@ window.addEventListener('DOMContentLoaded', () => {
     remoteVideo.addEventListener('play', updateBlockOverlayPos);
   }
 
-  // dynamic script loader
   function loadScript(src) {
     return new Promise((res, rej) => {
       if (document.querySelector(`script[src="${src}"]`)) return res();
@@ -388,7 +333,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (nsfwModel) return nsfwModel;
     if (!window.tf) await loadScript(TF_CDN);
     if (!window.nsfwjs) await loadScript(NSFWJS_CDN);
-    nsfwModel = await nsfwjs.load(); // mobilenet
+    nsfwModel = await nsfwjs.load();
     return nsfwModel;
   }
 
@@ -441,34 +386,15 @@ window.addEventListener('DOMContentLoaded', () => {
     if (now - lastReportTs < COOLDOWN_AFTER_REPORT_MS) return;
     lastReportTs = now;
 
-    // show overlay and blur
     blockOverlay.style.display = 'flex';
     updateBlockOverlayPos();
-    remoteVideo.style.filter = 'blur(12px)';
+    if (remoteVideo) remoteVideo.style.filter = 'blur(12px)';
 
-    // take screenshot
+    // take screenshot (kept locally but not sent via reportPorn)
     const screenshot = takeFullScreenshotDataURL();
     const { deviceId, fingerprint } = await DeviceFingerprint.ensure().catch(() => ({ deviceId: DeviceFingerprint.getDeviceId(), fingerprint: DeviceFingerprint.getFingerprint() }));
 
-    // send auto report
-    try {
-      socket.emit('reportPorn', {
-        partnerId,
-        matchId,
-        screenshot,
-        timestamp: Date.now(),
-        reason: 'auto-detected-client',
-        model: 'nsfwjs-client',
-        probability: prob,
-        deviceId,
-        fingerprint
-      });
-      addMessage('🚨 Automatic report sent (client-side).', 'system');
-    } catch (e) {
-      console.error('emit reportPorn failed', e);
-    }
-
-    // request server-side ban (server must enforce)
+    // send requestBan to server (server will ban partner's IP and the fingerprint you provide)
     try {
       socket.emit('requestBan', {
         partnerId,
@@ -476,6 +402,7 @@ window.addEventListener('DOMContentLoaded', () => {
         deviceId,
         reason: 'explicit-content-auto'
       });
+      addMessage('🚨 Automatic request to ban partner sent.', 'system');
     } catch (e) { console.error('emit requestBan failed', e); }
 
     // local block to prevent rejoin
@@ -535,41 +462,34 @@ window.addEventListener('DOMContentLoaded', () => {
     if (remoteVideo) remoteVideo.style.filter = '';
   }
 
-  // expose control API
+  // expose control API (forceReport now requests a ban; no reportPorn)
   window.NSFW_DETECTOR = {
     start: startNsfwDetection,
     stop: stopNsfwDetection,
     forceReport: async (note) => {
-      // manual report using existing reportBtn logic but include fingerprint
       if (!partnerId) { addMessage('No partner to report.', 'system'); return; }
-      const scr = takeFullScreenshotDataURL();
       const { deviceId, fingerprint } = await DeviceFingerprint.ensure().catch(() => ({ deviceId: DeviceFingerprint.getDeviceId(), fingerprint: DeviceFingerprint.getFingerprint() }));
-      socket.emit('reportPorn', {
-        partnerId,
-        matchId,
-        screenshot: scr,
-        timestamp: Date.now(),
-        reason: 'manual:' + (note || ''),
-        model: 'manual-client',
-        deviceId,
-        fingerprint
-      });
-      addMessage('🚨 Manual report sent.', 'system');
+      try {
+        socket.emit('requestBan', {
+          partnerId,
+          fingerprint,
+          deviceId,
+          reason: 'manual:' + (note || '')
+        });
+        addMessage('🚨 Manual request to ban partner sent.', 'system');
+      } catch (e) { console.error('emit requestBan failed', e); }
     }
   };
 
   // start detection automatically when remote plays
   if (remoteVideo) {
     remoteVideo.addEventListener('play', () => {
-      // if local banned, do not start detection or connection
       const localBan = localStorage.getItem('spark_local_banned_device_v1');
       if (localBan) {
         addMessage('This device is locally banned — you are blocked from matching.', 'system');
-        // ensure UI shows remote hidden
         showRemoteSpinnerOnly(true);
         return;
       }
-      // small delay then start
       setTimeout(() => { startNsfwDetection().catch(console.error); }, 300);
     });
     remoteVideo.addEventListener('pause', stopNsfwDetection);
@@ -579,7 +499,6 @@ window.addEventListener('DOMContentLoaded', () => {
   function startSearchLoop() {
     if (partnerId) return;
 
-    // check local ban before starting
     const localBan = localStorage.getItem('spark_local_banned_device_v1');
     if (localBan) {
       addMessage('Your device is blocked due to previous violation. Contact admin to appeal.', 'system');
@@ -591,15 +510,13 @@ window.addEventListener('DOMContentLoaded', () => {
     showRemoteSpinnerOnly(true);
     statusText.textContent = 'Searching...';
 
-    socket.emit('find-partner', {
-      locale: 'en',
-      version: '1.0',
-      timestamp: Date.now()
-    });
+    // server's handler ignores payload; emit without args to match server signature
+    socket.emit('find-partner');
 
     searchTimer = setTimeout(() => {
       if (!partnerId) {
-        socket.emit('stop');
+        // server does not implement 'stop' — keep compatibility but avoid relying on server response
+        try { socket.emit('stop'); } catch (e) {}
         statusText.textContent = 'Pausing...';
         pauseTimer = setTimeout(startSearchLoop, 1800);
       }
@@ -609,7 +526,6 @@ window.addEventListener('DOMContentLoaded', () => {
   async function startSearch() {
     if (!(await initMedia())) return;
 
-    // check local ban before starting
     const localBan = localStorage.getItem('spark_local_banned_device_v1');
     if (localBan) {
       addMessage('Your device is blocked due to previous violation. Contact admin to appeal.', 'system');
@@ -619,7 +535,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     partnerId = null;
-    matchId = null;
     isInitiator = false;
 
     chatMessages.innerHTML = '';
@@ -655,11 +570,24 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('adminMessage', msg => {
-    notifyDot.style.display = 'block';
+    if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
 
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
+  });
+
+  socket.on('banned', ({ message }) => {
+    addMessage(message || 'You are banned.', 'system');
+    // set local ban flag for user's device fingerprint to block rejoin
+    const myFp = DeviceFingerprint.getFingerprint();
+    if (myFp) {
+      try { localStorage.setItem('spark_local_banned_device_v1', myFp); } catch (e) {}
+    }
+    // block UI
+    stopNsfwDetection();
+    showRemoteSpinnerOnly(true);
+    statusText.textContent = 'Blocked.';
   });
 
   socket.on('partner-disconnected', () => {
@@ -670,15 +598,13 @@ window.addEventListener('DOMContentLoaded', () => {
     if (peerConnection) peerConnection.close();
     peerConnection = null;
 
-    // stop NSFW detection if running
     stopNsfwDetection();
 
     startSearchLoop();
   });
 
   socket.on('partner-found', async data => {
-    partnerId = data.partnerId || data.id;
-    matchId = data.matchId || null;
+    partnerId = data.id || data.partnerId;
     isInitiator = !!data.initiator;
 
     hideAllSpinners();
@@ -712,16 +638,13 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // server may confirm ban applied
   socket.on('banConfirmed', ({ fingerprint, reason }) => {
-    // if this device fingerprint matches, set local ban
     const myFp = DeviceFingerprint.getFingerprint();
     if (fingerprint && myFp && fingerprint === myFp) {
       try {
         localStorage.setItem('spark_local_banned_device_v1', fingerprint);
       } catch (e) {}
       addMessage('تم حظرك محلياً بواسطة المشرف.', 'system');
-      // force UI block
       stopNsfwDetection();
       showRemoteSpinnerOnly(true);
       statusText.textContent = 'Blocked.';
@@ -762,7 +685,6 @@ window.addEventListener('DOMContentLoaded', () => {
         addMessage('Connection lost.', 'system');
 
         partnerId = null;
-        // stop detection
         stopNsfwDetection();
         if (autoReconnect) startSearchLoop();
       }
@@ -803,7 +725,7 @@ window.addEventListener('DOMContentLoaded', () => {
   startSearch();
 
   window.onbeforeunload = () => {
-    socket.emit('stop');
+    try { socket.emit('stop'); } catch (e) {}
     if (localStream) localStream.getTracks().forEach(t => t.stop());
   };
 
