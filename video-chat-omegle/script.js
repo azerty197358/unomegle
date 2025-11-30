@@ -1,4 +1,4 @@
-// File: script.js (clean version - no NSFW detection, report button enabled)
+// File: script.js (final version with full working chat)
 
 window.addEventListener('DOMContentLoaded', () => {
 
@@ -83,18 +83,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (notifyDot) notifyDot.style.display = 'none';
     notifyBell.classList.remove('shake');
 
-    notifyMenu.style.display = notifyMenu.style.display === 'block'
-      ? 'none'
-      : 'block';
+    notifyMenu.style.display =
+      notifyMenu.style.display === 'block' ? 'none' : 'block';
   };
 
-  document.onclick = () => {
-    notifyMenu.style.display = 'none';
-  };
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') notifyMenu.style.display = 'none';
-  });
+  document.onclick = () => { notifyMenu.style.display = 'none'; };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
 
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
@@ -159,7 +153,7 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
   };
 
-  // ---------------------- REPORT BUTTON — working now ----------------------
+  // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = () => {
@@ -348,9 +342,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------- EXIT ----------------------
-  exitBtn.onclick = () => {
-    location.href = 'index.html';
-  };
+  exitBtn.onclick = () => { location.href = 'index.html'; };
 
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
