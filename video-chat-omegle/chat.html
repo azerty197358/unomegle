@@ -72,6 +72,7 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
 }
 
+/* الكمبيوتر بدون أي تعديل */
 .left-col{width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);} 
 
 .video-frame{
@@ -79,23 +80,27 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   border:6px solid var(--border);overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
-.video-frame.top{height:300px;}
 
-/* ⬆️ تعديل ليصبح نفس حجم شاشة الغريب */
-.video-frame.bottom{height:300px;}
+.video-frame.top{height:300px;}
+.video-frame.bottom{height:300px;} /* نفس حجم شاشة الغريب */
 
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
-.video-label{position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;z-index:6;}
-.watermark{position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;z-index:6;}
+.video-label{
+  position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;z-index:6;
+}
+.watermark{
+  position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;z-index:6;
+}
 
 .spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;border:6px solid #fff;
-  border-top-color:transparent;animation:spin 1s linear infinite;z-index:20;
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Buttons overlay */
+/* Overlay buttons */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;
@@ -131,15 +136,23 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
 
-#status{padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;}
+#status{
+  padding:6px 10px;background:#fafafa;border-radius:6px;
+  border:1px solid #ddd;text-align:center;
+}
 
 .input-container{display:flex;gap:8px;}
 #chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
-#sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;}
-#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
+#sendBtn{
+  width:42px;height:42px;background:var(--blue);color:#fff;
+  border-radius:8px;border:none;cursor:pointer;
+}
+#skipBtn{
+  background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;
+  cursor:pointer;border:none;
+}
 
-
-/* 📱📱📱 تصميم الهاتف (نفس الكمبيوتر لكن مناسب + الرسائل بجانب الشاشتين) */
+/* 📱📱📱 تصميم الهاتف الجديد */
 @media (max-width: 768px) {
 
   .stage{
@@ -151,23 +164,33 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   .left-col{
     width:100%;
     min-width:unset;
+    gap:8px;
   }
 
+  /* ↓↓↓ تصغير الشاشتين لإظهار الرسائل بدون تمرير ↓↓↓ */
   .video-frame.top,
   .video-frame.bottom{
-    height:260px;
+    height:180px;
+    border-width:4px;
   }
 
-  /* الرسائل تظهر بجانب الشاشتين */
+  .video-label{
+    font-size:12px;
+    padding:3px 8px;
+  }
+
+  /* الرسائل مرئية دائماً بدون سحب طويل */
   .right-col{
     width:100%;
     height:auto;
-    margin-top:10px;
+    max-height:300px; 
+    margin-top:8px;
   }
 
   .chat-area{
-    max-height:260px;
+    max-height:200px;
     font-size:13px;
+    padding:10px;
   }
 
   .msg{
@@ -177,15 +200,16 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   }
 
   .chat-input-row{
-    padding:8px;
+    padding:6px;
   }
 
   #chatInput{
-    height:38px;font-size:14px;
+    height:36px;
+    font-size:14px;
   }
 
   #sendBtn{
-    width:38px;height:38px;
+    width:36px;height:36px;
   }
 }
 </style>
