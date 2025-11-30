@@ -1,0 +1,156 @@
+<?php
+// يمكنك هنا كتابة أي كود PHP قبل الـ HTML
+// مثال: session_start();
+// أو التحقق من المستخدم…
+// أو تحميل إعدادات الموقع…
+?>
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SparkChat</title>
+
+<style>
+:root{
+  --blue:#2ea3ff;
+  --dark:#111;
+  --light:#ffffff;
+  --border:#e6d7c8;
+  --gap:10px;
+  --radius:12px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;}
+
+/* TOP BAR */
+.topbar{height:60px;display:flex;justify-content:space-between;align-items:center;padding:0 12px;border-bottom:1px solid #eee;background:#fff;}
+.logo{font-size:24px;font-weight:bold;color:#ff9a00;}
+.logo span{color:#3fa0ff;}
+#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+
+/* NOTIFICATIONS */
+.notify-bell{position:relative;font-size:22px;cursor:pointer;user-select:none;}
+#notifyDot{position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:red;border-radius:50%;display:none;}
+.shake{animation:shakeAnim 0.4s ease-in-out infinite;}
+@keyframes shakeAnim{0%{transform:rotate(0deg)}25%{transform:rotate(8deg)}50%{transform:rotate(0deg)}75%{transform:rotate(-8deg)}100%{transform:rotate(0deg)}}
+.notify-menu{position:absolute;top:42px;right:0;background:#fff;width:240px;max-height:320px;overflow-y:auto;padding:8px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);display:none;z-index:50;}
+
+/* LAYOUT */
+.stage{position:absolute;top:60px;bottom:0;left:0;right:0;display:flex;gap:var(--gap);padding:12px;overflow:hidden;}
+.left-col{width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);} 
+
+/* VIDEO */
+.video-frame{position:relative;border-radius:var(--radius);border:6px solid var(--border);overflow:hidden;background:#000;display:flex;justify-content:center;align-items:center;}
+.video-frame.top{height:300px;}
+.video-frame.bottom{height:220px;}
+video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
+.video-label{position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;z-index:6;}
+.watermark{position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;z-index:6;}
+#remoteSpinner,#localSpinner{position:absolute;width:45px;height:45px;border:5px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:none;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg);}}
+
+/* MIC BUTTON */
+#micBtn{position:absolute;bottom:10px;right:10px;background:var(--blue);color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;border:none;z-index:10;min-width:48px;min-height:48px;display:flex;align-items:center;justify-content:center;}
+
+/* REPORT BUTTON */
+#reportBtn{
+  position:absolute;
+  top:10px;
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:10px;
+  font-size:16px;
+  border-radius:10px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
+  min-width:48px;
+}
+
+/* CHAT */
+.right-col{flex:1;display:flex;flex-direction:column;border:6px solid var(--border);border-radius:10px;background:#fff;min-width:240px;}
+.chat-area{flex:1;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;height:100%;}
+.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;}
+.msg.you{background:#d8efff;align-self:flex-end;}
+.msg.stranger{background:#ffe6cc;align-self:flex-start;}
+.msg.system{background:#eee;color:#333;align-self:center;}
+.chat-input-row{display:flex;flex-direction:column;gap:8px;padding:10px;background:#fafafa;border-top:1px solid #ddd;}
+#status{padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;}
+.input-container{display:flex;gap:8px;}
+#chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
+#sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;}
+#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
+
+/* MOBILE FIXED */
+@media(max-width:900px){
+  .stage{flex-direction:column;overflow-y:auto;}
+  .left-col{width:100%;min-width:100%;}
+  .video-frame.top{height:240px;}
+  .video-frame.bottom{height:180px;}
+
+  #reportBtn{
+    top:8px;
+    right:8px;
+    padding:8px 10px;
+    font-size:14px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Spark<span>Chat</span></div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div id="notifyIcon" class="notify-bell">🔔 <span id="notifyDot"></span>
+      <div id="notifyMenu" class="notify-menu"></div>
+    </div>
+    <button id="exitBtn">Exit</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="left-col">
+
+    <!-- STRANGER VIDEO + REPORT BUTTON -->
+    <div class="video-frame top">
+      <button id="reportBtn">🚨 Report</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">Stranger</div>
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div id="remoteSpinner"></div>
+    </div>
+
+    <!-- LOCAL VIDEO -->
+    <div class="video-frame bottom">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
+      <video id="localVideo" autoplay muted playsinline></video>
+      <div id="localSpinner"></div>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div id="chatMessages" class="chat-area">
+      <div class="msg system">Connecting...</div>
+    </div>
+
+    <div class="chat-input-row">
+      <div id="status">Loading...</div>
+      <div class="input-container">
+        <button id="sendBtn" disabled>➤</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="skipBtn">Skip</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
