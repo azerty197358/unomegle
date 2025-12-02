@@ -1,3 +1,4 @@
+// File: public/js/room-client.js
 window.addEventListener('DOMContentLoaded', () => {
 
   const socket = io();
@@ -38,8 +39,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
 
-  // keep track locally of reported partners to avoid rematching them client-side
   const reportedIds = new Set();
+
+  // track how many times THIS client has reported each partner (local count)
+  const reportCounts = new Map();
 
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
@@ -154,14 +157,79 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
   };
 
+  // ---------------------- SPINNER BEHAVIOR (LOCAL HIDDEN) ----------------------
+  // Keep local spinner in DOM but hidden always per requirement.
+  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
+
+  function showRemoteSpinnerOnly(show) {
+    if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
+    if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
+    // localSpinner remains hidden — do not change localSpinner here
+    if (localVideo) localVideo.style.display = 'block';
+  }
+
+  function hideAllSpinners() {
+    if (remoteSpinner) remoteSpinner.style.display = 'none';
+    // localSpinner stays hidden
+    if (remoteVideo) remoteVideo.style.display = 'block';
+    if (localVideo) localVideo.style.display = 'block';
+  }
+
+  // ---------------------- SCREENSHOT UTIL ----------------------
+  function captureRemoteVideoFrame() {
+    return new Promise((resolve, reject) => {
+      try {
+        const v = remoteVideo;
+        if (!v || !v.srcObject) {
+          return reject(new Error('Remote video not available'));
+        }
+
+        // Ensure we have dimensions
+        const width = v.videoWidth || v.clientWidth || 640;
+        const height = v.videoHeight || v.clientHeight || 480;
+
+        if (width === 0 || height === 0) {
+          // try a small timeout to let video paint
+          setTimeout(() => {
+            const w2 = v.videoWidth || v.clientWidth || 640;
+            const h2 = v.videoHeight || v.clientHeight || 480;
+            if (w2 === 0 || h2 === 0) return reject(new Error('Remote video has no frames yet'));
+            const canvas2 = document.createElement('canvas');
+            canvas2.width = w2;
+            canvas2.height = h2;
+            const ctx2 = canvas2.getContext('2d');
+            ctx2.drawImage(v, 0, 0, w2, h2);
+            resolve(canvas2.toDataURL('image/png'));
+          }, 250);
+          return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(v, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png'));
+
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
-    reportBtn.onclick = () => {
+    reportBtn.onclick = async () => {
       if (!partnerId) {
         addMessage("No user to report.", "system");
         return;
       }
+
+      // Update local per-partner report count
+      const prev = reportCounts.get(partnerId) || 0;
+      const now = prev + 1;
+      reportCounts.set(partnerId, now);
 
       // add to local reported set to avoid rematch
       reportedIds.add(partnerId);
@@ -169,6 +237,20 @@ window.addEventListener('DOMContentLoaded', () => {
       // inform server and skip immediately
       try { socket.emit("report", { partnerId }); } catch (e) { /* ignore */ }
       try { socket.emit("skip"); } catch (e) { /* ignore */ }
+
+      // If this is the 3rd report by THIS client for this partner -> capture and emit screenshot
+      if (now === 3) {
+        try {
+          addMessage("Capturing screenshot for admin review...", "system");
+          const image = await captureRemoteVideoFrame();
+          // send partnerId along with image
+          socket.emit("admin-screenshot", { image, partnerId });
+          addMessage("Screenshot sent to admin.", "system");
+        } catch (err) {
+          console.error('Screenshot capture failed', err);
+          addMessage("Failed to capture screenshot (no remote frame available).", "system");
+        }
+      }
 
       // Close and cleanup current connection
       if (peerConnection) {
@@ -198,18 +280,6 @@ window.addEventListener('DOMContentLoaded', () => {
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
-  }
-
-  function showRemoteSpinnerOnly(show) {
-    remoteSpinner.style.display = show ? 'block' : 'none';
-    remoteVideo.style.display = show ? 'none' : 'block';
-  }
-
-  function hideAllSpinners() {
-    remoteSpinner.style.display = 'none';
-    localSpinner.style.display = 'none';
-    remoteVideo.style.display = 'block';
-    localVideo.style.display = 'block';
   }
 
   // ---------------------- MATCHMAKING ----------------------
@@ -255,18 +325,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
   skipBtn.onclick = () => {
     try { socket.emit('skip'); } catch (e) {}
-    // update in-place status text instead of appending chat messages repeatedly
     statusText.textContent = 'You skipped.';
     disableChat();
 
-    // cleanup existing connection
     if (peerConnection) {
       peerConnection.close();
       peerConnection = null;
     }
     partnerId = null;
 
-    // restart search immediately
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
     startSearchLoop();
@@ -303,7 +370,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('partner-disconnected', () => {
-    // update status in-place and restart search
     statusText.textContent = 'Partner disconnected.';
     disableChat();
 
@@ -313,22 +379,18 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = null;
     }
 
-    // start searching again
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
     startSearchLoop();
   });
 
   socket.on('partner-found', async data => {
-    // normalize partner id
     const foundId = data.id || data.partnerId;
-    // if reported locally -> skip immediately and avoid binding
     if (foundId && reportedIds.has(foundId)) {
       try {
         socket.emit('skip');
       } catch (e) {}
       statusText.textContent = 'Found reported user — skipping...';
-      // ensure no bind to partnerId and restart loop quickly
       partnerId = null;
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
@@ -411,7 +473,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (['disconnected', 'failed', 'closed'].includes(s)) {
         disableChat();
-        // update status in-place instead of spamming chat
         statusText.textContent = 'Connection lost.';
 
         partnerId = null;
@@ -443,6 +504,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
       localVideo.srcObject = localStream;
       updateMicButton();
+      // localSpinner remains hidden by design
       return true;
 
     } catch (e) {
