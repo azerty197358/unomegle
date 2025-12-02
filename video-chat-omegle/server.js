@@ -1,12 +1,12 @@
-// server.js
-// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO
-// Minimal critical comments only.
+/********************************************************************************************
+ * FULL SERVER — MATCHMAKING + REPORT SYSTEM + SCREENSHOT CAPTURE + ADMIN PANEL + GEO + BANS
+ ********************************************************************************************/
 
 const express = require("express");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 const basicAuth = require("express-basic-auth");
-const geoip = require("geoip-lite"); // npm install geoip-lite
+const geoip = require("geoip-lite");
 
 const app = express();
 app.set("trust proxy", true);
@@ -14,415 +14,363 @@ app.set("trust proxy", true);
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
-// static & body
+// ---------------- STATIC ----------------
 app.use(express.static(__dirname));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json({ limit: "20mb" })); // لرفع الصور base64
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
-// admin auth
+// ---------------- ADMIN AUTH ----------------
 const adminAuth = basicAuth({
   users: { admin: "admin" },
   challenge: true,
-  realm: "Admin Area",
+  realm: "Admin",
 });
 
-// core data
+// ---------------- CORE STORAGE ----------------
 const waitingQueue = [];
-const partners = new Map(); // socket.id -> partnerId
-const userFingerprint = new Map(); // socket.id -> fingerprint
-const userIp = new Map(); // socket.id -> ip
+const partners = new Map();
+const userFingerprint = new Map();
+const userIp = new Map();
 
-// bans/reports
-const bannedIps = new Map(); // ip -> expiry
-const bannedFingerprints = new Map(); // fp -> expiry
-const reports = new Map(); // targetId -> Set(reporterSocketId)
-const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
+// reports & bans
+const reports = new Map(); // socket → Set(reporters)
+const bannedIps = new Map();
+const bannedFingerprints = new Map();
+const screenshotMap = new Map(); // partnerId → filename
 
-// visitors tracking (historical)
-const visitors = new Map(); // socketId -> { ip, fp, country, ts }
-const visitorsHistory = []; // [{ip, fp, country, ts}]
+const BAN_DURATION = 24 * 60 * 60 * 1000;
+
+// visitors
+const visitors = new Map();
+const visitorsHistory = [];
 const countryCounts = new Map();
 
-// ADMIN helper to produce current state snapshot
+// ensure screenshot directory
+const screenshotDir = path.join(__dirname, "screenshots");
+if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir);
+
+
+// --------------------------------------------------------------------------------------------
+//  ADMIN SNAPSHOT
+// --------------------------------------------------------------------------------------------
 function getAdminSnapshot() {
-  // active bans: only those not expired
   const activeIpBans = [];
-  for (const [ip, exp] of bannedIps) {
-    if (exp === Infinity || exp > Date.now()) activeIpBans.push({ ip, expires: exp });
-    else bannedIps.delete(ip);
-  }
   const activeFpBans = [];
+
+  for (const [ip, exp] of bannedIps) {
+    if (exp > Date.now()) activeIpBans.push({
+      ip,
+      expires: exp,
+      screenshot: screenshotMap.get(ip) || null
+    });
+  }
+
   for (const [fp, exp] of bannedFingerprints) {
-    if (exp === Infinity || exp > Date.now()) activeFpBans.push({ fp, expires: exp });
-    else bannedFingerprints.delete(fp);
+    if (exp > Date.now()) activeFpBans.push({
+      fp,
+      expires: exp,
+      screenshot: screenshotMap.get(fp) || null
+    });
   }
 
-  // reported users (target id, count, reporters array)
   const reportedUsers = [];
-  for (const [target, reporters] of reports) {
-    reportedUsers.push({ target, count: reporters.size, reporters: Array.from(reporters) });
+  for (const [target, set] of reports) {
+    reportedUsers.push({
+      target,
+      count: set.size
+    });
   }
-
-  // visitors list (most recent 200)
-  const recentVisitors = visitorsHistory.slice(-200).map(v => ({ ip: v.ip, fp: v.fp, country: v.country, ts: v.ts }));
 
   return {
     stats: {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
-      partnered: partners.size / 2, // pairs
+      paired: partners.size / 2,
       totalVisitors: visitorsHistory.length,
-      countryCounts: Object.fromEntries(countryCounts),
+      countryCounts: Object.fromEntries(countryCounts)
     },
     activeIpBans,
     activeFpBans,
-    reportedUsers,
-    recentVisitors,
+    reportedUsers
   };
 }
 
-// broadcast updated admin snapshot to all admin sockets
 function emitAdminUpdate() {
-  const snap = getAdminSnapshot();
-  io.of("/").emit("adminUpdate", snap); // admin clients will filter/consume
+  io.emit("adminUpdate", getAdminSnapshot());
 }
 
-// utility: ban by ip/fp (24h)
-function banUser(ip, fp) {
-  const expiry = Date.now() + BAN_DURATION;
-  if (ip) bannedIps.set(ip, expiry);
-  if (fp) bannedFingerprints.set(fp, expiry);
-}
 
-// utility: unban ip/fp
-function unbanUser(ip, fp) {
-  if (ip) bannedIps.delete(ip);
-  if (fp) bannedFingerprints.delete(fp);
-  emitAdminUpdate();
-}
-
-// admin page (serves dynamic client that uses socket.io)
+// --------------------------------------------------------------------------------------------
+//  ADMIN PANEL PAGE (WITH IMAGES)
+// --------------------------------------------------------------------------------------------
 app.get("/admin", adminAuth, (req, res) => {
   res.send(`
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Admin Panel — Live</title>
+<meta charset="utf-8" />
+<title>Admin Panel</title>
 <style>
-  body{font-family:Arial;padding:16px;background:#f7f7f7}
-  .row{display:flex;gap:16px;align-items:flex-start}
-  .card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.05);flex:1}
-  .small{font-size:13px;color:#666}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
-  button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;color:#fff}
-  .unban{background:#28a745}
-  .ban{background:#d9534f}
-  .broadcast{background:#007bff}
-  .stat{font-size:20px;font-weight:700}
+body{font-family:Arial;background:#f3f3f3;padding:20px}
+.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:20px;box-shadow:0 2px 10px #0001}
+h2{margin-top:0}
+img{max-width:150px;border-radius:6px}
+.banned-item{margin-bottom:12px;padding:10px;background:#fafafa;border-radius:6px}
+button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;color:white;background:#28a745}
 </style>
 </head>
 <body>
-<h1>Admin — Live Dashboard</h1>
 
-<div class="row">
-  <div class="card" style="max-width:320px">
-    <h3>Live Stats</h3>
-    <div>Connected: <span id="stat-connected" class="stat">0</span></div>
-    <div>Waiting: <span id="stat-waiting" class="stat">0</span></div>
-    <div>Paired: <span id="stat-partnered" class="stat">0</span></div>
-    <div>Total visitors: <span id="stat-totalvisitors">0</span></div>
-    <h4>By Country</h4>
-    <div id="country-list" class="small"></div>
-  </div>
+<h1>Admin Dashboard</h1>
 
-  <div class="card">
-    <h3>Broadcast</h3>
-    <form id="broadcastForm">
-      <textarea id="broadcastMsg" rows="3" style="width:100%"></textarea><br><br>
-      <button class="broadcast">Send</button>
-    </form>
-
-    <h3 style="margin-top:12px">Active IP Bans</h3>
-    <div id="ip-bans" class="small"></div>
-
-    <h3>Active Device Bans</h3>
-    <div id="fp-bans" class="small"></div>
-  </div>
+<div class="card">
+  <h2>Stats</h2>
+  <div>Connected: <span id="conn">0</span></div>
+  <div>Waiting: <span id="wait">0</span></div>
+  <div>Paired: <span id="pair">0</span></div>
+  <div>Total Visitors: <span id="vis">0</span></div>
 </div>
 
-<div class="row" style="margin-top:12px">
-  <div class="card">
-    <h3>Reported Users</h3>
-    <div id="reported-list" class="small"></div>
-  </div>
+<div class="card">
+  <h2>Banned IPs</h2>
+  <div id="bip"></div>
+</div>
 
-  <div class="card">
-    <h3>Recent Visitors</h3>
-    <div id="visitors-list" class="small" style="max-height:360px;overflow:auto"></div>
-  </div>
+<div class="card">
+  <h2>Banned Devices</h2>
+  <div id="bfp"></div>
+</div>
+
+<div class="card">
+  <h2>Reports</h2>
+  <div id="rep"></div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket = io();
-  // subscribe as admin (no server-side check, HTTP basic auth guards page)
-  socket.emit('admin-join');
+const s = io();
+s.emit("admin-join");
 
-  function renderSnapshot(snap) {
-    document.getElementById('stat-connected').textContent = snap.stats.connected;
-    document.getElementById('stat-waiting').textContent = snap.stats.waiting;
-    document.getElementById('stat-partnered').textContent = snap.stats.partnered;
-    document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors;
+s.on("adminUpdate", snap => {
 
-    // countries
-    const cl = document.getElementById('country-list');
-    cl.innerHTML = '';
-    const entries = Object.entries(snap.stats.countryCounts);
-    if (entries.length === 0) cl.textContent = 'No data';
-    else {
-      entries.sort((a,b)=>b[1]-a[1]);
-      entries.forEach(([country, cnt]) => {
-        const d = document.createElement('div');
-        d.textContent = country + ': ' + cnt;
-        cl.appendChild(d);
-      });
-    }
+  document.getElementById("conn").textContent = snap.stats.connected;
+  document.getElementById("wait").textContent = snap.stats.waiting;
+  document.getElementById("pair").textContent = snap.stats.partnered;
+  document.getElementById("vis").textContent = snap.stats.totalVisitors;
 
-    // IP bans
-    const ipb = document.getElementById('ip-bans');
-    ipb.innerHTML = '';
-    if (snap.activeIpBans.length === 0) ipb.textContent = 'No active IP bans';
-    else snap.activeIpBans.forEach(b => {
-      const div = document.createElement('div');
-      const dt = new Date(b.expires).toLocaleString();
-      div.innerHTML = '<b>'+b.ip+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button');
-      btn.textContent = 'Unban';
-      btn.className = 'unban';
-      btn.onclick = () => {
-        fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})}).then(()=>{});
-      };
-      div.appendChild(btn);
-      ipb.appendChild(div);
-    });
-
-    // FP bans
-    const fpb = document.getElementById('fp-bans');
-    fpb.innerHTML = '';
-    if (snap.activeFpBans.length === 0) fpb.textContent = 'No active device bans';
-    else snap.activeFpBans.forEach(b => {
-      const div = document.createElement('div');
-      const dt = new Date(b.expires).toLocaleString();
-      div.innerHTML = '<b>'+b.fp+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button');
-      btn.textContent = 'Unban';
-      btn.className = 'unban';
-      btn.onclick = () => {
-        fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})}).then(()=>{});
-      };
-      div.appendChild(btn);
-      fpb.appendChild(div);
-    });
-
-    // reported users
-    const rep = document.getElementById('reported-list');
-    rep.innerHTML = '';
-    if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
-    else snap.reportedUsers.forEach(r => {
-      const div = document.createElement('div');
-      div.innerHTML = '<b>Target:</b> '+r.target+' — '+r.count+' reports ';
-      // show reporters briefly
-      const small = document.createElement('div');
-      small.style.fontSize='12px'; small.style.color='#666';
-      small.textContent = 'Reporters: ' + r.reporters.join(', ');
-      div.appendChild(small);
-      rep.appendChild(div);
-      rep.appendChild(document.createElement('hr'));
-    });
-
-    // visitors
-    const vis = document.getElementById('visitors-list');
-    vis.innerHTML = '';
-    if (snap.recentVisitors.length === 0) vis.textContent = 'No visitors yet';
-    else snap.recentVisitors.forEach(v => {
-      const d = document.createElement('div');
-      d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country || 'Unknown') + ' — ' + v.ip + (v.fp ? ' — ' + v.fp.slice(0,8) : '');
-      vis.appendChild(d);
-    });
-  }
-
-  // initial request for snapshot
-  socket.on('connect', () => {
-    socket.emit('admin-join');
+  // banned IPs
+  const bip = document.getElementById("bip");
+  bip.innerHTML = "";
+  snap.activeIpBans.forEach(b => {
+    const d = document.createElement("div");
+    d.className = "banned-item";
+    d.innerHTML = \`
+      <b>\${b.ip}</b><br>
+      Expires: \${new Date(b.expires).toLocaleString()}<br>
+      \${b.screenshot ? '<img src="/screenshots/' + b.screenshot + '">' : '(no image)'}<br><br>
+      <button onclick="fetch('/unban-ip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:'\${b.ip}'})})">Unban</button>
+    \`;
+    bip.appendChild(d);
   });
 
-  socket.on('adminUpdate', (snap) => {
-    renderSnapshot(snap);
+  // banned devices
+  const bfp = document.getElementById("bfp");
+  bfp.innerHTML = "";
+  snap.activeFpBans.forEach(b => {
+    const d = document.createElement("div");
+    d.className = "banned-item";
+    d.innerHTML = \`
+      <b>\${b.fp}</b><br>
+      Expires: \${new Date(b.expires).toLocaleString()}<br>
+      \${b.screenshot ? '<img src="/screenshots/' + b.screenshot + '">' : '(no image)'}<br><br>
+      <button onclick="fetch('/unban-fingerprint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fp:'\${b.fp}'})})">Unban</button>
+    \`;
+    bfp.appendChild(d);
   });
 
-  // broadcast form
-  document.getElementById('broadcastForm').onsubmit = e => {
-    e.preventDefault();
-    const msg = document.getElementById('broadcastMsg').value.trim();
-    if (!msg) return;
-    fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})});
-    document.getElementById('broadcastMsg').value = '';
-  };
+  // reports
+  const rep = document.getElementById("rep");
+  rep.innerHTML = "";
+  snap.reportedUsers.forEach(r => {
+    const d = document.createElement("div");
+    d.className = "banned-item";
+    d.textContent = r.target + " — " + r.count + " reports";
+    rep.appendChild(d);
+  });
+
+});
 </script>
+
 </body>
 </html>
   `);
 });
 
-// admin endpoints for actions (JSON)
-app.post("/admin-broadcast", adminAuth, (req, res) => {
-  const msg = req.body.message || (req.body && req.body.message);
-  if (msg && msg.trim()) {
-    io.emit("adminMessage", msg.trim());
-  }
-  res.status(200).send({ ok: true });
-});
 
+// ------------------------ UNBAN API ------------------------
 app.post("/unban-ip", adminAuth, (req, res) => {
-  const ip = req.body.ip || (req.body && req.body.ip);
-  unbanUser(ip, null);
-  res.status(200).send({ ok: true });
+  const { ip } = req.body;
+  bannedIps.delete(ip);
+  emitAdminUpdate();
+  res.send({ ok: true });
 });
 
 app.post("/unban-fingerprint", adminAuth, (req, res) => {
-  const fp = req.body.fp || (req.body && req.body.fp);
-  unbanUser(null, fp);
-  res.status(200).send({ ok: true });
+  const { fp } = req.body;
+  bannedFingerprints.delete(fp);
+  emitAdminUpdate();
+  res.send({ ok: true });
 });
 
-// socket logic
+
+// ------------------------ SOCKET.IO ------------------------
 io.on("connection", (socket) => {
-  const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
+
+  const ip =
+    socket.handshake.headers["cf-connecting-ip"] ||
+    socket.handshake.address ||
+    "unknown";
+
   userIp.set(socket.id, ip);
 
-  // geo lookup
+  // GEO
   let country = null;
-  const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
-  if (headerCountry) country = headerCountry.toUpperCase();
-  else {
-    try {
-      const g = geoip.lookup(ip);
-      if (g && g.country) country = g.country;
-    } catch (e) { country = null; }
-  }
-  const ts = Date.now();
-  visitors.set(socket.id, { ip, fp: null, country, ts });
-  visitorsHistory.push({ ip, fp: null, country, ts });
-  // maintain country counts
-  if (country) countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
+  const g = geoip.lookup(ip);
+  if (g) country = g.country;
 
-  // ban check on connect (IP)
-  const ipBan = bannedIps.get(ip);
-  if (ipBan && ipBan > Date.now()) {
-    socket.emit("banned", { message: "You are banned (IP)." });
-    socket.disconnect(true);
-    emitAdminUpdate();
+  visitors.set(socket.id, { ip, country, ts: Date.now() });
+  visitorsHistory.push({ ip, country, ts: Date.now() });
+
+  // -------- BAN CHECK --------
+  if (bannedIps.has(ip) && bannedIps.get(ip) > Date.now()) {
+    socket.emit("banned", { message: "IP banned" });
+    socket.disconnect();
     return;
   }
 
-  // notify admins of changes
+  // fingerprint check
+  socket.on("identify", ({ fingerprint }) => {
+    userFingerprint.set(socket.id, fingerprint);
+
+    if (bannedFingerprints.has(fingerprint) &&
+        bannedFingerprints.get(fingerprint) > Date.now()) {
+      socket.emit("banned", { message: "Device banned" });
+      socket.disconnect();
+      return;
+    }
+
+    emitAdminUpdate();
+  });
+
   emitAdminUpdate();
 
-  // identify fingerprint
-  socket.on("identify", ({ fingerprint }) => {
-    if (fingerprint) {
-      userFingerprint.set(socket.id, fingerprint);
-      // update visitors record with fp
-      const v = visitors.get(socket.id);
-      if (v) { v.fp = fingerprint; visitorsHistory[visitorsHistory.length -1].fp = fingerprint; }
-      // check fingerprint ban
-      const fpBan = bannedFingerprints.get(fingerprint);
-      if (fpBan && fpBan > Date.now()) {
-        socket.emit("banned", { message: "Device banned." });
-        socket.disconnect(true);
-        emitAdminUpdate();
-        return;
-      }
-    }
-    emitAdminUpdate();
-  });
 
-  // matchmaking find
+  // --------------------------------------------------------------------------------------------
+  // MATCHMAKING
+  // --------------------------------------------------------------------------------------------
   socket.on("find-partner", () => {
-    // ignore if banned by fingerprint
-    const fp = userFingerprint.get(socket.id);
-    if (fp) {
-      const fExp = bannedFingerprints.get(fp);
-      if (fExp && fExp > Date.now()) {
-        socket.emit("banned", { message: "You are banned (device)." });
-        socket.disconnect(true);
-        emitAdminUpdate();
-        return;
-      }
-    }
-
-    // push to waiting and try match
-    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
+    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
+    match();
     emitAdminUpdate();
   });
 
-  function tryMatch() {
+  function match() {
     while (waitingQueue.length >= 2) {
       const a = waitingQueue.shift();
       const b = waitingQueue.shift();
-      if (!a || !b) break;
-      // double-check they still connected
+
       if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
+
       partners.set(a, b);
       partners.set(b, a);
+
       io.to(a).emit("partner-found", { id: b, initiator: true });
       io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   }
 
-  // signal relay
+
+  // --------------------------------------------------------------------------------------------
+  //  SIGNAL RELAY
+  // --------------------------------------------------------------------------------------------
   socket.on("signal", ({ to, data }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("signal", { from: socket.id, data });
   });
 
-  // chat relay
+
+  // --------------------------------------------------------------------------------------------
+  // CHAT
+  // --------------------------------------------------------------------------------------------
   socket.on("chat-message", ({ to, message }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("chat-message", { message });
   });
 
-  // report handling
+
+  // --------------------------------------------------------------------------------------------
+  // REPORT SYSTEM + SCREENSHOT TRIGGER
+  // --------------------------------------------------------------------------------------------
   socket.on("report", ({ partnerId }) => {
     if (!partnerId) return;
+
     if (!reports.has(partnerId)) reports.set(partnerId, new Set());
-    const set = reports.get(partnerId);
-    // prevent duplicate reporting from same socket
-    set.add(socket.id);
+    reports.get(partnerId).add(socket.id);
 
-    // emit update to admins
-    emitAdminUpdate();
+    const count = reports.get(partnerId).size;
 
-    if (set.size >= 3) {
-      const targetSocket = io.sockets.sockets.get(partnerId);
-      // determine ip & fp
-      const targetIp = userIp.get(partnerId);
-      const targetFp = userFingerprint.get(partnerId);
-      banUser(targetIp, targetFp);
-      // notify and disconnect if online
-      if (targetSocket) {
-        targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
-        targetSocket.disconnect(true);
+    if (count >= 3) {
+      const target = io.sockets.sockets.get(partnerId);
+
+      // اطلب من العميل التقاط صورة
+      if (target) {
+        target.emit("capture-request");
       }
-      // emit update after ban
-      emitAdminUpdate();
+
+      // ban logic
+      const ip = userIp.get(partnerId);
+      const fp = userFingerprint.get(partnerId);
+
+      bannedIps.set(ip, Date.now() + BAN_DURATION);
+      bannedFingerprints.set(fp, Date.now() + BAN_DURATION);
+
+      if (target) {
+        target.emit("banned", { message: "You are banned for repeated reports." });
+        target.disconnect();
+      }
     }
+
+    emitAdminUpdate();
   });
 
-  socket.on("skip", () => {
+
+  // --------------------------------------------------------------------------------------------
+  //  RECEIVE SCREENSHOT FROM CLIENT
+  // --------------------------------------------------------------------------------------------
+  socket.on("screenshot-upload", ({ base64 }) => {
+    if (!base64) return;
+
+    const ip = userIp.get(socket.id);
+    const fp = userFingerprint.get(socket.id);
+
+    const filename = socket.id + "-" + Date.now() + ".png";
+    const filepath = path.join(screenshotDir, filename);
+
+    const data = base64.replace(/^data:image\/png;base64,/, "");
+    fs.writeFileSync(filepath, data, "base64");
+
+    // store screenshot for bans
+    if (ip) screenshotMap.set(ip, filename);
+    if (fp) screenshotMap.set(fp, filename);
+
+    emitAdminUpdate();
+  });
+
+
+  // --------------------------------------------------------------------------------------------
+  // DISCONNECT
+  // --------------------------------------------------------------------------------------------
+  socket.on("disconnect", () => {
     const p = partners.get(socket.id);
     if (p) {
       const other = io.sockets.sockets.get(p);
@@ -430,59 +378,16 @@ io.on("connection", (socket) => {
       partners.delete(p);
       partners.delete(socket.id);
     }
-    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
-    emitAdminUpdate();
-  });
 
-  socket.on("disconnect", () => {
-    // cleanup
     const idx = waitingQueue.indexOf(socket.id);
     if (idx !== -1) waitingQueue.splice(idx, 1);
 
-    const p = partners.get(socket.id);
-    if (p) {
-      const other = io.sockets.sockets.get(p);
-      if (other) other.emit("partner-disconnected");
-      partners.delete(p);
-    }
-    partners.delete(socket.id);
-
-    // remove from visitors map (keep history)
-    const v = visitors.get(socket.id);
-    if (v) {
-      // decrement country count
-      if (v.country && countryCounts.has(v.country)) {
-        const c = countryCounts.get(v.country) - 1;
-        if (c <= 0) countryCounts.delete(v.country);
-        else countryCounts.set(v.country, c);
-      }
-    }
-    visitors.delete(socket.id);
-    userFingerprint.delete(socket.id);
-    userIp.delete(socket.id);
-
-    // remove any reports made by this socket from sets (prevent stuck)
-    for (const [target, set] of reports.entries()) {
-      if (set.has(socket.id)) {
-        set.delete(socket.id);
-        if (set.size === 0) reports.delete(target);
-      }
-    }
-
     emitAdminUpdate();
   });
 
-  // admin subscription socket (optional)
-  socket.on("admin-join", () => {
-    // send immediate snapshot
-    socket.emit("adminUpdate", getAdminSnapshot());
-  });
-
-  // send initial admin update for new connection
-  emitAdminUpdate();
 });
 
-// start
+
+// ------------------ START ------------------
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log("Server listening on port " + PORT));
+http.listen(PORT, () => console.log("SERVER RUNNING ON PORT", PORT));
