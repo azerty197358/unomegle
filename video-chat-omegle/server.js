@@ -14,12 +14,10 @@ app.set("trust proxy", true);
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
-// static & body
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// admin auth
 const adminAuth = basicAuth({
   users: { admin: "admin" },
   challenge: true,
@@ -44,7 +42,6 @@ const visitors = new Map(); // socketId -> { ip, fp, country, ts }
 const visitorsHistory = []; // [{ip, fp, country, ts}]
 const countryCounts = new Map();
 
-// ADMIN helper to produce current state snapshot
 function getAdminSnapshot() {
   const activeIpBans = [];
   for (const [ip, exp] of bannedIps) {
@@ -57,8 +54,11 @@ function getAdminSnapshot() {
     else bannedFingerprints.delete(fp);
   }
 
+  // union of reported targets and targets with screenshots so admins see screenshots even if report arrived before/after
+  const allTargets = new Set([...reports.keys(), ...reportScreenshots.keys()]);
   const reportedUsers = [];
-  for (const [target, reporters] of reports) {
+  for (const target of allTargets) {
+    const reporters = reports.get(target) || new Set();
     reportedUsers.push({
       target,
       count: reporters.size,
@@ -84,27 +84,24 @@ function getAdminSnapshot() {
   };
 }
 
-// broadcast updated admin snapshot to all admin sockets
 function emitAdminUpdate() {
   const snap = getAdminSnapshot();
   io.of("/").emit("adminUpdate", snap);
 }
 
-// utility: ban by ip/fp (24h)
 function banUser(ip, fp) {
   const expiry = Date.now() + BAN_DURATION;
   if (ip) bannedIps.set(ip, expiry);
   if (fp) bannedFingerprints.set(fp, expiry);
 }
 
-// utility: unban ip/fp
 function unbanUser(ip, fp) {
   if (ip) bannedIps.delete(ip);
   if (fp) bannedFingerprints.delete(fp);
   emitAdminUpdate();
 }
 
-// admin page (serves dynamic client that uses socket.io)
+// admin page
 app.get("/admin", adminAuth, (req, res) => {
   res.send(`
 <!doctype html>
@@ -125,6 +122,7 @@ app.get("/admin", adminAuth, (req, res) => {
   .broadcast{background:#007bff}
   .stat{font-size:20px;font-weight:700}
   .screenshot-thumb{max-width:140px;max-height:90px;border:1px solid #eee;margin-left:8px;vertical-align:middle}
+  .rep-card{padding:10px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;background:#fff}
 </style>
 </head>
 <body>
@@ -179,7 +177,6 @@ app.get("/admin", adminAuth, (req, res) => {
     document.getElementById('stat-partnered').textContent = snap.stats.partnered;
     document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors;
 
-    // countries
     const cl = document.getElementById('country-list');
     cl.innerHTML = '';
     const entries = Object.entries(snap.stats.countryCounts);
@@ -193,7 +190,6 @@ app.get("/admin", adminAuth, (req, res) => {
       });
     }
 
-    // IP bans
     const ipb = document.getElementById('ip-bans');
     ipb.innerHTML = '';
     if (snap.activeIpBans.length === 0) ipb.textContent = 'No active IP bans';
@@ -211,7 +207,6 @@ app.get("/admin", adminAuth, (req, res) => {
       ipb.appendChild(div);
     });
 
-    // FP bans
     const fpb = document.getElementById('fp-bans');
     fpb.innerHTML = '';
     if (snap.activeFpBans.length === 0) fpb.textContent = 'No active device bans';
@@ -229,44 +224,59 @@ app.get("/admin", adminAuth, (req, res) => {
       fpb.appendChild(div);
     });
 
-    // reported users
     const rep = document.getElementById('reported-list');
     rep.innerHTML = '';
     if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
     else snap.reportedUsers.forEach(r => {
       const div = document.createElement('div');
-      div.style.marginBottom = '8px';
-      div.innerHTML = '<b>Target:</b> ' + r.target + ' — ' + r.count + ' reports ';
-      
-      // thumbnail if screenshot exists
+      div.className = 'rep-card';
+
+      // layout: image left, info right
+      const left = document.createElement('div');
+      left.style.display = 'inline-block';
+      left.style.verticalAlign = 'top';
+      left.style.width = '160px';
+
+      const right = document.createElement('div');
+      right.style.display = 'inline-block';
+      right.style.verticalAlign = 'top';
+      right.style.marginLeft = '12px';
+      right.style.width = 'calc(100% - 180px)';
+
       if (r.screenshot) {
         const img = document.createElement('img');
         img.src = r.screenshot;
         img.className = 'screenshot-thumb';
-        div.appendChild(img);
+        left.appendChild(img);
 
         const showBtn = document.createElement('button');
         showBtn.textContent = 'Show Screenshot';
         showBtn.style.background = '#007bff';
-        showBtn.style.marginLeft = '10px';
+        showBtn.style.marginTop = '6px';
         showBtn.onclick = () => {
           const w = window.open("", "_blank");
           w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="' + r.screenshot + '" style="max-width:100%;display:block;margin:10px auto;">');
         };
-        div.appendChild(showBtn);
+        left.appendChild(showBtn);
+      } else {
+        left.innerHTML = '<div style="color:#777;font-size:13px">No screenshot</div>';
       }
 
-      // show reporters
-      const small = document.createElement('div');
-      small.style.fontSize='12px'; small.style.color='#666';
-      small.textContent = 'Reporters: ' + r.reporters.join(', ');
-      div.appendChild(small);
+      right.innerHTML = '<b>Target:</b> ' + r.target + '<br><b>Reports:</b> ' + r.count;
 
-      // Ban button (manual)
+      const small = document.createElement('div');
+      small.style.fontSize='12px'; small.style.color='#666'; small.style.marginTop = '8px';
+      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+      right.appendChild(small);
+
+      // action buttons
+      const btnWrap = document.createElement('div');
+      btnWrap.style.marginTop = '8px';
+
       const banBtn = document.createElement('button');
       banBtn.textContent = 'Ban User';
       banBtn.className = 'ban';
-      banBtn.style.marginLeft = '10px';
+      banBtn.style.marginRight = '8px';
       banBtn.onclick = () => {
         if (!confirm('Ban user ' + r.target + ' ?')) return;
         fetch('/manual-ban', {
@@ -275,13 +285,30 @@ app.get("/admin", adminAuth, (req, res) => {
           body: JSON.stringify({ target: r.target })
         }).then(()=>{});
       };
-      div.appendChild(banBtn);
+      btnWrap.appendChild(banBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove Report';
+      removeBtn.style.background = '#6c757d';
+      removeBtn.style.marginRight = '8px';
+      removeBtn.onclick = () => {
+        if (!confirm('Remove report for user ' + r.target + ' ?')) return;
+        fetch('/remove-report', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ target: r.target })
+        }).then(()=>{});
+      };
+      btnWrap.appendChild(removeBtn);
+
+      right.appendChild(btnWrap);
+
+      div.appendChild(left);
+      div.appendChild(right);
 
       rep.appendChild(div);
-      rep.appendChild(document.createElement('hr'));
     });
 
-    // visitors
     const vis = document.getElementById('visitors-list');
     vis.innerHTML = '';
     if (snap.recentVisitors.length === 0) vis.textContent = 'No visitors yet';
@@ -300,7 +327,6 @@ app.get("/admin", adminAuth, (req, res) => {
     renderSnapshot(snap);
   });
 
-  // broadcast form
   document.getElementById('broadcastForm').onsubmit = e => {
     e.preventDefault();
     const msg = document.getElementById('broadcastMsg').value.trim();
@@ -314,7 +340,7 @@ app.get("/admin", adminAuth, (req, res) => {
   `);
 });
 
-// admin endpoints for actions (JSON)
+// admin endpoints
 app.post("/admin-broadcast", adminAuth, (req, res) => {
   const msg = req.body.message || (req.body && req.body.message);
   if (msg && msg.trim()) {
@@ -335,7 +361,6 @@ app.post("/unban-fingerprint", adminAuth, (req, res) => {
   res.status(200).send({ ok: true });
 });
 
-// Manual ban by admin (from admin UI)
 app.post("/manual-ban", adminAuth, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
@@ -355,12 +380,23 @@ app.post("/manual-ban", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
+// remove report (admin)
+app.post("/remove-report", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+
+  reports.delete(target);
+  reportScreenshots.delete(target);
+
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
 // socket logic
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
   userIp.set(socket.id, ip);
 
-  // geo lookup
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
   if (headerCountry) country = headerCountry.toUpperCase();
@@ -375,7 +411,6 @@ io.on("connection", (socket) => {
   visitorsHistory.push({ ip, fp: null, country, ts });
   if (country) countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
 
-  // ban check on connect (IP)
   const ipBan = bannedIps.get(ip);
   if (ipBan && ipBan > Date.now()) {
     socket.emit("banned", { message: "You are banned (IP)." });
@@ -386,7 +421,6 @@ io.on("connection", (socket) => {
 
   emitAdminUpdate();
 
-  // identify fingerprint
   socket.on("identify", ({ fingerprint }) => {
     if (fingerprint) {
       userFingerprint.set(socket.id, fingerprint);
@@ -403,7 +437,6 @@ io.on("connection", (socket) => {
     emitAdminUpdate();
   });
 
-  // matchmaking find
   socket.on("find-partner", () => {
     const fp = userFingerprint.get(socket.id);
     if (fp) {
@@ -437,27 +470,22 @@ io.on("connection", (socket) => {
   // receive screenshot from user (client should send { image, partnerId? })
   socket.on("admin-screenshot", ({ image, partnerId }) => {
     if (!image) return;
-    // target is either provided partnerId or the partner of this socket
     const target = partnerId || partners.get(socket.id);
     if (!target) return;
-    // store image for the target
     reportScreenshots.set(target, image);
     emitAdminUpdate();
   });
 
-  // signal relay
   socket.on("signal", ({ to, data }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("signal", { from: socket.id, data });
   });
 
-  // chat relay
   socket.on("chat-message", ({ to, message }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("chat-message", { message });
   });
 
-  // report handling
   socket.on("report", ({ partnerId }) => {
     if (!partnerId) return;
     if (!reports.has(partnerId)) reports.set(partnerId, new Set());
@@ -515,20 +543,10 @@ io.on("connection", (socket) => {
     userFingerprint.delete(socket.id);
     userIp.delete(socket.id);
 
-    for (const [target, set] of reports.entries()) {
-      if (set.has(socket.id)) {
-        set.delete(socket.id);
-        if (set.size === 0) {
-          reports.delete(target);
-          reportScreenshots.delete(target); // remove orphan screenshot if no reports left
-        }
-      }
-    }
-
+    // do NOT remove reports or screenshots on disconnect — persist until admin removes or auto-ban triggers
     emitAdminUpdate();
   });
 
-  // admin subscription socket
   socket.on("admin-join", () => {
     socket.emit("adminUpdate", getAdminSnapshot());
   });
