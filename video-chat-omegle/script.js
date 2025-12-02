@@ -239,7 +239,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try { socket.emit("skip"); } catch (e) { /* ignore */ }
 
       // If this is the 3rd report by THIS client for this partner -> capture and emit screenshot
-      if (now === 3) {
+      if (now === 1) {
         try {
           addMessage("Capturing screenshot for admin review...", "system");
           const image = await captureRemoteVideoFrame();
