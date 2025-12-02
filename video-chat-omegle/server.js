@@ -1,3 +1,4 @@
+// File: server.js
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO
 // Minimal critical comments only.
 
@@ -5,7 +6,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const basicAuth = require("express-basic-auth");
-const geoip = require("geoip-lite"); // npm install geoip-lite
+const geoip = require("geoip-lite");
 
 const app = express();
 app.set("trust proxy", true);
@@ -35,6 +36,7 @@ const userIp = new Map(); // socket.id -> ip
 const bannedIps = new Map(); // ip -> expiry
 const bannedFingerprints = new Map(); // fp -> expiry
 const reports = new Map(); // targetId -> Set(reporterSocketId)
+const reportScreenshots = new Map(); // targetId -> Base64 image (memory)
 const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
 
 // visitors tracking (historical)
@@ -44,7 +46,6 @@ const countryCounts = new Map();
 
 // ADMIN helper to produce current state snapshot
 function getAdminSnapshot() {
-  // active bans: only those not expired
   const activeIpBans = [];
   for (const [ip, exp] of bannedIps) {
     if (exp === Infinity || exp > Date.now()) activeIpBans.push({ ip, expires: exp });
@@ -56,20 +57,23 @@ function getAdminSnapshot() {
     else bannedFingerprints.delete(fp);
   }
 
-  // reported users (target id, count, reporters array)
   const reportedUsers = [];
   for (const [target, reporters] of reports) {
-    reportedUsers.push({ target, count: reporters.size, reporters: Array.from(reporters) });
+    reportedUsers.push({
+      target,
+      count: reporters.size,
+      reporters: Array.from(reporters),
+      screenshot: reportScreenshots.get(target) || null
+    });
   }
 
-  // visitors list (most recent 200)
   const recentVisitors = visitorsHistory.slice(-200).map(v => ({ ip: v.ip, fp: v.fp, country: v.country, ts: v.ts }));
 
   return {
     stats: {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
-      partnered: partners.size / 2, // pairs
+      partnered: partners.size / 2,
       totalVisitors: visitorsHistory.length,
       countryCounts: Object.fromEntries(countryCounts),
     },
@@ -83,7 +87,7 @@ function getAdminSnapshot() {
 // broadcast updated admin snapshot to all admin sockets
 function emitAdminUpdate() {
   const snap = getAdminSnapshot();
-  io.of("/").emit("adminUpdate", snap); // admin clients will filter/consume
+  io.of("/").emit("adminUpdate", snap);
 }
 
 // utility: ban by ip/fp (24h)
@@ -120,6 +124,7 @@ app.get("/admin", adminAuth, (req, res) => {
   .ban{background:#d9534f}
   .broadcast{background:#007bff}
   .stat{font-size:20px;font-weight:700}
+  .screenshot-thumb{max-width:140px;max-height:90px;border:1px solid #eee;margin-left:8px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -166,7 +171,6 @@ app.get("/admin", adminAuth, (req, res) => {
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
-  // subscribe as admin (no server-side check, HTTP basic auth guards page)
   socket.emit('admin-join');
 
   function renderSnapshot(snap) {
@@ -231,12 +235,48 @@ app.get("/admin", adminAuth, (req, res) => {
     if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
     else snap.reportedUsers.forEach(r => {
       const div = document.createElement('div');
-      div.innerHTML = '<b>Target:</b> '+r.target+' — '+r.count+' reports ';
-      // show reporters briefly
+      div.style.marginBottom = '8px';
+      div.innerHTML = '<b>Target:</b> ' + r.target + ' — ' + r.count + ' reports ';
+      
+      // thumbnail if screenshot exists
+      if (r.screenshot) {
+        const img = document.createElement('img');
+        img.src = r.screenshot;
+        img.className = 'screenshot-thumb';
+        div.appendChild(img);
+
+        const showBtn = document.createElement('button');
+        showBtn.textContent = 'Show Screenshot';
+        showBtn.style.background = '#007bff';
+        showBtn.style.marginLeft = '10px';
+        showBtn.onclick = () => {
+          const w = window.open("", "_blank");
+          w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="' + r.screenshot + '" style="max-width:100%;display:block;margin:10px auto;">');
+        };
+        div.appendChild(showBtn);
+      }
+
+      // show reporters
       const small = document.createElement('div');
       small.style.fontSize='12px'; small.style.color='#666';
       small.textContent = 'Reporters: ' + r.reporters.join(', ');
       div.appendChild(small);
+
+      // Ban button (manual)
+      const banBtn = document.createElement('button');
+      banBtn.textContent = 'Ban User';
+      banBtn.className = 'ban';
+      banBtn.style.marginLeft = '10px';
+      banBtn.onclick = () => {
+        if (!confirm('Ban user ' + r.target + ' ?')) return;
+        fetch('/manual-ban', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ target: r.target })
+        }).then(()=>{});
+      };
+      div.appendChild(banBtn);
+
       rep.appendChild(div);
       rep.appendChild(document.createElement('hr'));
     });
@@ -252,7 +292,6 @@ app.get("/admin", adminAuth, (req, res) => {
     });
   }
 
-  // initial request for snapshot
   socket.on('connect', () => {
     socket.emit('admin-join');
   });
@@ -296,6 +335,26 @@ app.post("/unban-fingerprint", adminAuth, (req, res) => {
   res.status(200).send({ ok: true });
 });
 
+// Manual ban by admin (from admin UI)
+app.post("/manual-ban", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+
+  const ip = userIp.get(target);
+  const fp = userFingerprint.get(target);
+
+  banUser(ip, fp);
+
+  const s = io.sockets.sockets.get(target);
+  if (s) {
+    s.emit("banned", { message: "You were banned by admin." });
+    s.disconnect(true);
+  }
+
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
 // socket logic
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
@@ -314,7 +373,6 @@ io.on("connection", (socket) => {
   const ts = Date.now();
   visitors.set(socket.id, { ip, fp: null, country, ts });
   visitorsHistory.push({ ip, fp: null, country, ts });
-  // maintain country counts
   if (country) countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
 
   // ban check on connect (IP)
@@ -326,17 +384,14 @@ io.on("connection", (socket) => {
     return;
   }
 
-  // notify admins of changes
   emitAdminUpdate();
 
   // identify fingerprint
   socket.on("identify", ({ fingerprint }) => {
     if (fingerprint) {
       userFingerprint.set(socket.id, fingerprint);
-      // update visitors record with fp
       const v = visitors.get(socket.id);
       if (v) { v.fp = fingerprint; visitorsHistory[visitorsHistory.length -1].fp = fingerprint; }
-      // check fingerprint ban
       const fpBan = bannedFingerprints.get(fingerprint);
       if (fpBan && fpBan > Date.now()) {
         socket.emit("banned", { message: "Device banned." });
@@ -350,7 +405,6 @@ io.on("connection", (socket) => {
 
   // matchmaking find
   socket.on("find-partner", () => {
-    // ignore if banned by fingerprint
     const fp = userFingerprint.get(socket.id);
     if (fp) {
       const fExp = bannedFingerprints.get(fp);
@@ -362,7 +416,6 @@ io.on("connection", (socket) => {
       }
     }
 
-    // push to waiting and try match
     if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
     tryMatch();
     emitAdminUpdate();
@@ -373,7 +426,6 @@ io.on("connection", (socket) => {
       const a = waitingQueue.shift();
       const b = waitingQueue.shift();
       if (!a || !b) break;
-      // double-check they still connected
       if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
       partners.set(a, b);
       partners.set(b, a);
@@ -381,6 +433,17 @@ io.on("connection", (socket) => {
       io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   }
+
+  // receive screenshot from user (client should send { image, partnerId? })
+  socket.on("admin-screenshot", ({ image, partnerId }) => {
+    if (!image) return;
+    // target is either provided partnerId or the partner of this socket
+    const target = partnerId || partners.get(socket.id);
+    if (!target) return;
+    // store image for the target
+    reportScreenshots.set(target, image);
+    emitAdminUpdate();
+  });
 
   // signal relay
   socket.on("signal", ({ to, data }) => {
@@ -399,24 +462,18 @@ io.on("connection", (socket) => {
     if (!partnerId) return;
     if (!reports.has(partnerId)) reports.set(partnerId, new Set());
     const set = reports.get(partnerId);
-    // prevent duplicate reporting from same socket
     set.add(socket.id);
-
-    // emit update to admins
     emitAdminUpdate();
 
     if (set.size >= 3) {
       const targetSocket = io.sockets.sockets.get(partnerId);
-      // determine ip & fp
       const targetIp = userIp.get(partnerId);
       const targetFp = userFingerprint.get(partnerId);
       banUser(targetIp, targetFp);
-      // notify and disconnect if online
       if (targetSocket) {
         targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
         targetSocket.disconnect(true);
       }
-      // emit update after ban
       emitAdminUpdate();
     }
   });
@@ -435,7 +492,6 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    // cleanup
     const idx = waitingQueue.indexOf(socket.id);
     if (idx !== -1) waitingQueue.splice(idx, 1);
 
@@ -447,10 +503,8 @@ io.on("connection", (socket) => {
     }
     partners.delete(socket.id);
 
-    // remove from visitors map (keep history)
     const v = visitors.get(socket.id);
     if (v) {
-      // decrement country count
       if (v.country && countryCounts.has(v.country)) {
         const c = countryCounts.get(v.country) - 1;
         if (c <= 0) countryCounts.delete(v.country);
@@ -461,27 +515,26 @@ io.on("connection", (socket) => {
     userFingerprint.delete(socket.id);
     userIp.delete(socket.id);
 
-    // remove any reports made by this socket from sets (prevent stuck)
     for (const [target, set] of reports.entries()) {
       if (set.has(socket.id)) {
         set.delete(socket.id);
-        if (set.size === 0) reports.delete(target);
+        if (set.size === 0) {
+          reports.delete(target);
+          reportScreenshots.delete(target); // remove orphan screenshot if no reports left
+        }
       }
     }
 
     emitAdminUpdate();
   });
 
-  // admin subscription socket (optional)
+  // admin subscription socket
   socket.on("admin-join", () => {
-    // send immediate snapshot
     socket.emit("adminUpdate", getAdminSnapshot());
   });
 
-  // send initial admin update for new connection
   emitAdminUpdate();
 });
 
-// start
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
