@@ -1,4 +1,3 @@
-
 window.addEventListener('DOMContentLoaded', () => {
 
   const socket = io();
@@ -38,6 +37,9 @@ window.addEventListener('DOMContentLoaded', () => {
   let pauseTimer = null;
 
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
+
+  // keep track locally of reported partners to avoid rematching them client-side
+  const reportedIds = new Set();
 
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
@@ -156,9 +158,34 @@ window.addEventListener('DOMContentLoaded', () => {
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = () => {
-      if (!partnerId) return addMessage("No user to report.", "system");
-      socket.emit("report", { partnerId });
-      addMessage("🚨 You reported the user.", "system");
+      if (!partnerId) {
+        addMessage("No user to report.", "system");
+        return;
+      }
+
+      // add to local reported set to avoid rematch
+      reportedIds.add(partnerId);
+
+      // inform server and skip immediately
+      try { socket.emit("report", { partnerId }); } catch (e) { /* ignore */ }
+      try { socket.emit("skip"); } catch (e) { /* ignore */ }
+
+      // Close and cleanup current connection
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+
+      partnerId = null;
+      disableChat();
+
+      // update single status element (no duplicate chat messages)
+      statusText.textContent = 'You reported the user — skipping...';
+
+      // restart search after a tiny delay to let server process report
+      clearTimeout(searchTimer);
+      clearTimeout(pauseTimer);
+      searchTimer = setTimeout(startSearchLoop, 300);
     };
   }
 
@@ -189,15 +216,23 @@ window.addEventListener('DOMContentLoaded', () => {
   function startSearchLoop() {
     if (partnerId) return;
 
+    // show loading indicator while searching
     showRemoteSpinnerOnly(true);
     statusText.textContent = 'Searching...';
 
     socket.emit('find-partner');
 
+    // if not paired within timeout -> go to pause (and hide spinner)
+    clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       if (!partnerId) {
         try { socket.emit('stop'); } catch (e) {}
+        // stop the remote loading spinner on pause per requirement
+        showRemoteSpinnerOnly(false);
         statusText.textContent = 'Pausing...';
+
+        // schedule next search attempt
+        clearTimeout(pauseTimer);
         pauseTimer = setTimeout(startSearchLoop, 1800);
       }
     }, 3500);
@@ -219,9 +254,21 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   skipBtn.onclick = () => {
-    socket.emit('skip');
-    addMessage('You skipped.', 'system');
+    try { socket.emit('skip'); } catch (e) {}
+    // update in-place status text instead of appending chat messages repeatedly
+    statusText.textContent = 'You skipped.';
     disableChat();
+
+    // cleanup existing connection
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
+    partnerId = null;
+
+    // restart search immediately
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
     startSearchLoop();
   };
 
@@ -256,18 +303,40 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('partner-disconnected', () => {
-    addMessage('Disconnected.', 'system');
+    // update status in-place and restart search
+    statusText.textContent = 'Partner disconnected.';
     disableChat();
+
     partnerId = null;
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
 
-    if (peerConnection) peerConnection.close();
-    peerConnection = null;
-
+    // start searching again
+    clearTimeout(searchTimer);
+    clearTimeout(pauseTimer);
     startSearchLoop();
   });
 
   socket.on('partner-found', async data => {
-    partnerId = data.id || data.partnerId;
+    // normalize partner id
+    const foundId = data.id || data.partnerId;
+    // if reported locally -> skip immediately and avoid binding
+    if (foundId && reportedIds.has(foundId)) {
+      try {
+        socket.emit('skip');
+      } catch (e) {}
+      statusText.textContent = 'Found reported user — skipping...';
+      // ensure no bind to partnerId and restart loop quickly
+      partnerId = null;
+      clearTimeout(searchTimer);
+      clearTimeout(pauseTimer);
+      setTimeout(startSearchLoop, 200);
+      return;
+    }
+
+    partnerId = foundId;
     isInitiator = !!data.initiator;
 
     hideAllSpinners();
@@ -276,28 +345,36 @@ window.addEventListener('DOMContentLoaded', () => {
     createPeerConnection();
 
     if (isInitiator) {
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('signal', { to: partnerId, data: offer });
+      try {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('signal', { to: partnerId, data: offer });
+      } catch (e) {
+        console.error('Offer failed', e);
+      }
     }
   });
 
   socket.on('signal', async ({ from, data }) => {
     if (!peerConnection) createPeerConnection();
 
-    if (data.type === 'offer') {
-      await peerConnection.setRemoteDescription(data);
+    try {
+      if (data.type === 'offer') {
+        await peerConnection.setRemoteDescription(data);
 
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
 
-      socket.emit('signal', { to: from, data: answer });
+        socket.emit('signal', { to: from, data: answer });
 
-    } else if (data.type === 'answer') {
-      await peerConnection.setRemoteDescription(data);
+      } else if (data.type === 'answer') {
+        await peerConnection.setRemoteDescription(data);
 
-    } else if (data.candidate) {
-      await peerConnection.addIceCandidate(data.candidate);
+      } else if (data.candidate) {
+        await peerConnection.addIceCandidate(data.candidate);
+      }
+    } catch (e) {
+      console.error('Signal handling error', e);
     }
   });
 
@@ -320,10 +397,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     peerConnection.onicecandidate = e => {
       if (e.candidate) {
-        socket.emit('signal', {
-          to: partnerId,
-          data: { candidate: e.candidate }
-        });
+        try {
+          socket.emit('signal', {
+            to: partnerId,
+            data: { candidate: e.candidate }
+          });
+        } catch (err) { /* ignore */ }
       }
     };
 
@@ -332,10 +411,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (['disconnected', 'failed', 'closed'].includes(s)) {
         disableChat();
-        addMessage('Connection lost.', 'system');
+        // update status in-place instead of spamming chat
+        statusText.textContent = 'Connection lost.';
 
         partnerId = null;
-        if (autoReconnect) startSearchLoop();
+        if (peerConnection) {
+          try { peerConnection.close(); } catch (e) {}
+          peerConnection = null;
+        }
+        if (autoReconnect) {
+          clearTimeout(searchTimer);
+          clearTimeout(pauseTimer);
+          startSearchLoop();
+        }
       }
     };
   }
