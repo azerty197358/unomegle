@@ -1,3 +1,7 @@
+window.addEventListener('DOMContentLoaded', () => {
+
+  const socket = io();
+
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
