@@ -526,14 +526,3 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
 });
- 
-    bannedCountries = new Set(Array.isArray(arr) ? arr : []);
-  } catch (e) { bannedCountries = new Set(); }
-}
-function saveBannedCountries() {
-  try {
-    fs.writeFileSync(BANNED_COUNTRIES_FILE, JSON.stringify(Array.from(bannedCountries), null, 2));
-  } catch (e) { /* ignore */ }
-}
-loadBannedCountries();
-
