@@ -1,16 +1,7 @@
-// File: public/js/room-client.js
-// Description: Client-side room logic with country-ban overlay and resilient WebRTC/signaling behavior.
 
-window.addEventListener('DOMContentLoaded', () => {
-
-  /* ============================
-     Dependencies / Socket init
-     ============================ */
   const socket = io();
 
-  /* ============================
-     DOM ELEMENTS
-     ============================ */
+  // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
   const notifyMenu = document.getElementById('notifyMenu');
@@ -32,9 +23,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const exitBtn = document.getElementById('exitBtn');
 
-  /* ============================
-     GLOBAL STATE
-     ============================ */
+  // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
   let partnerId = null;
@@ -43,39 +32,30 @@ window.addEventListener('DOMContentLoaded', () => {
   let micEnabled = true;
   let autoReconnect = true;
 
-  // Adaptive search backoff (ms)
-  let searchAttempt = 0;
-  const SEARCH_BASE = 1500;
-  const SEARCH_MAX = 20000;
-
   let searchTimer = null;
   let pauseTimer = null;
 
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
 
   const reportedIds = new Set();
+
+  // track how many times THIS client has reported each partner (local count)
   const reportCounts = new Map();
 
-  // For robust signaling & ICE candidate handling
-  let signalQueue = []; // {to, data, tries}
-  const SIGNAL_MAX_RETRIES = 6;
-
-  let candidateQueue = []; // candidates received before remoteDescription set
-
-  /* ============================
-     UTILS / UI HELPERS
-     ============================ */
-
+  // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
     d.className = `msg ${type}`;
     d.textContent = msg;
+
     const typing = document.querySelector('.msg.system[style*="italic"]');
+
     if (typing && typing.parentNode === chatMessages) {
       chatMessages.insertBefore(d, typing);
     } else {
       chatMessages.appendChild(d);
     }
+
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
@@ -83,7 +63,9 @@ window.addEventListener('DOMContentLoaded', () => {
     const item = document.createElement('div');
     item.className = 'notify-item';
     item.textContent = text;
+
     notifyMenu.prepend(item);
+
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
@@ -97,128 +79,115 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Full-screen red overlay for banned-country / critical notices
-  let banOverlay = null;
-  function ensureBanOverlay() {
-    if (banOverlay) return;
-    banOverlay = document.createElement('div');
-    banOverlay.id = 'banOverlay';
-    banOverlay.style.position = 'fixed';
-    banOverlay.style.left = '0';
-    banOverlay.style.top = '0';
-    banOverlay.style.width = '100%';
-    banOverlay.style.height = '100%';
-    banOverlay.style.zIndex = '9999';
-    banOverlay.style.display = 'none';
-    banOverlay.style.justifyContent = 'center';
-    banOverlay.style.alignItems = 'center';
-    banOverlay.style.backgroundColor = 'rgba(200,0,0,0.95)';
-    banOverlay.style.color = '#fff';
-    banOverlay.style.textAlign = 'center';
-    banOverlay.style.padding = '20px';
-    banOverlay.style.boxSizing = 'border-box';
-    banOverlay.innerHTML = `
-      <div style="max-width:900px;">
-        <h1 id="banHeader" style="color:#ffdddd;font-size:2.4rem;margin-bottom:0.5rem;">الموقع محظور في بلدك</h1>
-        <p id="banMsg" style="color:#ffeeee;font-size:1.2rem;margin-bottom:1.2rem;">لا يمكنك استخدام هذه الخدمة من موقعك الحالي.</p>
-        <button id="banExitBtn" style="font-size:1rem;padding:0.6rem 1rem;border-radius:6px;border:none;cursor:pointer;">العودة للرئيسية</button>
-      </div>
-    `;
-    document.body.appendChild(banOverlay);
-    document.getElementById('banExitBtn').onclick = () => { location.href = 'index.html'; };
+  // ---------------------- NOTIFICATION MENU ----------------------
+  notifyBell.onclick = (e) => {
+    e.stopPropagation();
+    if (notifyDot) notifyDot.style.display = 'none';
+    notifyBell.classList.remove('shake');
+
+    notifyMenu.style.display =
+      notifyMenu.style.display === 'block' ? 'none' : 'block';
+  };
+
+  document.onclick = () => { notifyMenu.style.display = 'none'; };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
+
+  // ---------------------- TYPING INDICATOR ----------------------
+  const typingIndicator = document.createElement('div');
+  typingIndicator.className = 'msg system';
+  typingIndicator.style.display = 'none';
+  typingIndicator.style.fontStyle = 'italic';
+  typingIndicator.textContent = 'Stranger is typing...';
+
+  chatMessages.appendChild(typingIndicator);
+
+  let typing = false;
+  let typingTimer = null;
+  const TYPING_PAUSE = 1500;
+
+  function sendTyping() {
+    if (!partnerId) return;
+
+    if (!typing) {
+      typing = true;
+      socket.emit('typing', { to: partnerId });
+    }
+
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+      typing = false;
+      socket.emit('stop-typing', { to: partnerId });
+    }, TYPING_PAUSE);
   }
 
-  function showBanOverlay(message) {
-    ensureBanOverlay();
-    const msgEl = document.getElementById('banMsg');
-    if (msgEl && message) msgEl.textContent = message;
-    banOverlay.style.display = 'flex';
+  chatInput.oninput = () => {
+    if (!chatInput.disabled) sendTyping();
+  };
+
+  // ---------------------- SEND CHAT ----------------------
+  function sendMessage() {
+    const msg = chatInput.value.trim();
+    if (!msg || !partnerId) return;
+
+    addMessage(msg, 'you');
+    socket.emit('chat-message', { to: partnerId, message: msg });
+
+    chatInput.value = '';
+    typing = false;
+    socket.emit('stop-typing', { to: partnerId });
   }
 
-  function hideBanOverlay() {
-    if (banOverlay) banOverlay.style.display = 'none';
-  }
+  sendBtn.onclick = sendMessage;
+  chatInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
 
+  // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
     micBtn.disabled = !localStream;
-    micBtn.style.opacity = localStream ? '1' : '0.6';
+    micBtn.style.opacity = localStream ? '1' : '0.8';
   }
 
-  function enableChat() {
-    chatInput.disabled = false;
-    sendBtn.disabled = false;
-  }
+  micBtn.onclick = () => {
+    if (!localStream) return alert('Microphone not ready yet.');
 
-  function disableChat() {
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
-  }
+    micEnabled = !micEnabled;
+    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+    updateMicButton();
+  };
+
+  // ---------------------- SPINNER BEHAVIOR (LOCAL HIDDEN) ----------------------
+  // Keep local spinner in DOM but hidden always per requirement.
+  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
 
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
+    // localSpinner remains hidden — do not change localSpinner here
     if (localVideo) localVideo.style.display = 'block';
   }
 
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
+    // localSpinner stays hidden
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
 
-  /* ============================
-     NETWORK / SIGNALING RESILIENCE
-     ============================ */
-
-  function enqueueSignal(item) {
-    // item: { to, data }
-    signalQueue.push({ ...item, tries: 0, lastTry: 0 });
-    processSignalQueue();
-  }
-
-  function processSignalQueue() {
-    if (!socket || !socket.connected) return;
-    const now = Date.now();
-    // iterate and send items that are allowed to try
-    for (let i = signalQueue.length - 1; i >= 0; i--) {
-      const it = signalQueue[i];
-      if (it.tries >= SIGNAL_MAX_RETRIES) {
-        // drop it to avoid infinite loop
-        signalQueue.splice(i, 1);
-        continue;
-      }
-      // exponential backoff between retries
-      const backoff = Math.min(1000 * Math.pow(2, it.tries), 10000);
-      if (now - (it.lastTry || 0) < backoff) continue;
-      try {
-        socket.emit('signal', { to: it.to, data: it.data });
-        it.tries++;
-        it.lastTry = now;
-        // remove completed if it's an ACK-based pattern is not available;
-        // we keep it to retry a few times in unreliable networks
-        if (it.tries >= SIGNAL_MAX_RETRIES) signalQueue.splice(i, 1);
-      } catch (e) {
-        // leave for retry
-      }
-    }
-  }
-
-  // process queued signals periodically
-  setInterval(processSignalQueue, 1200);
-
-  /* ============================
-     SCREENSHOT UTIL
-     ============================ */
-
+  // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
       try {
         const v = remoteVideo;
-        if (!v || !v.srcObject) return reject(new Error('Remote video not available'));
+        if (!v || !v.srcObject) {
+          return reject(new Error('Remote video not available'));
+        }
+
+        // Ensure we have dimensions
         const width = v.videoWidth || v.clientWidth || 640;
         const height = v.videoHeight || v.clientHeight || 480;
+
         if (width === 0 || height === 0) {
+          // try a small timeout to let video paint
           setTimeout(() => {
             const w2 = v.videoWidth || v.clientWidth || 640;
             const h2 = v.videoHeight || v.clientHeight || 480;
@@ -232,21 +201,21 @@ window.addEventListener('DOMContentLoaded', () => {
           }, 250);
           return;
         }
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(v, 0, 0, width, height);
         resolve(canvas.toDataURL('image/png'));
+
       } catch (err) {
         reject(err);
       }
     });
   }
 
-  /* ============================
-     REPORT BUTTON
-     ============================ */
+  // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = async () => {
@@ -254,186 +223,101 @@ window.addEventListener('DOMContentLoaded', () => {
         addMessage("No user to report.", "system");
         return;
       }
+
+      // Update local per-partner report count
       const prev = reportCounts.get(partnerId) || 0;
       const now = prev + 1;
       reportCounts.set(partnerId, now);
+
+      // add to local reported set to avoid rematch
       reportedIds.add(partnerId);
-      try { socket.emit("report", { partnerId }); } catch (e) {}
-      try { socket.emit("skip"); } catch (e) {}
-      if (now >= 1) { // keep threshold small for client-side example
+
+      // inform server and skip immediately
+      try { socket.emit("report", { partnerId }); } catch (e) { /* ignore */ }
+      try { socket.emit("skip"); } catch (e) { /* ignore */ }
+
+      // If this is the 3rd report by THIS client for this partner -> capture and emit screenshot
+      if (now === 1) {
         try {
           addMessage("Capturing screenshot for admin review...", "system");
           const image = await captureRemoteVideoFrame();
+          // send partnerId along with image
           socket.emit("admin-screenshot", { image, partnerId });
           addMessage("Screenshot sent to admin.", "system");
         } catch (err) {
+          console.error('Screenshot capture failed', err);
           addMessage("Failed to capture screenshot (no remote frame available).", "system");
         }
       }
-      closeAndCleanup();
+
+      // Close and cleanup current connection
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+
+      partnerId = null;
+      disableChat();
+
+      // update single status element (no duplicate chat messages)
       statusText.textContent = 'You reported the user — skipping...';
+
+      // restart search after a tiny delay to let server process report
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
-      searchAttempt = 0;
       searchTimer = setTimeout(startSearchLoop, 300);
     };
   }
 
-  /* ============================
-     CLEANUP / BAN HANDLING
-     ============================ */
-
-  function disableAllScreens() {
-    // Hide videos and UI, stop media
-    if (localVideo) localVideo.style.display = 'none';
-    if (remoteVideo) remoteVideo.style.display = 'none';
-    if (localSpinner) localSpinner.style.display = 'none';
-    if (remoteSpinner) remoteSpinner.style.display = 'none';
-    disableChat();
-    skipBtn.disabled = true;
-    reportBtn && (reportBtn.disabled = true);
-    micBtn && (micBtn.disabled = true);
+  // ---------------------- UI ----------------------
+  function enableChat() {
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
   }
 
-  function closeAndCleanup() {
-    // stop media and close connection
-    try {
-      if (localStream) {
-        localStream.getTracks().forEach(t => {
-          try { t.stop(); } catch (e) {}
-        });
-      }
-    } catch (e) {}
-    localStream = null;
-
-    if (peerConnection) {
-      try { peerConnection.close(); } catch (e) {}
-      peerConnection = null;
-    }
-    partnerId = null;
-    candidateQueue = [];
-    signalQueue = [];
-    disableAllScreens();
+  function disableChat() {
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
   }
 
-  socket.on('banned-country', ({ message }) => {
-    addMessage(message || 'Blocked by country policy.', 'system');
-    showBanOverlay(message || 'الموقع محظور في بلدك.');
-    closeAndCleanup();
-    statusText.textContent = 'Blocked.';
-  });
-
-  // legacy 'banned' event handling from existing server code
-  socket.on('banned', ({ message }) => {
-    addMessage(message || 'You are banned.', 'system');
-    showBanOverlay(message || 'الموقع محظور في بلدك.');
-    closeAndCleanup();
-    statusText.textContent = 'Blocked.';
-  });
-
-  /* ============================
-     TYPING INDICATOR & CHAT
-     ============================ */
-
-  const typingIndicator = document.createElement('div');
-  typingIndicator.className = 'msg system';
-  typingIndicator.style.display = 'none';
-  typingIndicator.style.fontStyle = 'italic';
-  typingIndicator.textContent = 'Stranger is typing...';
-  chatMessages.appendChild(typingIndicator);
-
-  let typing = false;
-  let typingTimer = null;
-  const TYPING_PAUSE = 1500;
-
-  function sendTyping() {
-    if (!partnerId) return;
-    if (!typing) {
-      typing = true;
-      try { socket.emit('typing', { to: partnerId }); } catch (e) {}
-    }
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => {
-      typing = false;
-      try { socket.emit('stop-typing', { to: partnerId }); } catch (e) {}
-    }, TYPING_PAUSE);
-  }
-
-  chatInput.oninput = () => {
-    if (!chatInput.disabled) sendTyping();
-  };
-
-  function sendMessage() {
-    const msg = chatInput.value.trim();
-    if (!msg || !partnerId) return;
-    addMessage(msg, 'you');
-    try { socket.emit('chat-message', { to: partnerId, message: msg }); } catch (e) {}
-    chatInput.value = '';
-    typing = false;
-    try { socket.emit('stop-typing', { to: partnerId }); } catch (e) {}
-  }
-
-  sendBtn.onclick = sendMessage;
-  chatInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
-
-  /* ============================
-     MIC CONTROL
-     ============================ */
-
-  micBtn.onclick = () => {
-    if (!localStream) return alert('Microphone not ready yet.');
-    micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-    updateMicButton();
-  };
-
-  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
-
-  /* ============================
-     MATCHMAKING / SEARCH LOOP (adaptive)
-     ============================ */
-
-  function computeSearchDelay(attempt) {
-    // exponential backoff with jitter
-    const base = Math.min(SEARCH_BASE * Math.pow(1.8, attempt), SEARCH_MAX);
-    const jitter = Math.floor(Math.random() * Math.min(800, base * 0.25));
-    return base + jitter;
-  }
-
+  // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (partnerId) return;
+
+    // show loading indicator while searching
     showRemoteSpinnerOnly(true);
     statusText.textContent = 'Searching...';
 
-    try { socket.emit('find-partner'); } catch (e) {}
+    socket.emit('find-partner');
 
+    // if not paired within timeout -> go to pause (and hide spinner)
     clearTimeout(searchTimer);
-    const timeout = 6000 + Math.min(4000 * searchAttempt, 12000); // wait longer for pairing under slow networks
     searchTimer = setTimeout(() => {
       if (!partnerId) {
         try { socket.emit('stop'); } catch (e) {}
+        // stop the remote loading spinner on pause per requirement
         showRemoteSpinnerOnly(false);
         statusText.textContent = 'Pausing...';
-        // schedule next search with backoff
-        searchAttempt = Math.min(searchAttempt + 1, 8);
+
+        // schedule next search attempt
         clearTimeout(pauseTimer);
-        pauseTimer = setTimeout(() => {
-          startSearchLoop();
-        }, computeSearchDelay(searchAttempt));
+        pauseTimer = setTimeout(startSearchLoop, 1800);
       }
-    }, timeout);
+    }, 3500);
   }
 
   async function startSearch() {
-    const ok = await initMedia();
-    if (!ok) return;
+    if (!(await initMedia())) return;
+
     partnerId = null;
     isInitiator = false;
+
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
+
     showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
-    searchAttempt = 0;
+
     startSearchLoop();
   }
 
@@ -441,70 +325,69 @@ window.addEventListener('DOMContentLoaded', () => {
     try { socket.emit('skip'); } catch (e) {}
     statusText.textContent = 'You skipped.';
     disableChat();
+
     if (peerConnection) {
-      try { peerConnection.close(); } catch (e) {}
+      peerConnection.close();
       peerConnection = null;
     }
     partnerId = null;
+
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
     startSearchLoop();
   };
 
-  /* ============================
-     SOCKET EVENTS
-     ============================ */
-
-  socket.on('connect', () => {
-    addMessage('Connected to signalling server.', 'system');
-    statusText.textContent = 'Online';
-    // try to flush any pending signals
-    processSignalQueue();
-  });
-
-  socket.on('disconnect', (reason) => {
-    addMessage('Disconnected from server.', 'system');
-    statusText.textContent = 'Offline';
-  });
-
-  socket.on('connect_error', (err) => {
-    addMessage('Connection error to signalling server.', 'system');
-    statusText.textContent = 'Connection error';
-  });
-
+  // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => { statusText.textContent = msg; });
 
-  socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
+  socket.on('chat-message', ({ message }) => {
+    addMessage(message, 'them');
+  });
 
-  socket.on('typing', () => { typingIndicator.style.display = 'block'; chatMessages.scrollTop = chatMessages.scrollHeight; });
+  socket.on('typing', () => {
+    typingIndicator.style.display = 'block';
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
 
-  socket.on('stop-typing', () => { typingIndicator.style.display = 'none'; });
+  socket.on('stop-typing', () => {
+    typingIndicator.style.display = 'none';
+  });
 
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
+
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
+  });
+
+  socket.on('banned', ({ message }) => {
+    addMessage(message || 'You are banned.', 'system');
+    showRemoteSpinnerOnly(true);
+    statusText.textContent = 'Blocked.';
   });
 
   socket.on('partner-disconnected', () => {
     statusText.textContent = 'Partner disconnected.';
     disableChat();
+
     partnerId = null;
     if (peerConnection) {
-      try { peerConnection.close(); } catch (e) {}
+      peerConnection.close();
       peerConnection = null;
     }
+
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
-    searchAttempt = 0;
     startSearchLoop();
   });
 
   socket.on('partner-found', async data => {
     const foundId = data.id || data.partnerId;
     if (foundId && reportedIds.has(foundId)) {
-      try { socket.emit('skip'); } catch (e) {}
+      try {
+        socket.emit('skip');
+      } catch (e) {}
       statusText.textContent = 'Found reported user — skipping...';
       partnerId = null;
       clearTimeout(searchTimer);
@@ -512,105 +395,84 @@ window.addEventListener('DOMContentLoaded', () => {
       setTimeout(startSearchLoop, 200);
       return;
     }
+
     partnerId = foundId;
     isInitiator = !!data.initiator;
+
     hideAllSpinners();
     statusText.textContent = 'Connecting...';
+
     createPeerConnection();
+
     if (isInitiator) {
       try {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        enqueueSignal({ to: partnerId, data: offer });
+        socket.emit('signal', { to: partnerId, data: offer });
       } catch (e) {
         console.error('Offer failed', e);
-        addMessage('Failed to create offer. Retrying...', 'system');
       }
     }
   });
 
   socket.on('signal', async ({ from, data }) => {
     if (!peerConnection) createPeerConnection();
+
     try {
       if (data.type === 'offer') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-        // drain any queued candidates
-        while (candidateQueue.length) {
-          const c = candidateQueue.shift();
-          try { await peerConnection.addIceCandidate(c); } catch (err) { console.warn('Late candidate rejected', err); }
-        }
+        await peerConnection.setRemoteDescription(data);
+
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        enqueueSignal({ to: from, data: answer });
+
+        socket.emit('signal', { to: from, data: answer });
+
       } else if (data.type === 'answer') {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-        // drain queued candidates
-        while (candidateQueue.length) {
-          const c = candidateQueue.shift();
-          try { await peerConnection.addIceCandidate(c); } catch (err) { console.warn('Late candidate rejected', err); }
-        }
+        await peerConnection.setRemoteDescription(data);
+
       } else if (data.candidate) {
-        const cand = new RTCIceCandidate(data.candidate);
-        // if remoteDescription not set yet, queue candidate
-        if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
-          candidateQueue.push(cand);
-        } else {
-          await peerConnection.addIceCandidate(cand);
-        }
+        await peerConnection.addIceCandidate(data.candidate);
       }
     } catch (e) {
       console.error('Signal handling error', e);
     }
   });
 
-  /* ============================
-     WEBRTC CORE (robust)
-     ============================ */
-
+  // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     peerConnection = new RTCPeerConnection(servers);
 
-    // Add local tracks if available
     if (localStream) {
-      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      localStream.getTracks().forEach(t =>
+        peerConnection.addTrack(t, localStream)
+      );
     }
 
-    // remote track
     peerConnection.ontrack = e => {
-      try {
-        remoteVideo.srcObject = e.streams[0];
-      } catch (err) {}
+      remoteVideo.srcObject = e.streams[0];
       enableChat();
       addMessage('Connected with a stranger!', 'system');
       showRemoteSpinnerOnly(false);
     };
 
-    // ICE candidate produced locally
     peerConnection.onicecandidate = e => {
       if (e.candidate) {
-        // send candidate via reliable queue
-        enqueueSignal({ to: partnerId, data: { candidate: e.candidate } });
+        try {
+          socket.emit('signal', {
+            to: partnerId,
+            data: { candidate: e.candidate }
+          });
+        } catch (err) { /* ignore */ }
       }
     };
 
-    peerConnection.onconnectionstatechange = async () => {
+    peerConnection.onconnectionstatechange = () => {
       const s = peerConnection.connectionState;
+
       if (['disconnected', 'failed', 'closed'].includes(s)) {
         disableChat();
         statusText.textContent = 'Connection lost.';
-        // attempt iceRestart on failure
-        if (s === 'failed' && autoReconnect && partnerId) {
-          try {
-            addMessage('Attempting ICE restart...', 'system');
-            const offer = await peerConnection.createOffer({ iceRestart: true });
-            await peerConnection.setLocalDescription(offer);
-            enqueueSignal({ to: partnerId, data: offer });
-            // give some time to recover; if still failing, cleanup occurs by onconnectionstatechange closure
-            return;
-          } catch (err) {
-            console.warn('ICE restart failed', err);
-          }
-        }
+
         partnerId = null;
         if (peerConnection) {
           try { peerConnection.close(); } catch (e) {}
@@ -619,36 +481,30 @@ window.addEventListener('DOMContentLoaded', () => {
         if (autoReconnect) {
           clearTimeout(searchTimer);
           clearTimeout(pauseTimer);
-          searchAttempt = 0;
           startSearchLoop();
         }
       }
     };
-
-    // keepalive datachannel optional (makes browsers keep connection more stable)
-    try {
-      const dc = peerConnection.createDataChannel('keepalive');
-      dc.onopen = () => {};
-      dc.onmessage = () => {};
-    } catch (e) {}
-
-    // catch unexpected errors
-    peerConnection.onerror = (err) => {
-      console.warn('PeerConnection error', err);
-    };
   }
 
-  /* ============================
-     MEDIA INIT
-     ============================ */
+  // ---------------------- EXIT ----------------------
+  exitBtn.onclick = () => { location.href = 'index.html'; };
 
+  // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (localStream) return true;
+
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
       localVideo.srcObject = localStream;
       updateMicButton();
+      // localSpinner remains hidden by design
       return true;
+
     } catch (e) {
       console.error(e);
       statusText.textContent = 'Camera/Mic denied.';
@@ -658,10 +514,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* ============================
-     AUTO-START + Unload handling
-     ============================ */
-
+  // ---------------------- AUTO START ----------------------
   ensureNotifyEmpty();
   updateMicButton();
   startSearch();
@@ -671,31 +524,15 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localStream) localStream.getTracks().forEach(t => t.stop());
   };
 
-  /* ============================
-     NETWORK AWARENESS
-     ============================ */
-
-  window.addEventListener('online', () => {
-    addMessage('Network online. Trying to reconnect...', 'system');
-    statusText.textContent = 'Online';
-    // flush signals & try search again if idle
-    processSignalQueue();
-    if (!partnerId) {
-      searchAttempt = 0;
-      clearTimeout(searchTimer);
-      clearTimeout(pauseTimer);
-      startSearchLoop();
-    }
-  });
-
-  window.addEventListener('offline', () => {
-    addMessage('Network offline. Waiting...', 'system');
-    statusText.textContent = 'Offline';
-  });
-
-  // periodic flush for queued signals
-  setInterval(() => {
-    if (socket && socket.connected) processSignalQueue();
-  }, 2000);
-
 });
+ 
+    bannedCountries = new Set(Array.isArray(arr) ? arr : []);
+  } catch (e) { bannedCountries = new Set(); }
+}
+function saveBannedCountries() {
+  try {
+    fs.writeFileSync(BANNED_COUNTRIES_FILE, JSON.stringify(Array.from(bannedCountries), null, 2));
+  } catch (e) { /* ignore */ }
+}
+loadBannedCountries();
+
