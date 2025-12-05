@@ -11,7 +11,394 @@
   --dark:#111;
   --light:#ffffff;
   --border:#e6d7c8;
+  --gap:10px;<!DOCTYPE html> 
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>SparkChat</title>
+
+<style>
+:root{
+  --blue:#2ea3ff;
+  --dark:#111;
+  --light:#ffffff;
+  --border:#e6d7c8;
   --gap:10px;
+  --radius:12px;
+
+  --bg:#ffffff;
+  --text:#000;
+
+  --msgYou:#cceaff;
+  --msgStranger:#ffd8b0;
+  --msgSystem:#e8e8e8;
+}
+
+.dark{
+  --bg:#0f1115;
+  --text:#ffffff !important;
+  --msgYou:#1c2733;
+  --msgStranger:#332519;
+  --msgSystem:#222;
+  --border:#444;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html, body{
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* ===================== */
+/*  TOP BAR FIXED        */
+/* ===================== */
+.topbar{
+  height:60px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 12px;
+  border-bottom:1px solid #ddd;
+  background:var(--bg);
+  position:sticky;
+  top:0;
+  z-index:9999;
+}
+
+.logo{
+  font-size:32px;
+  font-weight:bold;
+  display:flex;
+  gap:3px;
+  user-select:none;
+}
+.logo span:nth-child(-n+5){color:#2ea3ff!important;}
+.logo span:nth-child(n+6){color:#ff9a00;}
+.logo span{transition:0.4s;}
+.flip{animation:spinLetter 0.5s ease forwards;}
+@keyframes spinLetter{
+  0%{transform:rotate(0deg) scale(1);}
+  50%{transform:rotate(180deg) scale(1.2);}
+  100%{transform:rotate(360deg) scale(1);}
+}
+
+#exitBtn{
+  display:block;
+  background:red;
+  color:#fff;
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+#darkToggle{
+  background:#444;
+  color:#fff;
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-right:10px;
+}
+
+/* ===================== */
+/*  LAYOUT                */
+/* ===================== */
+.stage{
+  position:absolute;
+  top:60px;
+  bottom:0;
+  left:0;
+  right:0;
+  display:flex;
+  gap:var(--gap);
+  padding:12px;
+  overflow:hidden;
+}
+
+.left-col{
+  width:520px;
+  min-width:320px;
+  display:flex;
+  flex-direction:column;
+  gap:var(--gap);
+}
+
+.video-frame{
+  position:relative;
+  border-radius:var(--radius);
+  border:6px solid var(--border);
+  overflow:hidden;
+  background:#000;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.video-frame.top,
+.video-frame.bottom{
+  height:330px;
+}
+
+video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.video-label{
+  position:absolute;
+  top:8px;
+  left:8px;
+  background:#fff;
+  padding:4px 10px;
+  border-radius:6px;
+  font-size:13px;
+}
+
+.watermark{
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  font-size:14px;
+  color:#ffffffaa;
+  font-weight:bold;
+}
+
+#micBtn{
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:var(--blue);
+  color:#fff;
+  padding:8px;
+  border-radius:50%;
+  cursor:pointer;
+  border:none;
+  width:40px;
+  height:40px;
+}
+
+#reportBtn{
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:6px 10px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+}
+
+/* ===================== */
+/* CHAT AREA             */
+/* ===================== */
+.right-col{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  border:6px solid var(--border);
+  border-radius:10px;
+  background:var(--bg);
+  min-width:260px;
+}
+
+.chat-area{
+  flex:1;
+  padding:12px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  scroll-behavior:smooth;
+}
+
+.msg{
+  padding:10px 14px;
+  max-width:75%;
+  border-radius:10px;
+  font-size:14px;
+}
+
+.msg.system{background:var(--msgSystem);align-self:center;}
+.msg.you{background:var(--msgYou);align-self:flex-end;}
+.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
+
+.chat-input-row{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px;
+  background:#fafafa;
+  border-top:1px solid #ddd;
+}
+
+.input-container{
+  display:flex;
+  gap:8px;
+}
+
+#skipBtn{
+  background:#1f8cff;
+  color:#fff;
+  padding:12px 22px;
+  font-size:16px;
+  font-weight:bold;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+}
+
+#sendBtn{
+  width:42px;
+  height:42px;
+  background:var(--blue);
+  color:#fff;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+}
+
+#chatInput{
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+}
+
+/* ===================== */
+/* MOBILE FIXES          */
+/* ===================== */
+
+@media (max-width: 1024px){
+  .stage{
+    flex-direction:column;
+    overflow:auto;
+  }
+  .left-col{
+    width:100%;
+    min-width:unset;
+  }
+}
+
+@media (max-width: 768px){
+  .logo{font-size:26px;}
+  .stage{padding:6px;}
+
+  .video-frame.top,
+  .video-frame.bottom{
+    height:220px;
+  }
+}
+
+@media (max-width: 480px){
+
+  .logo{font-size:22px;}
+
+  .video-frame.top,
+  .video-frame.bottom{
+    height:180px;
+  }
+  
+  #skipBtn{
+    padding:10px 16px;
+    font-size:14px;
+  }
+  
+  #chatInput{
+    font-size:14px;
+  }
+  
+  #sendBtn{
+    width:38px;
+    height:38px;
+  }
+  
+  .chat-area{padding:8px;}
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div class="logo" id="logo">
+    <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
+    <span>C</span><span>h</span><span>a</span><span>t</span>
+  </div>
+
+  <div style="display:flex;gap:14px;align-items:center;">
+    <button id="darkToggle">🌙</button>
+    <button id="exitBtn">Exit</button>
+  </div>
+</div>
+
+<div class="stage">
+
+  <div class="left-col">
+    <div class="video-frame top">
+      <button id="reportBtn">🚨 BORN18+</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">Stranger</div>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div class="video-frame bottom">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
+      <video id="localVideo" autoplay muted playsinline></video>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div id="chatMessages" class="chat-area">
+      <div class="msg system">Connecting...</div>
+    </div>
+
+    <div class="chat-input-row">
+      <div id="status">Loading...</div>
+      <div class="input-container">
+        <button id="skipBtn">Skip</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="sendBtn" disabled>➤</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
+<script>
+// Dark mode toggle
+document.getElementById("darkToggle").onclick = () => {
+  document.body.classList.toggle("dark");
+  document.getElementById("darkToggle").innerText =
+    document.body.classList.contains("dark") ? "☀️" : "🌙";
+};
+
+// Logo Animation
+const logoLetters = document.querySelectorAll("#logo span");
+function flipRandomLetter(){
+  const randomIndex = Math.floor(Math.random() * logoLetters.length);
+  logoLetters[randomIndex].classList.add("flip");
+  setTimeout(()=>{ logoLetters[randomIndex].classList.remove("flip"); }, 500);
+}
+setInterval(flipRandomLetter, 2500);
+</script>
+
+</body>
+</html>
+
   --radius:12px;
 
   --bg:#ffffff;
