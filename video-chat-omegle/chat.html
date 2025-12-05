@@ -33,10 +33,6 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
-/* ----------- Desktop: Hide scrollbar ----------- */
-.chat-area::-webkit-scrollbar{width:0;}
-.chat-area{scrollbar-width:none;}
-
 .topbar{
   height:60px;display:flex;justify-content:space-between;align-items:center;
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
@@ -50,7 +46,7 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   cursor:pointer;margin-right:10px;
 }
 
-/* Notification */
+/* 🔔 Notification Icon */
 .notify-box{
   position:relative;margin-right:12px;cursor:pointer;
 }
@@ -91,24 +87,34 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 .watermark{position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;z-index:6;}
 
 .spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;border:6px solid #fff;
-  border-top-color:transparent;animation:spin 1s linear infinite;z-index:20;
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;animation:spin 1s linear infinite;z-index:20;
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic and Report */
+/* 🎤 Microphone */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;
   border:none;z-index:10;min-width:48px;min-height:48px;
 }
 
+/* 🚨 Report Button — NEW POSITION & SIZE */
 #reportBtn{
-  position:absolute;top:10px;right:10px;background:red;color:#fff;
-  padding:10px;font-size:16px;border-radius:10px;cursor:pointer;border:none;z-index:10;
+  position:absolute;
+  bottom:10px;   /* ⬇ بدلاً من الأعلى */
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:6px 10px; /* أصغر */
+  font-size:12px;   /* أصغر */
+  border-radius:8px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
 }
 
-/* Chat */
+/* RIGHT COLUMN CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
@@ -138,26 +144,13 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 .input-container{display:flex;gap:8px;}
 #chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
 #sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;}
-#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;z-index:9999;}
+#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
 
-/* ---------------- MOBILE ONLY ---------------- */
+
+/* ----------------------- */
+/* 📱📱 MOBILE DESIGN ONLY */
+/* ----------------------- */
 @media (max-width: 768px){
-
-  /* إظهار زر الإخفاء في الجوال فقط */
-  #toggleMessagesBtn{
-    width:50px;height:50px;
-    border-radius:50%;
-    border:none;
-    background:var(--blue);
-    color:#fff;
-    font-size:20px;
-    align-self:center;
-    margin:10px 0;
-    cursor:pointer;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-  }
 
   .stage{
     flex-direction:column;
@@ -177,20 +170,44 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     border-width:4px;
   }
 
-  /* Hide chat area on toggle */
-  .messages-hidden .right-col{display:none;}
-  .messages-hidden .chat-input-row{display:none !important;}
+  /* زر إظهار/إخفاء الرسائل */
+  #toggleMessagesBtn{
+    width:50px;height:50px;
+    border-radius:50%;
+    border:none;
+    background:var(--blue);
+    color:#fff;
+    font-size:20px;
+    align-self:center;
+    margin:10px 0;
+    cursor:pointer;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+  }
 
-  /* Show skip button in hidden mode */
+  .messages-hidden .right-col{
+    display:none;
+  }
+
+  .messages-hidden .video-frame.top,
+  .messages-hidden .video-frame.bottom{
+    height:240px;
+  }
+
+  .messages-hidden .chat-input-row{
+    display:none !important;
+  }
+
   .messages-hidden #skipBtn{
-    position:fixed !important;
+    position:fixed;
     bottom:20px;
     left:50%;
     transform:translateX(-50%);
-    z-index:99999;
-    width:150px;
-    height:55px;
-    font-size:20px;
+    z-index:9999;
+    width:140px;
+    height:50px;
+    font-size:18px;
     display:block !important;
   }
 
@@ -203,11 +220,12 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   }
 }
 
-/* إخفاء زر الإخفاء من الكمبيوتر */
+/* 🔥 إخفاء زر الإخفاء من الكمبيوتر */
 @media (min-width: 769px){
-  #toggleMessagesBtn{ display:none !important; }
+  #toggleMessagesBtn{
+    display:none !important;
+  }
 }
-
 </style>
 </head>
 
@@ -235,7 +253,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   <div class="left-col">
 
     <div class="video-frame top">
-      <button id="reportBtn">🚨 Report</button>
+      <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
       <div id="remoteSpinner" class="spinner"></div>
@@ -252,7 +270,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
   </div>
 
-  <!-- يظهر فقط في الجوال -->
   <button id="toggleMessagesBtn">▼</button>
 
   <div class="right-col">
@@ -274,6 +291,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 </div>
 
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
@@ -284,17 +302,15 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle chat on mobile */
+/* زر إظهار/إخفاء الرسائل */
 const toggleBtn = document.getElementById("toggleMessagesBtn");
-if(toggleBtn){
-  toggleBtn.addEventListener("click", ()=>{
-    document.body.classList.toggle("messages-hidden");
-    toggleBtn.innerText =
-      document.body.classList.contains("messages-hidden") ? "▲" : "▼";
-  });
-}
+toggleBtn.addEventListener("click", ()=>{
+  document.body.classList.toggle("messages-hidden");
+  toggleBtn.innerText =
+    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
+});
 
-/* Typing indicator */
+/* مؤشر الكتابة */
 const typingIndicator = document.getElementById("typingIndicator");
 let typingTimeout;
 
