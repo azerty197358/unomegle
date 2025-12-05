@@ -1,4 +1,4 @@
-<!DOCTYPE html> اجعل زر التخطي مظهره مثل اوميجل  
+<!DOCTYPE html> 
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
@@ -39,8 +39,35 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   height:60px;display:flex;justify-content:space-between;align-items:center;
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
-.logo{font-size:24px;font-weight:bold;color:#ff9a00;}
-.logo span{color:#3fa0ff;}
+
+/* ⭐ تكبير الشعار + جعله سبانات */
+.logo{
+  font-size:32px;
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:2px;
+  user-select:none;
+}
+.logo span{
+  display:inline-block;
+  transition:0.3s;
+}
+.logo span:nth-child(6){
+  color:#3fa0ff; /* بداية كلمة Chat */
+}
+
+/* ⭐ حركة الشقلبة */
+.flip {
+  animation: flipAnim 0.6s ease forwards;
+}
+
+@keyframes flipAnim{
+  0% { transform: rotateY(0deg) scale(1); }
+  50% { transform: rotateY(180deg) scale(1.3); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
+
 #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
 
 #darkToggle{
@@ -245,7 +272,12 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 <body>
 
 <div class="topbar">
-  <div class="logo">Spark<span>Chat</span></div>
+
+  <!-- ⭐ شعار جديد بحروف منفصلة -->
+  <div class="logo" id="logo">
+    <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
+    <span>C</span><span>h</span><span>a</span><span>t</span>
+  </div>
 
   <div style="display:flex;gap:14px;align-items:center;">
     <div class="notify-box">
@@ -330,6 +362,21 @@ document.getElementById("reportBtn").onclick = () => {
     alert("تم إرسال البلاغ بنجاح.");
   }
 };
+
+/* ⭐ شقلبة حرف من الشعار كل 3 ثواني */
+const logoLetters = document.querySelectorAll("#logo span");
+
+function flipRandomLetter(){
+  const randomIndex = Math.floor(Math.random() * logoLetters.length);
+  const letter = logoLetters[randomIndex];
+  letter.classList.add("flip");
+
+  setTimeout(()=>{
+    letter.classList.remove("flip");
+  }, 600); // مدة الأنيميشن
+}
+
+setInterval(flipRandomLetter, 3000);
 </script>
 
 </body>
