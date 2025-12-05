@@ -34,11 +34,22 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html, body{
   height:100%;
-  overflow:hidden;
+  overflow:hidden; /* لا يوجد أي تمرير */
   font-family:Arial, sans-serif;
   background:var(--bg);
   color:var(--text)
 }
+
+/* ===== AUTO SCALE WRAPPER ===== */
+
+#autoScaleContainer {
+  transform-origin: top left;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  overflow: hidden;
+}
+
 
 /* ===================== */
 /*  TOP BAR - FIXED      */
@@ -81,6 +92,8 @@ html, body{
   display:inline-block;
   transition:0.4s;
 }
+
+/* Animation */
 .flip{
   animation:spinLetter 0.5s ease forwards;
 }
@@ -98,7 +111,7 @@ html, body{
   border-radius:8px;
   font-weight:bold;
   cursor:pointer;
-  display:block; /* ← نجعله ظاهر دائماً */
+  display:block;
 }
 
 #darkToggle{
@@ -322,11 +335,12 @@ video{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;color:#000;
 }
 
-/* لا يوجد أي MEDIA QUERY */
 </style>
 </head>
 
 <body>
+
+<div id="autoScaleContainer">
 
 <div class="topbar">
   <div class="logo" id="logo">
@@ -389,6 +403,8 @@ video{
 
 </div>
 
+</div> <!-- AUTO SCALE END -->
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
@@ -410,6 +426,27 @@ function flipRandomLetter(){
 }
 
 setInterval(flipRandomLetter, 2500);
+
+
+
+/* ======== AUTO SCALE SCRIPT ======== */
+
+function autoScaleDesktopView() {
+  const baseWidth = 900;  // العرض الأصلي للتصميم
+  const baseHeight = 720; // الارتفاع الأصلي للتصميم
+
+  const scaleX = window.innerWidth / baseWidth;
+  const scaleY = window.innerHeight / baseHeight;
+
+  const finalScale = Math.min(scaleX, scaleY);
+
+  document.getElementById("autoScaleContainer").style.transform =
+    `scale(${finalScale})`;
+}
+
+window.addEventListener("resize", autoScaleDesktopView);
+autoScaleDesktopView();
+
 </script>
 
 </body>
