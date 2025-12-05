@@ -1,28 +1,13 @@
-<!DOCTYPE html> 
-<html lang="en" dir="ltr">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8" />
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SparkChat</title>
 
 <style>
 :root{
   --blue:#2ea3ff;
-  --dark:#111;
-  --light:#ffffff;
-  --border:#e6d7c8;
-  --gap:10px;<!DOCTYPE html> 
-<html lang="en" dir="ltr">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>SparkChat</title>
-
-<style>
-:root{
-  --blue:#2ea3ff;
-  --dark:#111;
-  --light:#ffffff;
   --border:#e6d7c8;
   --gap:10px;
   --radius:12px;
@@ -33,31 +18,32 @@
   --msgYou:#cceaff;
   --msgStranger:#ffd8b0;
   --msgSystem:#e8e8e8;
+  --topbar-height:60px;
 }
 
 .dark{
   --bg:#0f1115;
-  --text:#ffffff !important;
+  --text:#ffffff;
   --msgYou:#1c2733;
   --msgStranger:#332519;
   --msgSystem:#222;
   --border:#444;
 }
 
-*{margin:0;padding:0;box-sizing:border-box;}
-html, body{
+/* Reset */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{
   height:100%;
-  overflow:hidden;
-  font-family:Arial, sans-serif;
+  min-height:100%;
+  font-family: Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
+  overflow:auto; /* مهم: السماح بالتمرير */
 }
 
-/* ===================== */
-/*  TOP BAR FIXED        */
-/* ===================== */
+/* TOPBAR */
 .topbar{
-  height:60px;
+  height:var(--topbar-height);
   display:flex;
   justify-content:space-between;
   align-items:center;
@@ -69,67 +55,49 @@ html, body{
   z-index:9999;
 }
 
+/* Logo */
 .logo{
-  font-size:32px;
-  font-weight:bold;
+  font-size:24px;
+  font-weight:700;
   display:flex;
-  gap:3px;
-  user-select:none;
+  gap:4px;
+  align-items:center;
 }
-.logo span:nth-child(-n+5){color:#2ea3ff!important;}
+.logo span:nth-child(-n+5){color:#2ea3ff;}
 .logo span:nth-child(n+6){color:#ff9a00;}
-.logo span{transition:0.4s;}
-.flip{animation:spinLetter 0.5s ease forwards;}
+.logo span{display:inline-block;transition:0.35s;}
+.flip{animation:spinLetter .5s ease forwards;}
 @keyframes spinLetter{
-  0%{transform:rotate(0deg) scale(1);}
-  50%{transform:rotate(180deg) scale(1.2);}
-  100%{transform:rotate(360deg) scale(1);}
+  0%{transform:rotate(0) scale(1)}
+  50%{transform:rotate(180deg) scale(1.15)}
+  100%{transform:rotate(360deg) scale(1)}
 }
 
-#exitBtn{
-  display:block;
-  background:red;
-  color:#fff;
-  padding:8px 12px;
-  border:none;
-  border-radius:8px;
-  font-weight:bold;
-  cursor:pointer;
-}
+/* Buttons in topbar */
+.topbar-controls{display:flex;gap:10px;align-items:center;}
+#darkToggle,#exitBtn{border:0;padding:8px 10px;border-radius:8px;cursor:pointer;background:#444;color:#fff}
+#exitBtn{background:#e03b3b}
 
-#darkToggle{
-  background:#444;
-  color:#fff;
-  border:none;
-  padding:8px 12px;
-  border-radius:8px;
-  cursor:pointer;
-  margin-right:10px;
-}
-
-/* ===================== */
-/*  LAYOUT                */
-/* ===================== */
+/* STAGE: use calc to keep below topbar and allow overall page scroll */
 .stage{
-  position:absolute;
-  top:60px;
-  bottom:0;
-  left:0;
-  right:0;
+  height:calc(100vh - var(--topbar-height));
   display:flex;
   gap:var(--gap);
   padding:12px;
-  overflow:hidden;
+  align-items:flex-start;
+  overflow:auto; /* يسمح بالتمرير إذا طغت المحتويات */
 }
 
+/* Left column - الفيديو */
 .left-col{
-  width:520px;
-  min-width:320px;
+  flex:0 0 520px; /* basis 520, لكن قابل للانكماش */
+  min-width:300px;
   display:flex;
   flex-direction:column;
   gap:var(--gap);
 }
 
+/* Video frames */
 .video-frame{
   position:relative;
   border-radius:var(--radius);
@@ -137,79 +105,55 @@ html, body{
   overflow:hidden;
   background:#000;
   display:flex;
-  justify-content:center;
   align-items:center;
+  justify-content:center;
+  min-height:160px;
 }
 
-.video-frame.top,
-.video-frame.bottom{
-  height:330px;
-}
+/* اضبط ارتفاعات قابلة للتغيير */
+.video-frame.top{height:330px}
+.video-frame.bottom{height:240px}
 
 video{
   width:100%;
   height:100%;
   object-fit:cover;
+  display:block;
 }
 
-.video-label{
-  position:absolute;
-  top:8px;
-  left:8px;
-  background:#fff;
-  padding:4px 10px;
-  border-radius:6px;
-  font-size:13px;
-}
+/* Labels & controls */
+.video-label{position:absolute;top:8px;left:8px;background:#ffffffcc;padding:6px 10px;border-radius:6px;font-size:13px;z-index:5}
+.watermark{position:absolute;bottom:10px;left:10px;font-size:13px;color:#fff8;z-index:5}
 
-.watermark{
-  position:absolute;
-  bottom:10px;
-  left:10px;
-  font-size:14px;
-  color:#ffffffaa;
-  font-weight:bold;
-}
-
-#micBtn{
+/* Floating small buttons */
+#micBtn, #reportBtn{
   position:absolute;
   bottom:10px;
   right:10px;
-  background:var(--blue);
-  color:#fff;
-  padding:8px;
-  border-radius:50%;
+  z-index:10;
+  border:0;
   cursor:pointer;
-  border:none;
-  width:40px;
-  height:40px;
-}
-
-#reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:6px 10px;
   border-radius:8px;
-  border:none;
-  cursor:pointer;
+  padding:8px 10px;
+  color:#fff;
 }
+#micBtn{background:var(--blue);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+#reportBtn{background:#e03b3b;padding:6px 8px;font-size:12px}
 
-/* ===================== */
-/* CHAT AREA             */
-/* ===================== */
+/* Right column - chat */
 .right-col{
   flex:1;
+  min-width:220px;
   display:flex;
   flex-direction:column;
   border:6px solid var(--border);
   border-radius:10px;
   background:var(--bg);
-  min-width:260px;
+  max-height:100%;
+  overflow:hidden;
 }
 
+/* Chat area scrolls internally */
 .chat-area{
   flex:1;
   padding:12px;
@@ -218,148 +162,90 @@ video{
   flex-direction:column;
   gap:8px;
   scroll-behavior:smooth;
+  background:transparent;
 }
 
-.msg{
-  padding:10px 14px;
-  max-width:75%;
-  border-radius:10px;
-  font-size:14px;
-}
+.msg{padding:10px 14px;border-radius:10px;max-width:75%;font-size:14px}
+.msg.system{background:var(--msgSystem);align-self:center}
+.msg.you{background:var(--msgYou);align-self:flex-end}
+.msg.stranger{background:var(--msgStranger);align-self:flex-start}
 
-.msg.system{background:var(--msgSystem);align-self:center;}
-.msg.you{background:var(--msgYou);align-self:flex-end;}
-.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
-
+/* Input area fixed within right-col bottom */
 .chat-input-row{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
   padding:10px;
   background:#fafafa;
   border-top:1px solid #ddd;
-}
-
-.input-container{
   display:flex;
+  flex-direction:column;
   gap:8px;
 }
 
-#skipBtn{
-  background:#1f8cff;
-  color:#fff;
-  padding:12px 22px;
-  font-size:16px;
-  font-weight:bold;
-  border-radius:6px;
-  border:none;
-  cursor:pointer;
-}
+/* Input controls */
+.input-container{display:flex;gap:8px;align-items:center}
+#skipBtn{background:#1f8cff;color:#fff;padding:10px 16px;border-radius:6px;border:0;cursor:pointer}
+#chatInput{flex:1;padding:10px;border-radius:8px;border:1px solid #ccc}
+#sendBtn{width:42px;height:42px;border-radius:8px;border:0;background:var(--blue);color:#fff;cursor:pointer}
 
-#sendBtn{
-  width:42px;
-  height:42px;
-  background:var(--blue);
-  color:#fff;
-  border-radius:8px;
-  border:none;
-  cursor:pointer;
-}
-
-#chatInput{
-  flex:1;
-  padding:10px;
-  border:1px solid #ccc;
-  border-radius:8px;
-}
-
-/* ===================== */
-/* MOBILE FIXES          */
-/* ===================== */
-
+/* RESPONSIVE RULES */
 @media (max-width: 1024px){
-  .stage{
-    flex-direction:column;
-    overflow:auto;
-  }
-  .left-col{
-    width:100%;
-    min-width:unset;
-  }
+  .stage{flex-direction:column;align-items:stretch;padding:10px;height:auto}
+  .left-col{flex:0 0 auto;width:100%;min-width:unset}
+  .video-frame.top{height:280px}
+  .video-frame.bottom{height:180px}
+  .right-col{width:100%}
 }
 
-@media (max-width: 768px){
-  .logo{font-size:26px;}
-  .stage{padding:6px;}
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:220px;
-  }
+/* الهواتف الصغيرة */
+@media (max-width:480px){
+  .logo{font-size:18px}
+  .video-frame.top{height:200px}
+  .video-frame.bottom{height:140px}
+  #skipBtn{padding:8px 12px;font-size:14px}
+  #chatInput{font-size:14px}
+  #sendBtn{width:38px;height:38px}
+  .left-col{gap:8px}
+  .video-frame{border-width:4px}
+  .right-col{border-width:4px}
 }
 
-@media (max-width: 480px){
-
-  .logo{font-size:22px;}
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:180px;
-  }
-  
-  #skipBtn{
-    padding:10px 16px;
-    font-size:14px;
-  }
-  
-  #chatInput{
-    font-size:14px;
-  }
-  
-  #sendBtn{
-    width:38px;
-    height:38px;
-  }
-  
-  .chat-area{padding:8px;}
-}
+/* ضمان عدم إنشاء شريط تمرير أفقي غير مرغوب */
+body, .stage { -webkit-overflow-scrolling: touch; }
 </style>
 </head>
 
 <body>
 
-<div class="topbar">
+<div class="topbar" role="banner">
   <div class="logo" id="logo">
     <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
     <span>C</span><span>h</span><span>a</span><span>t</span>
   </div>
 
-  <div style="display:flex;gap:14px;align-items:center;">
-    <button id="darkToggle">🌙</button>
-    <button id="exitBtn">Exit</button>
+  <div class="topbar-controls" aria-hidden="false">
+    <button id="darkToggle" aria-label="Toggle dark mode">🌙</button>
+    <button id="exitBtn" aria-label="Exit">Exit</button>
   </div>
 </div>
 
-<div class="stage">
-
+<div class="stage" role="main">
   <div class="left-col">
-    <div class="video-frame top">
-      <button id="reportBtn">🚨 BORN18+</button>
-      <div class="watermark">SparkChat</div>
+    <div class="video-frame top" aria-label="Remote video">
+      <button id="reportBtn" title="Report/age">🚨 BORN18+</button>
       <div class="video-label">Stranger</div>
+      <div class="watermark">SparkChat</div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
-    <div class="video-frame bottom">
-      <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
+    <div class="video-frame bottom" aria-label="Local video">
+      <button id="micBtn" title="Mic">🎤</button>
       <div class="video-label">You</div>
+      <div class="watermark">SparkChat</div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
   </div>
 
-  <div class="right-col">
-    <div id="chatMessages" class="chat-area">
+  <div class="right-col" aria-label="Chat area">
+    <div id="chatMessages" class="chat-area" aria-live="polite">
       <div class="msg system">Connecting...</div>
     </div>
 
@@ -367,466 +253,53 @@ video{
       <div id="status">Loading...</div>
       <div class="input-container">
         <button id="skipBtn">Skip</button>
-        <input id="chatInput" placeholder="Type..." disabled />
-        <button id="sendBtn" disabled>➤</button>
+        <input id="chatInput" placeholder="اكتب رسالتك..." />
+        <button id="sendBtn">➤</button>
       </div>
     </div>
   </div>
-
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
+<!-- روابط السكربت — إن لم تكن مطلوبة يمكنك إزالتها -->
 <script>
-// Dark mode toggle
-document.getElementById("darkToggle").onclick = () => {
-  document.body.classList.toggle("dark");
-  document.getElementById("darkToggle").innerText =
-    document.body.classList.contains("dark") ? "☀️" : "🌙";
+/* minimal scripts to keep UI interactive */
+
+/* Dark mode toggle */
+const darkToggle = document.getElementById('darkToggle');
+darkToggle.onclick = () => {
+  document.documentElement.classList.toggle('dark');
+  darkToggle.textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 };
 
-// Logo Animation
-const logoLetters = document.querySelectorAll("#logo span");
+/* Logo flip animation */
+const logoLetters = document.querySelectorAll('#logo span');
 function flipRandomLetter(){
-  const randomIndex = Math.floor(Math.random() * logoLetters.length);
-  logoLetters[randomIndex].classList.add("flip");
-  setTimeout(()=>{ logoLetters[randomIndex].classList.remove("flip"); }, 500);
+  const i = Math.floor(Math.random()*logoLetters.length);
+  const el = logoLetters[i];
+  el.classList.add('flip');
+  setTimeout(()=>el.classList.remove('flip'),500);
 }
-setInterval(flipRandomLetter, 2500);
-</script>
-
-</body>
-</html>
-
-  --radius:12px;
-
-  --bg:#ffffff;
-  --text:#000;
-
-  --msgYou:#cceaff;
-  --msgStranger:#ffd8b0;
-  --msgSystem:#e8e8e8;
-}
-
-.dark{
-  --bg:#0f1115;
-  --text:#ffffff !important;
-  --msgYou:#1c2733;
-  --msgStranger:#332519;
-  --msgSystem:#222;
-  --border:#444;
-}
-
-*{margin:0;padding:0;box-sizing:border-box;}
-html, body{
-  height:100%;
-  overflow:hidden;
-  font-family:Arial, sans-serif;
-  background:var(--bg);
-  color:var(--text)
-}
-
-/* ===================== */
-/*  TOP BAR - FIXED      */
-/* ===================== */
-
-.topbar{
-  height:60px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:0 12px;
-  border-bottom:1px solid #ddd;
-  background:var(--bg);
-  position:sticky;
-  top:0;
-  z-index:9999;
-}
-
-/* LOGO */
-.logo{
-  font-size:48px;
-  font-weight:bold;
-  display:flex;
-  gap:3px;
-  user-select:none;
-  letter-spacing:1px;
-}
-
-/* نجعل كلمة Spark باللون الأزرق فقط */
-.logo span:nth-child(-n+5){
-  color:#2ea3ff !important;
-}
-
-/* باقي كلمة Chat بلونها الطبيعي */
-.logo span:nth-child(n+6){
-  color:#ff9a00;
-}
-
-.logo span{
-  display:inline-block;
-  transition:0.4s;
-}
-.flip{
-  animation:spinLetter 0.5s ease forwards;
-}
-@keyframes spinLetter{
-  0%   { transform: rotate(0deg) scale(1); }
-  50%  { transform: rotate(180deg) scale(1.2); }
-  100% { transform: rotate(360deg) scale(1); }
-}
-
-#exitBtn{
-  background:red;
-  color:#fff;
-  padding:8px 12px;
-  border:none;
-  border-radius:8px;
-  font-weight:bold;
-  cursor:pointer;
-}
-
-/* ALWAYS visible on mobile */
-@media(max-width:768px){
-  #exitBtn{
-    display:block !important;
-  }
-}
-
-#darkToggle{
-  background:#444;
-  color:#fff;
-  border:none;
-  padding:8px 12px;
-  border-radius:8px;
-  cursor:pointer;
-  margin-right:10px;
-}
-
-/* NOTIFICATIONS */
-.notify-box{position:relative;margin-right:12px;cursor:pointer;}
-#notifyIcon{font-size:24px;}
-#notifyDot{
-  width:10px;height:10px;background:red;border-radius:50%;
-  position:absolute;top:0;right:0;display:none;
-}
-#notifyMenu{
-  position:absolute;right:0;top:40px;width:220px;
-  background:#fff;border:1px solid #ccc;border-radius:8px;
-  display:none;max-height:250px;overflow-y:auto;z-index:999;
-}
-.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
-.notify-empty{padding:10px;text-align:center;color:#777;}
-
-/* ===================== */
-/*    STAGE CONTAINER    */
-/* ===================== */
-
-.stage{
-  position:absolute;
-  top:60px;
-  bottom:0;
-  left:0;
-  right:0;
-  display:flex;
-  gap:var(--gap);
-  padding:12px;
-  overflow:hidden;
-}
-
-/* LEFT SIDE */
-.left-col{
-  width:520px;
-  min-width:380px;
-  display:flex;
-  flex-direction:column;
-  gap:var(--gap);
-}
-
-/* VIDEO FRAMES */
-.video-frame{
-  position:relative;
-  border-radius:var(--radius);
-  border:6px solid var(--border);
-  overflow:hidden;
-  background:#000;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-
-.video-frame.top,
-.video-frame.bottom{
-  height:330px;
-}
-
-video{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  position:relative;
-  z-index:0;
-}
-
-.video-label{
-  position:absolute;top:8px;left:8px;background:#fff;
-  padding:4px 10px;border-radius:6px;z-index:6;color:#000;
-}
-.watermark{
-  position:absolute;bottom:10px;left:10px;font-size:14px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
-}
-
-/* SMALL MICROPHONE BUTTON */
-#micBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:var(--blue);
-  color:#fff;
-  padding:8px;
-  font-size:14px;
-  border-radius:50%;
-  cursor:pointer;
-  border:none;
-  z-index:10;
-  width:40px;
-  height:40px;
-}
-
-.spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;
-  animation:spin 1s linear infinite;z-index:20;
-}
-@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
-
-/* REPORT BTN */
-#reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:6px 10px;
-  font-size:12px;
-  border-radius:8px;
-  cursor:pointer;
-  border:none;
-  z-index:10;
-}
-
-/* ===================== */
-/*       CHAT AREA       */
-/* ===================== */
-
-.right-col{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  border:6px solid var(--border);
-  border-radius:10px;
-  background:var(--bg);
-  min-width:240px;
-  height:100%;
-  color:var(--text);
-}
-
-.chat-area{
-  flex:1;
-  padding:12px;
-  overflow-y:auto;  /* ← إصلاح التمرير */
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  scroll-behavior:smooth;
-}
-
-.msg{
-  padding:10px 14px;
-  max-width:75%;
-  border-radius:10px;
-  font-size:14px;
-  color:var(--text);
-}
-
-.msg.system{background:var(--msgSystem);align-self:center;}
-.dark .msg.system{color:#fff;}
-
-.msg.you{
-  background:var(--msgYou);
-  border:1px solid #a7d8ff;
-  align-self:flex-end;
-}
-
-.msg.stranger{
-  background:var(--msgStranger);
-  border:1px solid #ffbf85;
-  align-self:flex-start;
-}
-
-/* INPUT AREA */
-.chat-input-row{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  padding:10px;
-  background:#fafafa;
-  border-top:1px solid #ddd;
-  position:sticky;
-  bottom:0;
-  left:0;
-  right:0;
-  z-index:50;
-  color:#000;
-}
-
-#status{
-  padding:6px 10px;
-  background:#fafafa;
-  border-radius:6px;
-  border:1px solid #ddd;
-  text-align:center;
-  color:#000;
-}
-
-.input-container{display:flex;gap:8px;}
-
-#skipBtn{
-  background:#1f8cff;
-  color:#fff;
-  padding:12px 22px;
-  font-size:16px;
-  font-weight:bold;
-  border-radius:6px;
-  border:none;
-  cursor:pointer;
-  transition:0.2s ease;
-  box-shadow:0 3px 8px #0002;
-}
-
-#sendBtn{
-  width:42px;height:42px;background:var(--blue);
-  color:#fff;border-radius:8px;border:none;cursor:pointer;
-}
-
-#chatInput{
-  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;color:#000;
-}
-
-/* ===================== */
-/*     MOBILE FIXES      */
-/* ===================== */
-
-@media (max-width: 768px){
-
-  /* الشاشات لا تتحرك — فقط الشات يتمرر */
-  .stage{
-    flex-direction:column;
-    padding:8px;
-    overflow:hidden;
-  }
-
-  .left-col{width:100%;min-width:unset;gap:8px;}
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:200px;
-  }
-
-  /* زر الخروج ظاهر */
-  #exitBtn{
-    display:block;
-  }
-}
-</style>
-</head>
-
-<body>
-
-<div class="topbar">
-  <div class="logo" id="logo">
-    <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
-    <span>C</span><span>h</span><span>a</span><span>t</span>
-  </div>
-
-  <div style="display:flex;gap:14px;align-items:center;">
-    <div class="notify-box">
-      <div id="notifyIcon">🔔</div>
-      <div id="notifyDot"></div>
-      <div id="notifyMenu">
-        <div class="notify-empty">No notifications</div>
-      </div>
-    </div>
-
-    <button id="darkToggle">🌙</button>
-    <button id="exitBtn">Exit</button>
-  </div>
-</div>
-
-<div class="stage">
-
-  <div class="left-col">
-
-    <div class="video-frame top">
-      <button id="reportBtn">🚨 BORN18+</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">Stranger</div>
-      <div id="remoteSpinner" class="spinner"></div>
-      <video id="remoteVideo" autoplay playsinline></video>
-    </div>
-
-    <div class="video-frame bottom">
-      <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
-      <video id="localVideo" autoplay muted playsinline></video>
-    </div>
-
-  </div>
-
-  <div class="right-col">
-    <div id="chatMessages" class="chat-area">
-      <div class="msg system">Connecting...</div>
-    </div>
-
-    <div class="chat-input-row">
-      <div id="status">Loading...</div>
-
-      <div class="input-container">
-        <button id="skipBtn">Skip</button>
-        <input id="chatInput" placeholder="Type..." disabled />
-        <button id="sendBtn" disabled>➤</button>
-      </div>
-    </div>
-
-  </div>
-
-</div>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
-<script>
-document.getElementById("darkToggle").onclick = () => {
-  document.body.classList.toggle("dark");
-  document.getElementById("darkToggle").innerText =
-    document.body.classList.contains("dark") ? "☀️" : "🌙";
-};
-
-const logoLetters = document.querySelectorAll("#logo span");
-
-function flipRandomLetter(){
-  const randomIndex = Math.floor(Math.random() * logoLetters.length);
-  const letter = logoLetters[randomIndex];
-  letter.classList.add("flip");
-
-  setTimeout(()=>{ letter.classList.remove("flip"); }, 500);
-}
-
-setInterval(flipRandomLetter, 2500);
+setInterval(flipRandomLetter,2500);
+
+/* Simple accessibility: focus send on Enter */
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+chatInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') { e.preventDefault(); sendBtn.click(); }
+});
+
+/* placeholder send action */
+sendBtn.addEventListener('click', ()=>{
+  const txt = chatInput.value.trim();
+  if(!txt) return;
+  const area = document.getElementById('chatMessages');
+  const m = document.createElement('div');
+  m.className='msg you';
+  m.textContent = txt;
+  area.appendChild(m);
+  chatInput.value='';
+  area.scrollTop = area.scrollHeight;
+});
 </script>
 
 </body>
