@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
@@ -24,7 +24,7 @@
 
 .dark{
   --bg:#0f1115;
-  --text:#ffffff;
+  --text:#ffffff !important;
   --msgYou:#1c2733;
   --msgStranger:#332519;
   --msgSystem:#222;
@@ -37,12 +37,13 @@ html, body{
   overflow:hidden;
   font-family:Arial, sans-serif;
   background:var(--bg);
-  color:var(--text);
+  color:var(--text)
 }
 
 /* ===================== */
-/*  FIXED TOP BAR        */
+/*  TOP BAR - FIXED      */
 /* ===================== */
+
 .topbar{
   height:60px;
   display:flex;
@@ -63,18 +64,32 @@ html, body{
   display:flex;
   gap:3px;
   user-select:none;
+  letter-spacing:1px;
 }
-.logo span:nth-child(-n+5){color:#2ea3ff;}
-.logo span:nth-child(n+6){color:#ff9a00;}
 
-.flip{animation:spinLetter 0.5s ease forwards;}
+/* نجعل كلمة Spark باللون الأزرق فقط */
+.logo span:nth-child(-n+5){
+  color:#2ea3ff !important;
+}
+
+/* باقي كلمة Chat بلونها الطبيعي */
+.logo span:nth-child(n+6){
+  color:#ff9a00;
+}
+
+.logo span{
+  display:inline-block;
+  transition:0.4s;
+}
+.flip{
+  animation:spinLetter 0.5s ease forwards;
+}
 @keyframes spinLetter{
-  0%{transform:rotate(0);}
-  50%{transform:rotate(180deg) scale(1.2);}
-  100%{transform:rotate(360deg);}
+  0%   { transform: rotate(0deg) scale(1); }
+  50%  { transform: rotate(180deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(1); }
 }
 
-/* EXIT BUTTON ALWAYS VISIBLE */
 #exitBtn{
   background:red;
   color:#fff;
@@ -83,10 +98,15 @@ html, body{
   border-radius:8px;
   font-weight:bold;
   cursor:pointer;
-  display:block !important;
 }
 
-/* DARK MODE */
+/* ALWAYS visible on mobile */
+@media(max-width:768px){
+  #exitBtn{
+    display:block !important;
+  }
+}
+
 #darkToggle{
   background:#444;
   color:#fff;
@@ -97,8 +117,23 @@ html, body{
   margin-right:10px;
 }
 
+/* NOTIFICATIONS */
+.notify-box{position:relative;margin-right:12px;cursor:pointer;}
+#notifyIcon{font-size:24px;}
+#notifyDot{
+  width:10px;height:10px;background:red;border-radius:50%;
+  position:absolute;top:0;right:0;display:none;
+}
+#notifyMenu{
+  position:absolute;right:0;top:40px;width:220px;
+  background:#fff;border:1px solid #ccc;border-radius:8px;
+  display:none;max-height:250px;overflow-y:auto;z-index:999;
+}
+.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+.notify-empty{padding:10px;text-align:center;color:#777;}
+
 /* ===================== */
-/*   MAIN SCREEN STAGE   */
+/*    STAGE CONTAINER    */
 /* ===================== */
 
 .stage{
@@ -113,6 +148,7 @@ html, body{
   overflow:hidden;
 }
 
+/* LEFT SIDE */
 .left-col{
   width:520px;
   min-width:380px;
@@ -142,25 +178,20 @@ video{
   width:100%;
   height:100%;
   object-fit:cover;
+  position:relative;
+  z-index:0;
 }
 
 .video-label{
-  position:absolute;
-  top:8px;
-  left:8px;
-  background:#fff;
-  padding:4px 10px;
-  border-radius:6px;
+  position:absolute;top:8px;left:8px;background:#fff;
+  padding:4px 10px;border-radius:6px;z-index:6;color:#000;
 }
-
 .watermark{
-  position:absolute;
-  bottom:10px;
-  left:10px;
-  color:#ffffffaa;
-  font-weight:bold;
+  position:absolute;bottom:10px;left:10px;font-size:14px;
+  color:#ffffffaa;font-weight:bold;z-index:6;
 }
 
+/* SMALL MICROPHONE BUTTON */
 #micBtn{
   position:absolute;
   bottom:10px;
@@ -168,11 +199,23 @@ video{
   background:var(--blue);
   color:#fff;
   padding:8px;
+  font-size:14px;
   border-radius:50%;
   cursor:pointer;
   border:none;
+  z-index:10;
+  width:40px;
+  height:40px;
 }
 
+.spinner{
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
+}
+@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+
+/* REPORT BTN */
 #reportBtn{
   position:absolute;
   bottom:10px;
@@ -180,88 +223,134 @@ video{
   background:red;
   color:#fff;
   padding:6px 10px;
-  border:none;
+  font-size:12px;
   border-radius:8px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
 }
 
 /* ===================== */
-/*   NEW SIDEBAR        */
+/*       CHAT AREA       */
 /* ===================== */
 
-.sidebar-chat{
-  position:fixed;
-  top:60px;
-  right:0;
-  width:300px;
-  bottom:0;
-  background:var(--bg);
-  border-left:6px solid var(--border);
+.right-col{
+  flex:1;
   display:flex;
   flex-direction:column;
-  z-index:9990;
+  border:6px solid var(--border);
+  border-radius:10px;
+  background:var(--bg);
+  min-width:240px;
+  height:100%;
+  color:var(--text);
 }
 
-.sidebar-chat .chat-area{
+.chat-area{
   flex:1;
   padding:12px;
-  overflow-y:auto;
+  overflow-y:auto;  /* ← إصلاح التمرير */
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  scroll-behavior:smooth;
 }
 
-.chat-area .msg{
+.msg{
   padding:10px 14px;
-  border-radius:10px;
   max-width:75%;
+  border-radius:10px;
+  font-size:14px;
+  color:var(--text);
 }
 
 .msg.system{background:var(--msgSystem);align-self:center;}
-.msg.you{background:var(--msgYou);align-self:flex-end;}
-.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
+.dark .msg.system{color:#fff;}
 
-.sidebar-input{
+.msg.you{
+  background:var(--msgYou);
+  border:1px solid #a7d8ff;
+  align-self:flex-end;
+}
+
+.msg.stranger{
+  background:var(--msgStranger);
+  border:1px solid #ffbf85;
+  align-self:flex-start;
+}
+
+/* INPUT AREA */
+.chat-input-row{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
   padding:10px;
   background:#fafafa;
   border-top:1px solid #ddd;
+  position:sticky;
+  bottom:0;
+  left:0;
+  right:0;
+  z-index:50;
+  color:#000;
 }
 
-.sidebar-input .input-container{
-  display:flex;
-  gap:8px;
+#status{
+  padding:6px 10px;
+  background:#fafafa;
+  border-radius:6px;
+  border:1px solid #ddd;
+  text-align:center;
+  color:#000;
+}
+
+.input-container{display:flex;gap:8px;}
+
+#skipBtn{
+  background:#1f8cff;
+  color:#fff;
+  padding:12px 22px;
+  font-size:16px;
+  font-weight:bold;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+  transition:0.2s ease;
+  box-shadow:0 3px 8px #0002;
 }
 
 #sendBtn{
-  width:42px;
-  height:42px;
-  background:var(--blue);
-  color:#fff;
-  border:none;
-  border-radius:8px;
+  width:42px;height:42px;background:var(--blue);
+  color:#fff;border-radius:8px;border:none;cursor:pointer;
 }
 
 #chatInput{
-  flex:1;
-  padding:10px;
-  border:1px solid #ccc;
-  border-radius:8px;
+  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;color:#000;
 }
 
 /* ===================== */
-/*   MOBILE FIX / HIDE   */
+/*     MOBILE FIXES      */
 /* ===================== */
-@media(max-width:768px){
 
+@media (max-width: 768px){
+
+  /* الشاشات لا تتحرك — فقط الشات يتمرر */
   .stage{
-    padding:6px;
     flex-direction:column;
+    padding:8px;
+    overflow:hidden;
   }
 
-  .left-col{
-    width:100%;
-    min-width:unset;
-  }
+  .left-col{width:100%;min-width:unset;gap:8px;}
 
   .video-frame.top,
   .video-frame.bottom{
-    height:190px;
+    height:200px;
+  }
+
+  /* زر الخروج ظاهر */
+  #exitBtn{
+    display:block;
   }
 }
 </style>
@@ -269,7 +358,6 @@ video{
 
 <body>
 
-<!-- TOP BAR -->
 <div class="topbar">
   <div class="logo" id="logo">
     <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
@@ -277,19 +365,28 @@ video{
   </div>
 
   <div style="display:flex;gap:14px;align-items:center;">
+    <div class="notify-box">
+      <div id="notifyIcon">🔔</div>
+      <div id="notifyDot"></div>
+      <div id="notifyMenu">
+        <div class="notify-empty">No notifications</div>
+      </div>
+    </div>
+
     <button id="darkToggle">🌙</button>
     <button id="exitBtn">Exit</button>
   </div>
 </div>
 
-<!-- MAIN AREA -->
 <div class="stage">
+
   <div class="left-col">
 
     <div class="video-frame top">
       <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
+      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
@@ -297,26 +394,27 @@ video{
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
+      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
-</div>
 
-<!-- FIXED SIDEBAR CHAT -->
-<div class="sidebar-chat">
-
-  <div id="chatMessages" class="chat-area">
-    <div class="msg system">Connecting...</div>
-  </div>
-
-  <div class="sidebar-input">
-    <div id="status">Loading...</div>
-    <div class="input-container">
-      <button id="skipBtn">Skip</button>
-      <input id="chatInput" placeholder="Type..." />
-      <button id="sendBtn">➤</button>
+  <div class="right-col">
+    <div id="chatMessages" class="chat-area">
+      <div class="msg system">Connecting...</div>
     </div>
+
+    <div class="chat-input-row">
+      <div id="status">Loading...</div>
+
+      <div class="input-container">
+        <button id="skipBtn">Skip</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="sendBtn" disabled>➤</button>
+      </div>
+    </div>
+
   </div>
 
 </div>
@@ -331,12 +429,17 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-const letters = document.querySelectorAll("#logo span");
-setInterval(()=>{
-  const x = letters[Math.floor(Math.random()*letters.length)];
-  x.classList.add("flip");
-  setTimeout(()=>x.classList.remove("flip"),500);
-},2500);
+const logoLetters = document.querySelectorAll("#logo span");
+
+function flipRandomLetter(){
+  const randomIndex = Math.floor(Math.random() * logoLetters.length);
+  const letter = logoLetters[randomIndex];
+  letter.classList.add("flip");
+
+  setTimeout(()=>{ letter.classList.remove("flip"); }, 500);
+}
+
+setInterval(flipRandomLetter, 2500);
 </script>
 
 </body>
