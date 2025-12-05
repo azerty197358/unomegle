@@ -1,447 +1,383 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<!DOCTYPE html> 
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SparkChat — Omegle-like UI</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SparkChat</title>
 
-  <style>
-    :root{
-      --blue:#2ea3ff;
-      --accent:#ff9a00;
-      --bg:#fafbfd;
-      --panel:#ffffff;
-      --dark-panel:#0f1115;
-      --text:#0b1220;
-      --muted:#9aa4ad;
-      --border:#e7e9ec;
-      --radius:12px;
-      --gap:12px;
-    }
-    .dark{
-      --bg:#0b0d10;
-      --panel:#111316;
-      --text:#eef2f5;
-      --muted:#9aa4ad;
-      --border:#272a2f;
-    }
+<style>
+:root{
+  --blue:#2ea3ff;
+  --dark:#111;
+  --light:#ffffff;
+  --border:#e6d7c8;
+  --gap:10px;
+  --radius:12px;
 
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%;font-family: "Segoe UI", Tahoma, Arial, sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+  --bg:#ffffff;
+  --text:#000;
 
-    /* Topbar */
-    .topbar{
-      height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;
-      background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.4));
-      border-bottom:1px solid var(--border);
-      gap:12px;
-    }
-    .topbar .left{display:flex;align-items:center;gap:20px}
-    .logo{
-      font-weight:800;font-size:28px;color:var(--accent);display:flex;gap:4px;align-items:center;user-select:none;
-    }
-    .logo span{display:inline-block;transition:transform .45s ease}
-    .logo .logo-chat{color:#3fa0ff}
+  /* ⭐ ألوان أوميجل */
+  --msgYou:#cceaff;
+  --msgStranger:#ffd8b0;
+  --msgSystem:#e8e8e8;
+}
 
-    .top-actions{display:flex;gap:10px;align-items:center}
-    .icon-btn{background:transparent;border:none;cursor:pointer;padding:8px;border-radius:8px;font-size:18px}
-    #darkToggle{background:transparent}
-    #exitBtn{background:#ff5454;color:#fff;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+.dark{
+  --bg:#0f1115;
+  --text:#f5f5f5;
+  --msgYou:#1c2733;
+  --msgStranger:#332519;
+  --msgSystem:#222;
+  --border:#444;
+}
 
-    /* Stage */
-    .stage{position:absolute;left:0;right:0;top:64px;bottom:0;padding:18px;display:flex;gap:var(--gap);align-items:stretch}
-    .left-col{width:360px;min-width:260px;display:flex;flex-direction:column;gap:12px}
-    .right-col{flex:1;display:flex;flex-direction:column;gap:12px}
+*{margin:0;padding:0;box-sizing:border-box;}
+html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
-    /* video frames */
-    .video-frame{
-      border-radius:12px;overflow:hidden;background:#000;border:6px solid var(--border);position:relative;min-height:1px;
-      display:flex;align-items:center;justify-content:center;
-    }
-    .video-frame.top{height:320px}
-    .video-frame.bottom{height:220px}
+.topbar{
+  height:60px;display:flex;justify-content:space-between;align-items:center;
+  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
+}
 
-    video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
-    .watermark{position:absolute;left:12px;bottom:12px;color:#fff;font-weight:700;opacity:.9}
-    .video-label{position:absolute;top:12px;left:12px;background:rgba(255,255,255,0.95);padding:6px 10px;border-radius:8px;font-weight:600;color:#111}
-    .spinner{position:absolute;width:60px;height:60px;border-radius:50%;border:6px solid #fff;border-top-color:transparent;animation:spin 1s linear infinite;z-index:20}
-    @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+/* ⭐ تكبير الشعار + جعله سبانات */
+.logo{
+  font-size:32px;
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:2px;
+  user-select:none;
+}
+.logo span{
+  display:inline-block;
+  transition:0.3s;
+}
+.logo span:nth-child(6){
+  color:#3fa0ff; /* بداية كلمة Chat */
+}
 
-    /* small circular buttons overlay */
-    .overlay-btn{position:absolute;right:12px;bottom:12px;background:var(--blue);color:#fff;border:none;border-radius:50%;width:48px;height:48px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,0.15)}
-    .report-btn{position:absolute;top:12px;right:12px;background:#ff4343;color:#fff;padding:6px 10px;border-radius:8px;border:none;z-index:30;cursor:pointer;font-weight:700}
+/* ⭐ حركة الشقلبة */
+.flip {
+  animation: flipAnim 0.6s ease forwards;
+}
 
-    /* chat panel */
-    .chat-panel{background:var(--panel);border-radius:12px;border:6px solid var(--border);display:flex;flex-direction:column;min-width:200px;overflow:hidden}
-    .chat-area{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:transparent}
-    .msg{max-width:78%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.25}
-    .msg.system{align-self:center;background:rgba(0,0,0,0.04);color:var(--muted)}
-    .msg.you{align-self:flex-end;background:rgba(46,163,255,0.12);border:1px solid rgba(46,163,255,0.25)}
-    .msg.stranger{align-self:flex-start;background:rgba(255,216,176,0.14);border:1px solid rgba(255,182,105,0.22)}
+@keyframes flipAnim{
+  0% { transform: rotateY(0deg) scale(1); }
+  50% { transform: rotateY(180deg) scale(1.3); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
 
-    .chat-input-row{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;background:linear-gradient(0deg, rgba(255,255,255,0.65), rgba(255,255,255,0.45))}
-    .status{padding:8px 10px;border-radius:8px;background:transparent;border:1px solid var(--border);text-align:center;color:var(--muted);font-size:13px}
+#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
 
-    .input-row{display:flex;gap:10px;align-items:center}
-    #chatInput{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);outline:none;font-size:15px;background:transparent}
-    #skipBtn{background:linear-gradient(180deg,var(--blue),#1a8de0);color:#fff;padding:12px 18px;border-radius:8px;border:none;cursor:pointer;font-weight:700;box-shadow:0 10px 18px rgba(46,163,255,0.14)}
-    #sendBtn{background:var(--blue);color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer}
+#darkToggle{
+  background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
+  cursor:pointer;margin-right:10px;
+}
 
-    /* notification box */
-    .notify-box{position:relative}
-    #notifyDot{position:absolute;top:0;left:0;width:10px;height:10px;background:#ff3b30;border-radius:50%;display:none}
+/* Notification */
+.notify-box{position:relative;margin-right:12px;cursor:pointer;}
+#notifyIcon{font-size:24px;}
+#notifyDot{
+  width:10px;height:10px;background:red;border-radius:50%;
+  position:absolute;top:0;right:0;display:none;
+}
+#notifyMenu{
+  position:absolute;right:0;top:40px;width:220px;
+  background:#fff;border:1px solid #ccc;border-radius:8px;
+  display:none;max-height:250px;overflow-y:auto;z-index:999;
+}
+.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+.notify-empty{padding:10px;text-align:center;color:#777;}
 
-    #notifyMenu{position:absolute;left:0;top:46px;width:260px;background:var(--panel);border:1px solid var(--border);border-radius:10px;display:none;z-index:999;padding:8px;max-height:260px;overflow:auto}
-    .notify-item{padding:8px;border-bottom:1px dashed var(--border);font-size:13px;color:var(--muted)}
+.stage{
+  position:absolute;top:60px;bottom:0;left:0;right:0;
+  display:flex;gap:var(--gap);padding:12px;overflow:hidden;
+}
 
-    /* responsive */
-    @media (max-width:900px){
-      .stage{flex-direction:column;padding:10px}
-      .left-col{width:100%;flex-direction:row;gap:10px}
-      .video-frame.top{flex:1;height:220px;border-width:4px}
-      .video-frame.bottom{flex:1;height:160px;border-width:4px}
-      .right-col{order:3}
-    }
-    @media (max-width:600px){
-      .left-col{flex-direction:column}
-      .video-frame.top{height:280px}
-      .video-frame.bottom{height:180px}
-      #toggleMessagesBtn{display:block}
-      .chat-panel{display:none}
-      .messages-visible .chat-panel{display:flex}
-    }
+.left-col{
+  width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);
+}
 
-    /* little flip animation for logo letters */
-    .flip{animation:flipAnim .6s cubic-bezier(.2,.9,.3,1) forwards}
-    @keyframes flipAnim{0%{transform:rotateY(0) scale(1)}50%{transform:rotateY(180deg) scale(1.25)}100%{transform:rotateY(360deg) scale(1)}}
+.video-frame{
+  position:relative;border-radius:var(--radius);
+  border:6px solid var(--border);overflow:hidden;background:#000;
+  display:flex;justify-content:center;align-items:center;
+}
+.video-frame.top{height:300px;}
+.video-frame.bottom{height:220px;}
+video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
-  </style>
+.video-label{
+  position:absolute;top:8px;left:8px;background:#fff;
+  padding:4px 10px;border-radius:6px;z-index:6;
+}
+.watermark{
+  position:absolute;bottom:10px;left:10px;font-size:14px;
+  color:#ffffffaa;font-weight:bold;z-index:6;
+}
+
+.spinner{
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
+}
+@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+
+/* Mic */
+#micBtn{
+  position:absolute;bottom:10px;right:10px;background:var(--blue);
+  color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;
+  border:none;z-index:10;min-width:48px;min-height:48px;
+}
+
+/* ⭐ زر الإبلاغ الجديد (أسفل + أصغر + BORN18+) */
+#reportBtn{
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:6px 10px;
+  font-size:12px;
+  border-radius:8px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
+}
+
+/* CHAT */
+.right-col{
+  flex:1;display:flex;flex-direction:column;
+  border:6px solid var(--border);border-radius:10px;
+  background:var(--bg);min-width:240px;height:100%;
+}
+
+.chat-area{
+  flex:1;padding:12px;overflow-y:scroll;
+  display:flex;flex-direction:column;gap:8px;
+}
+
+/* ⭐ ألوان رسائل أوميجل */
+.msg{
+  padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
+}
+
+.msg.you{
+  background:var(--msgYou);
+  border:1px solid #a7d8ff;
+  align-self:flex-end;
+}
+
+.msg.stranger{
+  background:var(--msgStranger);
+  border:1px solid #ffbf85;
+  align-self:flex-start;
+}
+
+.msg.system{
+  background:var(--msgSystem);
+  align-self:center;
+}
+
+.chat-input-row{
+  display:flex;flex-direction:column;gap:8px;padding:10px;
+  background:#fafafa;border-top:1px solid #ddd;
+  position:sticky;bottom:0;left:0;right:0;z-index:50;
+}
+
+#status{
+  padding:6px 10px;background:#fafafa;
+  border-radius:6px;border:1px solid #ddd;text-align:center;
+}
+
+.input-container{display:flex;gap:8px;}
+
+/* ⭐ زر Skip نسخة أوميجل الحقيقي */
+#skipBtn{
+  background:#1f8cff;
+  color:#fff;
+  padding:12px 22px;
+  font-size:16px;
+  font-weight:bold;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+  transition:0.2s ease;
+  box-shadow:0 3px 8px #0002;
+}
+#skipBtn:hover{
+  background:#3ca0ff;
+  transform:translateY(-2px);
+}
+#skipBtn:active{
+  background:#1574d6;
+  transform:translateY(0);
+}
+
+#sendBtn{
+  width:42px;height:42px;background:var(--blue);
+  color:#fff;border-radius:8px;border:none;cursor:pointer;
+}
+#chatInput{
+  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
+}
+
+/* MOBILE ONLY */
+@media (max-width: 768px){
+
+  .stage{
+    flex-direction:column;
+    padding:8px;
+    overflow-y:auto;
+  }
+
+  .left-col{
+    width:100%;min-width:unset;gap:8px;
+  }
+
+  .video-frame.top,
+  .video-frame.bottom{
+    height:180px;border-width:4px;
+  }
+
+  #toggleMessagesBtn{
+    width:50px;height:50px;border-radius:50%;
+    border:none;background:var(--blue);color:#fff;
+    font-size:20px;align-self:center;margin:10px 0;
+    cursor:pointer;display:flex;justify-content:center;align-items:center;
+  }
+
+  .messages-hidden .right-col{display:none;}
+  .messages-hidden .video-frame.top,
+  .messages-hidden .video-frame.bottom{height:240px;}
+
+  .messages-hidden .chat-input-row{display:none !important;}
+
+  .messages-hidden #skipBtn{
+    position:fixed;bottom:20px;left:50%;
+    transform:translateX(-50%);
+    z-index:9999;width:140px;height:50px;font-size:18px;
+    display:block !important;
+  }
+}
+
+/* إخفاء زر الإخفاء على الكمبيوتر */
+@media (min-width: 769px){
+  #toggleMessagesBtn{display:none !important;}
+}
+</style>
 </head>
+
 <body>
 
-  <div class="topbar">
-    <div class="left">
-      <div class="logo" id="logo">
-        <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
-        <span class="logo-chat">C</span><span class="logo-chat">h</span><span class="logo-chat">a</span><span class="logo-chat">t</span>
-      </div>
-      <div style="color:var(--muted);font-size:14px">تطبيق الدردشة المرئية</div>
-    </div>
+<div class="topbar">
 
-    <div class="top-actions">
-      <div class="notify-box" id="notifyBox" title="Notifications">
-        <button class="icon-btn" id="notifyIcon">🔔</button>
-        <div id="notifyDot"></div>
-        <div id="notifyMenu">
-          <div class="notify-item">لا توجد إشعارات</div>
-        </div>
-      </div>
-
-      <button class="icon-btn" id="darkToggle" title="Dark / Light">🌙</button>
-      <button id="exitBtn" title="Exit">خروج</button>
-    </div>
+  <!-- ⭐ شعار جديد بحروف منفصلة -->
+  <div class="logo" id="logo">
+    <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
+    <span>C</span><span>h</span><span>a</span><span>t</span>
   </div>
 
-  <div class="stage">
-
-    <div class="left-col">
-      <div class="video-frame top" id="remoteFrame">
-        <button class="report-btn" id="reportBtn">🚨 بلّغ</button>
-        <div class="video-label">Stranger</div>
-        <div class="watermark">SparkChat</div>
-        <div id="remoteSpinner" class="spinner"></div>
-        <video id="remoteVideo" autoplay playsinline></video>
-      </div>
-
-      <div class="video-frame bottom" id="localFrame">
-        <button class="overlay-btn" id="micBtn" title="Toggle Mic">🎤</button>
-        <div class="video-label">You</div>
-        <div class="watermark">SparkChat</div>
-        <div id="localSpinner" class="spinner"></div>
-        <video id="localVideo" autoplay muted playsinline></video>
+  <div style="display:flex;gap:14px;align-items:center;">
+    <div class="notify-box">
+      <div id="notifyIcon">🔔</div>
+      <div id="notifyDot"></div>
+      <div id="notifyMenu">
+        <div class="notify-empty">No notifications</div>
       </div>
     </div>
 
-    <button id="toggleMessagesBtn" style="display:none;align-self:flex-start;padding:8px 10px;border-radius:8px;background:var(--blue);color:#fff;border:none;cursor:pointer">▼</button>
+    <button id="darkToggle">🌙</button>
+    <button id="exitBtn">Exit</button>
+  </div>
+</div>
 
-    <div class="right-col">
-      <div class="chat-panel" id="chatPanel">
-        <div id="chatMessages" class="chat-area" dir="ltr">
-          <div class="msg system">Connecting...</div>
-        </div>
+<div class="stage">
 
-        <div class="chat-input-row">
-          <div class="status" id="status">جاري التحميل...</div>
+  <div class="left-col">
 
-          <div class="input-row">
-            <button id="skipBtn">Skip</button>
-            <input id="chatInput" placeholder="Type a message..." autocomplete="off" />
-            <button id="sendBtn">➤</button>
-          </div>
-        </div>
-      </div>
+    <div class="video-frame top">
+      <button id="reportBtn">🚨 BORN18+</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">Stranger</div>
+      <div id="remoteSpinner" class="spinner"></div>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div class="video-frame bottom">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
+      <div id="localSpinner" class="spinner"></div>
+      <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
 
-  <!-- Optional: Socket.io (if your backend provides it) -->
-  <script src="/socket.io/socket.io.js"></script>
+  <button id="toggleMessagesBtn">▼</button>
 
-  <script>
-    /*******************************
-     * UI behavior (complete)
-     * - Dark mode toggle
-     * - Logo flip animation
-     * - Notifications menu
-     * - Skip / Send basic handlers
-     * - Mic toggle (visual + permission)
-     * - Report confirmation
-     * - Toggle messages (mobile)
-     * - Local getUserMedia + simulated remote stream if none
-     *******************************/
+  <div class="right-col">
 
-    // --- Dark mode
-    const darkToggle = document.getElementById('darkToggle');
-    darkToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark');
-      darkToggle.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
-    });
+    <div id="chatMessages" class="chat-area">
+      <div class="msg system">Connecting...</div>
+    </div>
 
-    // --- Logo flip animation (random letter every 3s)
-    const logoLetters = document.querySelectorAll('#logo span');
-    function flipRandom(){
-      const idx = Math.floor(Math.random() * logoLetters.length);
-      const el = logoLetters[idx];
-      el.classList.add('flip');
-      setTimeout(()=> el.classList.remove('flip'), 600);
-    }
-    setInterval(flipRandom, 3000);
+    <div class="chat-input-row">
+      <div id="status">Loading...</div>
 
-    // --- Notifications
-    const notifyIcon = document.getElementById('notifyIcon');
-    const notifyMenu = document.getElementById('notifyMenu');
-    const notifyDot = document.getElementById('notifyDot');
-    const notifyBox = document.getElementById('notifyBox');
-    notifyIcon.addEventListener('click', (e) => {
-      e.stopPropagation();
-      notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
-      notifyDot.style.display = 'none';
-    });
-    document.addEventListener('click', ()=> notifyMenu.style.display = 'none');
+      <div class="input-container">
+        <button id="skipBtn">Skip</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="sendBtn" disabled>➤</button>
+      </div>
+    </div>
 
-    // Example: show dot on load (demo)
-    setTimeout(()=> notifyDot.style.display = 'block', 1200);
+  </div>
 
-    // --- Report button
-    const reportBtn = document.getElementById('reportBtn');
-    reportBtn.addEventListener('click', ()=>{
-      const ok = confirm('هل تريد الإبلاغ عن المستخدم فعلاً؟');
-      if(ok){
-        // maintain existing ID for server integration: trigger an event (you can change)
-        appendSystemMessage('تم إرسال البلاغ بنجاح.');
-        // Here you could call your API or socket to report
-      }
-    });
+</div>
 
-    // --- Chat: append helpers
-    const chatMessages = document.getElementById('chatMessages');
-    function appendMessage(text, type='system'){
-      const d = document.createElement('div');
-      d.className = 'msg ' + (type==='system'? 'system' : (type==='you' ? 'you' : 'stranger'));
-      d.textContent = text;
-      chatMessages.appendChild(d);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-    function appendSystemMessage(txt){ appendMessage(txt,'system'); }
-    function appendYouMessage(txt){ appendMessage(txt,'you'); }
-    function appendStrangerMessage(txt){ appendMessage(txt,'stranger'); }
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
 
-    // --- Skip button
-    const skipBtn = document.getElementById('skipBtn');
-    skipBtn.addEventListener('click', ()=> {
-      appendSystemMessage('Skipping to the next user...');
-      // simulate disconnection and reconnection
-      simulateRemoteDisconnectThenReconnect();
-      // If your backend expects an event, emit socket event here (keeping ID compat)
-      // socket && socket.emit('skip');
-    });
+<script>
+/* Dark Mode */
+document.getElementById("darkToggle").onclick = () => {
+  document.body.classList.toggle("dark");
+  document.getElementById("darkToggle").innerText =
+    document.body.classList.contains("dark") ? "☀️" : "🌙";
+};
 
-    // --- Send button + Enter key
-    const sendBtn = document.getElementById('sendBtn');
-    const chatInput = document.getElementById('chatInput');
-    sendBtn.addEventListener('click', sendChat);
-    chatInput.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter') sendChat();
-    });
-    function sendChat(){
-      const txt = chatInput.value.trim();
-      if(!txt) return;
-      appendYouMessage(txt);
-      chatInput.value = '';
-      // If you have socket: socket.emit('message', txt);
-      // For demo, auto-reply from stranger
-      setTimeout(()=> appendStrangerMessage('Reply: ' + txt), 900);
-    }
+/* Toggle Messages */
+const toggleBtn = document.getElementById("toggleMessagesBtn");
+toggleBtn.addEventListener("click", ()=>{
+  document.body.classList.toggle("messages-hidden");
+  toggleBtn.innerText =
+    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
+});
 
-    // --- Mic toggle: request permission and toggle audio track
-    const micBtn = document.getElementById('micBtn');
-    let localStream = null;
-    let micEnabled = true;
-    micBtn.addEventListener('click', async ()=>{
-      if(!localStream){
-        await startLocalStream();
-        return;
-      }
-      micEnabled = !micEnabled;
-      localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-      micBtn.style.background = micEnabled ? 'var(--blue)' : '#888';
-      micBtn.title = micEnabled ? 'Mic ON' : 'Mic OFF';
-    });
+/* ⭐ نافذة تأكيد زر BORN18+ */
+document.getElementById("reportBtn").onclick = () => {
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
+    alert("تم إرسال البلاغ بنجاح.");
+  }
+};
 
-    // --- Toggle messages button (mobile)
-    const toggleMessagesBtn = document.getElementById('toggleMessagesBtn');
-    toggleMessagesBtn.addEventListener('click', ()=>{
-      document.body.classList.toggle('messages-visible');
-      const panel = document.getElementById('chatPanel');
-      panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
-      toggleMessagesBtn.textContent = panel.style.display === 'flex' ? '▲' : '▼';
-    });
+/* ⭐ شقلبة حرف من الشعار كل 3 ثواني */
+const logoLetters = document.querySelectorAll("#logo span");
 
-    // --- Video: get local stream and show; try to get remote via socket or simulate
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const localSpinner = document.getElementById('localSpinner');
-    const remoteSpinner = document.getElementById('remoteSpinner');
-    const statusBox = document.getElementById('status');
+function flipRandomLetter(){
+  const randomIndex = Math.floor(Math.random() * logoLetters.length);
+  const letter = logoLetters[randomIndex];
+  letter.classList.add("flip");
 
-    async function startLocalStream(){
-      try{
-        localSpinner.style.display = 'block';
-        const s = await navigator.mediaDevices.getUserMedia({video:{width:640}, audio:true});
-        localStream = s;
-        localVideo.srcObject = s;
-        // start with mic enabled true
-        localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-        localSpinner.style.display = 'none';
-        statusBox.textContent = 'Connected (local ready)';
-        // if you have signaling, you'd send this stream to peer here. For demo we simulate a remote
-        simulateRemoteStream();
-      }catch(err){
-        localSpinner.style.display = 'none';
-        statusBox.textContent = 'لا يمكن الوصول إلى الكاميرا/الميكروفون';
-        console.warn('getUserMedia error', err);
-      }
-    }
+  setTimeout(()=>{
+    letter.classList.remove("flip");
+  }, 600); // مدة الأنيميشن
+}
 
-    // Simulate remote stream (for demo) — in real app remoteVideo should be set by your WebRTC/Socket handling
-    function simulateRemoteStream(){
-      // if browser supports captureStream from localVideo, reuse it with delay to mimic remote
-      try{
-        if(localVideo.captureStream){
-          const simulated = localVideo.captureStream(25);
-          setTimeout(()=> {
-            remoteVideo.srcObject = simulated;
-            remoteSpinner.style.display = 'none';
-            statusBox.textContent = 'Connected to stranger';
-            // add sample system message
-            appendSystemMessage('You are now connected. Say hi!');
-          }, 900);
-        } else {
-          // fallback: hide spinner and show black
-          remoteSpinner.style.display = 'none';
-          statusBox.textContent = 'Waiting for stranger...';
-        }
-      }catch(e){
-        remoteSpinner.style.display = 'none';
-        statusBox.textContent = 'Waiting for stranger...';
-      }
-    }
+setInterval(flipRandomLetter, 3000);
+</script>
 
-    // Simulate remote disconnect/reconnect
-    function simulateRemoteDisconnectThenReconnect(){
-      remoteSpinner.style.display = 'block';
-      remoteVideo.srcObject = null;
-      statusBox.textContent = 'Searching for next user...';
-      setTimeout(()=> {
-        // if local available, reuse as simulated remote
-        if(localVideo.srcObject) {
-          simulateRemoteStream();
-        } else {
-          remoteSpinner.style.display = 'none';
-          statusBox.textContent = 'No camera available locally';
-        }
-      }, 1200);
-    }
-
-    // Auto start local stream for better demo UX
-    // (Browsers require user gesture for autoplay with audio; video muted allows autoplay)
-    (async ()=>{
-      // Attempt to auto-start muted video (local) to show preview
-      try{
-        localSpinner.style.display = 'block';
-        const s = await navigator.mediaDevices.getUserMedia({video:{width:640}, audio:false});
-        localStream = s;
-        localVideo.srcObject = s;
-        localSpinner.style.display = 'none';
-        statusBox.textContent = 'Preview ready (click mic to enable audio)';
-        // keep audio disabled until user clicks mic — now request audio separately when mic toggled
-      }catch(e){
-        localSpinner.style.display = 'none';
-        statusBox.textContent = 'كاميرا غير متاحة';
-      }
-    })();
-
-    // --- Exit button (just for demo)
-    document.getElementById('exitBtn').addEventListener('click', ()=>{
-      if(confirm('هل تريد الخروج من الدردشة؟')) {
-        appendSystemMessage('تم الخروج.');
-        // If you have socket: socket.emit('leave');
-        // Stop local tracks
-        if(localStream){
-          localStream.getTracks().forEach(t=>t.stop());
-          localVideo.srcObject = null;
-        }
-        remoteVideo.srcObject = null;
-        statusBox.textContent = 'Disconnected';
-      }
-    });
-
-    // --- Ensure UI elements exist for integration with your existing script.js
-    // If you already have a script.js that expects these IDs, this template preserves them:
-    // IDs: localVideo, remoteVideo, skipBtn, micBtn, reportBtn, chatInput, sendBtn, chatMessages, status
-    // So you can drop your existing script.js (that uses socket.io) and it will still find these DOM nodes.
-
-    // --- Accessibility: focus input on load
-    setTimeout(()=> {
-      const input = document.getElementById('chatInput');
-      if(input) input.focus();
-    }, 900);
-
-    // Example: Append a timed system message
-    setTimeout(()=> appendSystemMessage('نموذج الواجهة جاهز — يمكنك الآن توصيل وظائفك الخلفية.'), 1600);
-
-    // --- Protect against missing socket.io (non-blocking)
-    try{
-      if(typeof io === 'function'){
-        // If the developer has a backend socket, integrate here:
-        const socket = io();
-        // Example: listen to incoming chat messages
-        socket.on('chat-message', (msg)=>{
-          appendStrangerMessage(msg);
-        });
-        // Provide hooks for skip / report / send
-        skipBtn.addEventListener('click', ()=> socket.emit('skip'));
-        reportBtn.addEventListener('click', ()=> socket.emit('report'));
-        sendBtn.addEventListener('click', ()=> {
-          const txt = chatInput.value.trim();
-          if(!txt) return;
-          socket.emit('message', txt);
-        });
-        // and more — but do not assume these on the client when no socket provided
-      }
-    }catch(e){
-      // no socket available — fine, our UI still works for demo
-    }
-  </script>
 </body>
 </html>
