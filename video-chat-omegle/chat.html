@@ -16,9 +16,11 @@
 
   --bg:#ffffff;
   --text:#000;
-  --msgYou:#d8efff;
-  --msgStranger:#ffe6cc;
-  --msgSystem:#eee;
+
+  /* ⭐ ألوان أوميجل */
+  --msgYou:#cceaff;
+  --msgStranger:#ffd8b0;
+  --msgSystem:#e8e8e8;
 }
 
 .dark{
@@ -46,10 +48,8 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   cursor:pointer;margin-right:10px;
 }
 
-/* 🔔 Notification Icon */
-.notify-box{
-  position:relative;margin-right:12px;cursor:pointer;
-}
+/* Notification */
+.notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
   width:10px;height:10px;background:red;border-radius:50%;
@@ -60,19 +60,17 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   background:#fff;border:1px solid #ccc;border-radius:8px;
   display:none;max-height:250px;overflow-y:auto;z-index:999;
 }
-.notify-item{
-  padding:10px;border-bottom:1px solid #ddd;font-size:14px;
-}
-.notify-empty{
-  padding:10px;text-align:center;color:#777;
-}
+.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+.notify-empty{padding:10px;text-align:center;color:#777;}
 
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
 }
 
-.left-col{width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);} 
+.left-col{
+  width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);
+}
 
 .video-frame{
   position:relative;border-radius:var(--radius);
@@ -83,38 +81,45 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 .video-frame.bottom{height:220px;}
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
-.video-label{position:absolute;top:8px;left:8px;background:#fff;padding:4px 10px;border-radius:6px;z-index:6;}
-.watermark{position:absolute;bottom:10px;left:10px;font-size:14px;color:#ffffffaa;font-weight:bold;z-index:6;}
+.video-label{
+  position:absolute;top:8px;left:8px;background:#fff;
+  padding:4px 10px;border-radius:6px;z-index:6;
+}
+.watermark{
+  position:absolute;bottom:10px;left:10px;font-size:14px;
+  color:#ffffffaa;font-weight:bold;z-index:6;
+}
 
 .spinner{
   position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;animation:spin 1s linear infinite;z-index:20;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* 🎤 Microphone */
+/* Mic */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;
   border:none;z-index:10;min-width:48px;min-height:48px;
 }
 
-/* 🚨 Report Button — NEW POSITION & SIZE */
+/* ⭐ زر الإبلاغ الجديد (أسفل + أصغر + BORN18+) */
 #reportBtn{
   position:absolute;
-  bottom:10px;   /* ⬇ بدلاً من الأعلى */
+  bottom:10px;
   right:10px;
   background:red;
   color:#fff;
-  padding:6px 10px; /* أصغر */
-  font-size:12px;   /* أصغر */
+  padding:6px 10px;
+  font-size:12px;
   border-radius:8px;
   cursor:pointer;
   border:none;
   z-index:10;
 }
 
-/* RIGHT COLUMN CHAT */
+/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
@@ -126,12 +131,27 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
+/* ⭐ ألوان رسائل أوميجل */
 .msg{
   padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
 }
-.msg.you{background:var(--msgYou);align-self:flex-end;}
-.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
-.msg.system{background:var(--msgSystem);align-self:center;}
+
+.msg.you{
+  background:var(--msgYou);
+  border:1px solid #a7d8ff;
+  align-self:flex-end;
+}
+
+.msg.stranger{
+  background:var(--msgStranger);
+  border:1px solid #ffbf85;
+  align-self:flex-start;
+}
+
+.msg.system{
+  background:var(--msgSystem);
+  align-self:center;
+}
 
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
@@ -139,17 +159,27 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
 
-#status{padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;}
+#status{
+  padding:6px 10px;background:#fafafa;
+  border-radius:6px;border:1px solid #ddd;text-align:center;
+}
 
 .input-container{display:flex;gap:8px;}
-#chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
-#sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;}
-#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
 
+/* ⭐ قلبنا ترتيب Send و Skip */
+#skipBtn{
+  background:#ff9a00;color:#fff;padding:10px 14px;
+  border-radius:8px;cursor:pointer;border:none;
+}
+#sendBtn{
+  width:42px;height:42px;background:var(--blue);
+  color:#fff;border-radius:8px;border:none;cursor:pointer;
+}
+#chatInput{
+  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
+}
 
-/* ----------------------- */
-/* 📱📱 MOBILE DESIGN ONLY */
-/* ----------------------- */
+/* MOBILE ONLY */
 @media (max-width: 768px){
 
   .stage{
@@ -159,72 +189,38 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   }
 
   .left-col{
-    width:100%;
-    min-width:unset;
-    gap:8px;
+    width:100%;min-width:unset;gap:8px;
   }
 
   .video-frame.top,
   .video-frame.bottom{
-    height:180px;
-    border-width:4px;
+    height:180px;border-width:4px;
   }
 
-  /* زر إظهار/إخفاء الرسائل */
   #toggleMessagesBtn{
-    width:50px;height:50px;
-    border-radius:50%;
-    border:none;
-    background:var(--blue);
-    color:#fff;
-    font-size:20px;
-    align-self:center;
-    margin:10px 0;
-    cursor:pointer;
-    display:flex;
-    justify-content:center;
-    align-items:center;
+    width:50px;height:50px;border-radius:50%;
+    border:none;background:var(--blue);color:#fff;
+    font-size:20px;align-self:center;margin:10px 0;
+    cursor:pointer;display:flex;justify-content:center;align-items:center;
   }
 
-  .messages-hidden .right-col{
-    display:none;
-  }
-
+  .messages-hidden .right-col{display:none;}
   .messages-hidden .video-frame.top,
-  .messages-hidden .video-frame.bottom{
-    height:240px;
-  }
+  .messages-hidden .video-frame.bottom{height:240px;}
 
-  .messages-hidden .chat-input-row{
-    display:none !important;
-  }
+  .messages-hidden .chat-input-row{display:none !important;}
 
   .messages-hidden #skipBtn{
-    position:fixed;
-    bottom:20px;
-    left:50%;
+    position:fixed;bottom:20px;left:50%;
     transform:translateX(-50%);
-    z-index:9999;
-    width:140px;
-    height:50px;
-    font-size:18px;
+    z-index:9999;width:140px;height:50px;font-size:18px;
     display:block !important;
-  }
-
-  #typingIndicator{
-    text-align:center;
-    font-size:14px;
-    color:#888;
-    padding:4px 0;
-    display:none;
   }
 }
 
-/* 🔥 إخفاء زر الإخفاء من الكمبيوتر */
+/* إخفاء زر الإخفاء على الكمبيوتر */
 @media (min-width: 769px){
-  #toggleMessagesBtn{
-    display:none !important;
-  }
+  #toggleMessagesBtn{display:none !important;}
 }
 </style>
 </head>
@@ -273,7 +269,8 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   <button id="toggleMessagesBtn">▼</button>
 
   <div class="right-col">
-    <div id="typingIndicator">Stranger is typing...</div>
+
+    <!-- تمت إزالة: Stranger is typing... -->
 
     <div id="chatMessages" class="chat-area">
       <div class="msg system">Connecting...</div>
@@ -281,28 +278,31 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
     <div class="chat-input-row">
       <div id="status">Loading...</div>
+
+      <!-- ⭐ تغيير المواقع: Skip أولاً ثم الكتابة ثم Send -->
       <div class="input-container">
-        <button id="sendBtn" disabled>➤</button>
-        <input id="chatInput" placeholder="Type..." disabled />
         <button id="skipBtn">Skip</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="sendBtn" disabled>➤</button>
       </div>
     </div>
+
   </div>
 
 </div>
-
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
 <script>
+/* Dark Mode */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* زر إظهار/إخفاء الرسائل */
+/* Toggle Messages */
 const toggleBtn = document.getElementById("toggleMessagesBtn");
 toggleBtn.addEventListener("click", ()=>{
   document.body.classList.toggle("messages-hidden");
@@ -310,28 +310,14 @@ toggleBtn.addEventListener("click", ()=>{
     document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 });
 
-/* مؤشر الكتابة */
-const typingIndicator = document.getElementById("typingIndicator");
-let typingTimeout;
-
-function showTyping(){
-  typingIndicator.style.display = "block";
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(()=>{
-    typingIndicator.style.display = "none";
-  }, 2000);
-}
-
-if(window.socket){
-  socket.on("typing", ()=>{ showTyping(); });
-}
-
-const chatInput = document.getElementById("chatInput");
-chatInput?.addEventListener("input", ()=>{
-  if(window.socket){
-    socket.emit("typing");
+/* ⭐ نافذة تأكيد زر BORN18+ */
+document.getElementById("reportBtn").onclick = () => {
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
+    alert("تم إرسال البلاغ بنجاح.");
   }
-});
+};
+
+/* تمت إزالة كود typing بالكامل */
 </script>
 
 </body>
