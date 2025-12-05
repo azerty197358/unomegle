@@ -1,8 +1,9 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en" dir="ltr">
+
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SparkChat</title>
 
 <style>
@@ -32,20 +33,25 @@
   --border:#444;
 }
 
-*{margin:0;padding:0;box-sizing:border-box;}
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
 
-/* ❗️ إصلاح أساسي: إزالة overflow:hidden من الجوال */
 html, body{
   height:100%;
-  overflow:hidden; /* على الديسكتوب فقط */
   background:var(--bg);
   color:var(--text);
   font-family:Arial, sans-serif;
+  overflow-x:hidden;
 }
 
+/* إصلاح منع التمرير */
 @media(max-width:768px){
   html, body{
-    overflow:auto !important; /* حل التمرير في الجوال */
+    height:auto !important;
+    overflow-y:auto !important;
   }
 }
 
@@ -72,11 +78,10 @@ html, body{
   letter-spacing:1px;
 }
 
-/* spark باللون الأزرق */
 .logo span:nth-child(-n+5){color:#2ea3ff;}
 .logo span:nth-child(n+6){color:#ff9a00;}
-
 .logo span{transition:0.4s;display:inline-block;}
+
 .flip{animation:spinLetter 0.5s ease forwards;}
 @keyframes spinLetter{
   0%{transform:rotate(0deg) scale(1);}
@@ -94,12 +99,6 @@ html, body{
   cursor:pointer;
 }
 
-@media(max-width:768px){
-  #exitBtn{
-    display:block !important; /* إصلاح ظهور الزر */
-  }
-}
-
 #darkToggle{
   background:#444;
   color:#fff;
@@ -112,15 +111,17 @@ html, body{
 
 /* MAIN LAYOUT */
 .stage{
-  position:absolute;
-  top:60px;
-  bottom:0;
-  left:0;
-  right:0;
   display:flex;
   gap:var(--gap);
   padding:12px;
-  overflow:hidden;
+  height:calc(100vh - 60px);
+}
+
+@media(max-width:768px){
+  .stage{
+    flex-direction:column;
+    height:auto !important;
+  }
 }
 
 .left-col{
@@ -129,6 +130,13 @@ html, body{
   display:flex;
   flex-direction:column;
   gap:var(--gap);
+}
+
+@media(max-width:768px){
+  .left-col{
+    width:100%;
+    min-width:unset;
+  }
 }
 
 /* VIDEOS */
@@ -146,6 +154,13 @@ html, body{
 .video-frame.top,
 .video-frame.bottom{
   height:330px;
+}
+
+@media(max-width:768px){
+  .video-frame.top,
+  .video-frame.bottom{
+    height:220px;
+  }
 }
 
 video{
@@ -201,9 +216,9 @@ video{
   border-radius:10px;
   min-width:240px;
   background:var(--bg);
+  height:100%;
 }
 
-/* ❗️ إصلاح التمرير — هذا أهم جزء */
 .chat-area{
   flex:1;
   padding:12px;
@@ -211,7 +226,6 @@ video{
   display:flex;
   flex-direction:column;
   gap:8px;
-  scroll-behavior:smooth;
 }
 
 .msg{
@@ -247,24 +261,6 @@ video{
   position:sticky;
   bottom:0;
   z-index:999;
-}
-
-/* MOBILE FIX */
-@media(max-width:768px){
-  .stage{
-    flex-direction:column;
-    overflow:auto; /* يسمح بالتمرير */
-  }
-
-  .left-col{
-    width:100%;
-    min-width:unset;
-  }
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:200px;
-  }
 }
 </style>
 </head>
@@ -332,7 +328,6 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* شعار */
 const letters = document.querySelectorAll("#logo span");
 setInterval(()=>{
   const r = Math.floor(Math.random()*letters.length);
