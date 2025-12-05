@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
-
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -23,39 +22,27 @@
   --msgSystem:#e8e8e8;
 }
 
-/* DARK MODE */
 .dark{
   --bg:#0f1115;
-  --text:#ffffff !important;
+  --text:#ffffff;
   --msgYou:#1c2733;
   --msgStranger:#332519;
   --msgSystem:#222;
   --border:#444;
 }
 
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-}
-
+*{margin:0;padding:0;box-sizing:border-box;}
 html, body{
   height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
-  font-family:Arial, sans-serif;
-  overflow-x:hidden;
 }
 
-/* إصلاح منع التمرير */
-@media(max-width:768px){
-  html, body{
-    height:auto !important;
-    overflow-y:auto !important;
-  }
-}
-
-/* TOPBAR */
+/* ===================== */
+/*  FIXED TOP BAR        */
+/* ===================== */
 .topbar{
   height:60px;
   display:flex;
@@ -69,26 +56,25 @@ html, body{
   z-index:9999;
 }
 
+/* LOGO */
 .logo{
   font-size:48px;
   font-weight:bold;
   display:flex;
   gap:3px;
   user-select:none;
-  letter-spacing:1px;
 }
-
 .logo span:nth-child(-n+5){color:#2ea3ff;}
 .logo span:nth-child(n+6){color:#ff9a00;}
-.logo span{transition:0.4s;display:inline-block;}
 
 .flip{animation:spinLetter 0.5s ease forwards;}
 @keyframes spinLetter{
-  0%{transform:rotate(0deg) scale(1);}
+  0%{transform:rotate(0);}
   50%{transform:rotate(180deg) scale(1.2);}
-  100%{transform:rotate(360deg) scale(1);}
+  100%{transform:rotate(360deg);}
 }
 
+/* EXIT BUTTON ALWAYS VISIBLE */
 #exitBtn{
   background:red;
   color:#fff;
@@ -97,31 +83,34 @@ html, body{
   border-radius:8px;
   font-weight:bold;
   cursor:pointer;
+  display:block !important;
 }
 
+/* DARK MODE */
 #darkToggle{
   background:#444;
   color:#fff;
-  padding:8px 12px;
   border:none;
+  padding:8px 12px;
   border-radius:8px;
   cursor:pointer;
   margin-right:10px;
 }
 
-/* MAIN LAYOUT */
+/* ===================== */
+/*   MAIN SCREEN STAGE   */
+/* ===================== */
+
 .stage{
+  position:absolute;
+  top:60px;
+  bottom:0;
+  left:0;
+  right:0;
   display:flex;
   gap:var(--gap);
   padding:12px;
-  height:calc(100vh - 60px);
-}
-
-@media(max-width:768px){
-  .stage{
-    flex-direction:column;
-    height:auto !important;
-  }
+  overflow:hidden;
 }
 
 .left-col{
@@ -132,14 +121,7 @@ html, body{
   gap:var(--gap);
 }
 
-@media(max-width:768px){
-  .left-col{
-    width:100%;
-    min-width:unset;
-  }
-}
-
-/* VIDEOS */
+/* VIDEO FRAMES */
 .video-frame{
   position:relative;
   border-radius:var(--radius);
@@ -156,13 +138,6 @@ html, body{
   height:330px;
 }
 
-@media(max-width:768px){
-  .video-frame.top,
-  .video-frame.bottom{
-    height:220px;
-  }
-}
-
 video{
   width:100%;
   height:100%;
@@ -170,14 +145,20 @@ video{
 }
 
 .video-label{
-  position:absolute;top:8px;left:8px;
-  background:#fff;padding:4px 10px;
-  border-radius:6px;z-index:6;color:#000;
+  position:absolute;
+  top:8px;
+  left:8px;
+  background:#fff;
+  padding:4px 10px;
+  border-radius:6px;
 }
 
 .watermark{
-  position:absolute;bottom:10px;left:10px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  color:#ffffffaa;
+  font-weight:bold;
 }
 
 #micBtn{
@@ -188,85 +169,107 @@ video{
   color:#fff;
   padding:8px;
   border-radius:50%;
-  width:40px;height:40px;
-  cursor:pointer;border:none;z-index:10;
-}
-
-.spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;
-  animation:spin 1s linear infinite;z-index:20;
+  cursor:pointer;
+  border:none;
 }
 
 #reportBtn{
   position:absolute;
-  bottom:10px;right:10px;
-  background:red;color:#fff;
+  bottom:10px;
+  right:10px;
+  background:red;
+  color:#fff;
   padding:6px 10px;
-  font-size:12px;border-radius:8px;
-  cursor:pointer;border:none;z-index:10;
+  border:none;
+  border-radius:8px;
 }
 
-/* CHAT */
-.right-col{
-  flex:1;
+/* ===================== */
+/*   NEW SIDEBAR        */
+/* ===================== */
+
+.sidebar-chat{
+  position:fixed;
+  top:60px;
+  right:0;
+  width:300px;
+  bottom:0;
+  background:var(--bg);
+  border-left:6px solid var(--border);
   display:flex;
   flex-direction:column;
-  border:6px solid var(--border);
-  border-radius:10px;
-  min-width:240px;
-  background:var(--bg);
-  height:100%;
+  z-index:9990;
 }
 
-.chat-area{
+.sidebar-chat .chat-area{
   flex:1;
   padding:12px;
-  overflow-y:auto !important;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
+  overflow-y:auto;
 }
 
-.msg{
+.chat-area .msg{
   padding:10px 14px;
-  max-width:75%;
   border-radius:10px;
+  max-width:75%;
 }
 
-.msg.you{
-  background:var(--msgYou);
-  border:1px solid #a7d8ff;
-  align-self:flex-end;
-}
+.msg.system{background:var(--msgSystem);align-self:center;}
+.msg.you{background:var(--msgYou);align-self:flex-end;}
+.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
 
-.msg.stranger{
-  background:var(--msgStranger);
-  border:1px solid #ffbf85;
-  align-self:flex-start;
-}
-
-.msg.system{
-  background:var(--msgSystem);
-  align-self:center;
-}
-
-.chat-input-row{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
+.sidebar-input{
   padding:10px;
   background:#fafafa;
   border-top:1px solid #ddd;
-  position:sticky;
-  bottom:0;
-  z-index:999;
+}
+
+.sidebar-input .input-container{
+  display:flex;
+  gap:8px;
+}
+
+#sendBtn{
+  width:42px;
+  height:42px;
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  border-radius:8px;
+}
+
+#chatInput{
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+}
+
+/* ===================== */
+/*   MOBILE FIX / HIDE   */
+/* ===================== */
+@media(max-width:768px){
+
+  .stage{
+    padding:6px;
+    flex-direction:column;
+  }
+
+  .left-col{
+    width:100%;
+    min-width:unset;
+  }
+
+  .video-frame.top,
+  .video-frame.bottom{
+    height:190px;
+  }
 }
 </style>
 </head>
 
 <body>
 
+<!-- TOP BAR -->
 <div class="topbar">
   <div class="logo" id="logo">
     <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
@@ -279,15 +282,14 @@ video{
   </div>
 </div>
 
+<!-- MAIN AREA -->
 <div class="stage">
-
   <div class="left-col">
 
     <div class="video-frame top">
       <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
-      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
@@ -295,24 +297,25 @@ video{
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
+</div>
 
-  <div class="right-col">
-    <div id="chatMessages" class="chat-area">
-      <div class="msg system">Connecting...</div>
-    </div>
+<!-- FIXED SIDEBAR CHAT -->
+<div class="sidebar-chat">
 
-    <div class="chat-input-row">
-      <div id="status">Loading...</div>
-      <div style="display:flex;gap:8px;">
-        <button id="skipBtn">Skip</button>
-        <input id="chatInput" placeholder="Type..." disabled />
-        <button id="sendBtn" disabled>➤</button>
-      </div>
+  <div id="chatMessages" class="chat-area">
+    <div class="msg system">Connecting...</div>
+  </div>
+
+  <div class="sidebar-input">
+    <div id="status">Loading...</div>
+    <div class="input-container">
+      <button id="skipBtn">Skip</button>
+      <input id="chatInput" placeholder="Type..." />
+      <button id="sendBtn">➤</button>
     </div>
   </div>
 
@@ -330,9 +333,9 @@ document.getElementById("darkToggle").onclick = () => {
 
 const letters = document.querySelectorAll("#logo span");
 setInterval(()=>{
-  const r = Math.floor(Math.random()*letters.length);
-  letters[r].classList.add("flip");
-  setTimeout(()=>letters[r].classList.remove("flip"),500);
+  const x = letters[Math.floor(Math.random()*letters.length)];
+  x.classList.add("flip");
+  setTimeout(()=>x.classList.remove("flip"),500);
 },2500);
 </script>
 
