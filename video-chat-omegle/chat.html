@@ -14,10 +14,6 @@
   --gap:10px;
   --radius:12px;
 
-  --bg:#ffffff;
-  --text:#000;
-
-  /* ⭐ ألوان أوميجل */
   --msgYou:#cceaff;
   --msgStranger:#ffd8b0;
   --msgSystem:#e8e8e8;
@@ -29,18 +25,19 @@
   --msgYou:#1c2733;
   --msgStranger:#332519;
   --msgSystem:#222;
-  --border:#444;
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
+html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;}
 
 .topbar{
   height:60px;display:flex;justify-content:space-between;align-items:center;
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
+
 .logo{font-size:24px;font-weight:bold;color:#ff9a00;}
 .logo span{color:#3fa0ff;}
+
 #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
 
 #darkToggle{
@@ -48,82 +45,53 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   cursor:pointer;margin-right:10px;
 }
 
-/* Notification */
-.notify-box{position:relative;margin-right:12px;cursor:pointer;}
-#notifyIcon{font-size:24px;}
-#notifyDot{
-  width:10px;height:10px;background:red;border-radius:50%;
-  position:absolute;top:0;right:0;display:none;
+/* Skip Button Omegle Style */
+#skipBtn{
+  background:#1f9cff;
+  color:#fff;
+  padding:10px 18px;
+  border-radius:8px;
+  cursor:pointer;
+  border:none;
+  font-weight:bold;
+  transition:0.2s;
 }
-#notifyMenu{
-  position:absolute;right:0;top:40px;width:220px;
-  background:#fff;border:1px solid #ccc;border-radius:8px;
-  display:none;max-height:250px;overflow-y:auto;z-index:999;
-}
-.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
-.notify-empty{padding:10px;text-align:center;color:#777;}
+#skipBtn:hover{background:#0c86e8;}
 
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
-  display:flex;gap:var(--gap);padding:12px;overflow:hidden;
+  display:flex;gap:10px;padding:12px;
 }
 
 .left-col{
-  width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);
+  width:340px;display:flex;flex-direction:column;gap:10px;
 }
 
 .video-frame{
-  position:relative;border-radius:var(--radius);
+  position:relative;border-radius:10px;
   border:6px solid var(--border);overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
 .video-frame.top{height:300px;}
 .video-frame.bottom{height:220px;}
-video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
-.video-label{
-  position:absolute;top:8px;left:8px;background:#fff;
-  padding:4px 10px;border-radius:6px;z-index:6;
-}
-.watermark{
-  position:absolute;bottom:10px;left:10px;font-size:14px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
+video{width:100%;height:100%;object-fit:cover;}
+
+#reportBtn{
+  position:absolute;bottom:10px;right:10px;
+  background:red;color:#fff;padding:6px 10px;
+  font-size:12px;border-radius:8px;border:none;cursor:pointer;z-index:10;
 }
 
-.spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;
-  animation:spin 1s linear infinite;z-index:20;
-}
-@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
-
-/* Mic */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
-  color:#fff;padding:10px;font-size:18px;border-radius:50%;cursor:pointer;
-  border:none;z-index:10;min-width:48px;min-height:48px;
-}
-
-/* ⭐ زر الإبلاغ الجديد (أسفل + أصغر + BORN18+) */
-#reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:6px 10px;
-  font-size:12px;
-  border-radius:8px;
-  cursor:pointer;
-  border:none;
-  z-index:10;
+  color:#fff;padding:10px;border-radius:50%;border:none;cursor:pointer;
 }
 
 /* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
-  border:6px solid var(--border);border-radius:10px;
-  background:var(--bg);min-width:240px;height:100%;
+  border:6px solid var(--border);border-radius:10px;background:var(--bg);
 }
 
 .chat-area{
@@ -131,95 +99,34 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-/* ⭐ ألوان رسائل أوميجل */
 .msg{
-  padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
+  padding:10px 14px;border-radius:10px;max-width:75%;font-size:14px;
 }
-
-.msg.you{
-  background:var(--msgYou);
-  border:1px solid #a7d8ff;
-  align-self:flex-end;
-}
-
-.msg.stranger{
-  background:var(--msgStranger);
-  border:1px solid #ffbf85;
-  align-self:flex-start;
-}
-
-.msg.system{
-  background:var(--msgSystem);
-  align-self:center;
-}
+.msg.you{background:var(--msgYou);align-self:flex-end;}
+.msg.stranger{background:var(--msgStranger);align-self:flex-start;}
+.msg.system{background:var(--msgSystem);align-self:center;}
 
 .chat-input-row{
-  display:flex;flex-direction:column;gap:8px;padding:10px;
-  background:#fafafa;border-top:1px solid #ddd;
-  position:sticky;bottom:0;left:0;right:0;z-index:50;
+  padding:10px;background:#fafafa;border-top:1px solid #ddd;
 }
 
-#status{
-  padding:6px 10px;background:#fafafa;
-  border-radius:6px;border:1px solid #ddd;text-align:center;
-}
+.input-container{display:flex;gap:10px;}
 
-.input-container{display:flex;gap:8px;}
-
-/* ⭐ قلبنا ترتيب Send و Skip */
-#skipBtn{
-  background:#ff9a00;color:#fff;padding:10px 14px;
-  border-radius:8px;cursor:pointer;border:none;
-}
 #sendBtn{
-  width:42px;height:42px;background:var(--blue);
-  color:#fff;border-radius:8px;border:none;cursor:pointer;
+  width:42px;height:42px;background:#2ea3ff;color:#fff;border:none;
+  border-radius:8px;cursor:pointer;font-size:18px;
 }
 #chatInput{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* MOBILE ONLY */
-@media (max-width: 768px){
-
-  .stage{
-    flex-direction:column;
-    padding:8px;
-    overflow-y:auto;
-  }
-
-  .left-col{
-    width:100%;min-width:unset;gap:8px;
-  }
-
-  .video-frame.top,
-  .video-frame.bottom{
-    height:180px;border-width:4px;
-  }
-
-  #toggleMessagesBtn{
-    width:50px;height:50px;border-radius:50%;
-    border:none;background:var(--blue);color:#fff;
-    font-size:20px;align-self:center;margin:10px 0;
-    cursor:pointer;display:flex;justify-content:center;align-items:center;
-  }
-
-  .messages-hidden .right-col{display:none;}
-  .messages-hidden .video-frame.top,
-  .messages-hidden .video-frame.bottom{height:240px;}
-
-  .messages-hidden .chat-input-row{display:none !important;}
-
-  .messages-hidden #skipBtn{
-    position:fixed;bottom:20px;left:50%;
-    transform:translateX(-50%);
-    z-index:9999;width:140px;height:50px;font-size:18px;
-    display:block !important;
-  }
+/* Mobile */
+@media (max-width:768px){
+  .stage{flex-direction:column;}
 }
 
-/* إخفاء زر الإخفاء على الكمبيوتر */
-@media (min-width: 769px){
+/* Hide toggle on PC */
+@media (min-width:769px){
   #toggleMessagesBtn{display:none !important;}
 }
 </style>
@@ -227,18 +134,13 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 <body>
 
+<!-- 🔊 صوت الرسائل -->
+<audio id="msgSound" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_68f0f44795.mp3?filename=notification-3-14714.mp3"></audio>
+
 <div class="topbar">
   <div class="logo">Spark<span>Chat</span></div>
 
-  <div style="display:flex;gap:14px;align-items:center;">
-    <div class="notify-box">
-      <div id="notifyIcon">🔔</div>
-      <div id="notifyDot"></div>
-      <div id="notifyMenu">
-        <div class="notify-empty">No notifications</div>
-      </div>
-    </div>
-
+  <div style="display:flex;gap:14px;">
     <button id="darkToggle">🌙</button>
     <button id="exitBtn">Exit</button>
   </div>
@@ -250,36 +152,23 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
     <div class="video-frame top">
       <button id="reportBtn">🚨 BORN18+</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">Stranger</div>
-      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
     <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
 
-  <button id="toggleMessagesBtn">▼</button>
-
   <div class="right-col">
-
-    <!-- تمت إزالة: Stranger is typing... -->
 
     <div id="chatMessages" class="chat-area">
       <div class="msg system">Connecting...</div>
     </div>
 
     <div class="chat-input-row">
-      <div id="status">Loading...</div>
-
-      <!-- ⭐ تغيير المواقع: Skip أولاً ثم الكتابة ثم Send -->
       <div class="input-container">
         <button id="skipBtn">Skip</button>
         <input id="chatInput" placeholder="Type..." disabled />
@@ -292,8 +181,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
 <script>
 /* Dark Mode */
 document.getElementById("darkToggle").onclick = () => {
@@ -302,22 +189,33 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle Messages */
-const toggleBtn = document.getElementById("toggleMessagesBtn");
-toggleBtn.addEventListener("click", ()=>{
-  document.body.classList.toggle("messages-hidden");
-  toggleBtn.innerText =
-    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
-});
-
-/* ⭐ نافذة تأكيد زر BORN18+ */
+/* BORN18+ confirmation */
 document.getElementById("reportBtn").onclick = () => {
-  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
-    alert("تم إرسال البلاغ بنجاح.");
+  if(confirm("هل تريد الإبلاغ عن المستخدم؟")){
+    alert("تم إرسال البلاغ.");
   }
 };
 
-/* تمت إزالة كود typing بالكامل */
+/* ⭐ تشغيل الصوت عند قدوم رسالة */
+function playMsgSound(){
+  const s = document.getElementById("msgSound");
+  s.currentTime = 0;
+  s.play();
+}
+
+/* مثال: استقبال رسالة (ادمجها مع كود السيرفر لديك) */
+function receiveMessage(text){
+  const box = document.getElementById("chatMessages");
+
+  const div = document.createElement("div");
+  div.className = "msg stranger";
+  div.innerText = text;
+
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+
+  playMsgSound(); // 🔊 تشغيل الصوت
+}
 </script>
 
 </body>
