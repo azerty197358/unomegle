@@ -34,22 +34,11 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html, body{
   height:100%;
-  overflow:hidden; /* لا يوجد أي تمرير */
+  overflow:hidden; 
   font-family:Arial, sans-serif;
   background:var(--bg);
-  color:var(--text)
+  color:var(--text);
 }
-
-/* ===== AUTO SCALE WRAPPER ===== */
-
-#autoScaleContainer {
-  transform-origin: top left;
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  overflow: hidden;
-}
-
 
 /* ===================== */
 /*  TOP BAR - FIXED      */
@@ -78,22 +67,13 @@ html, body{
   letter-spacing:1px;
 }
 
-/* نجعل كلمة Spark باللون الأزرق فقط */
-.logo span:nth-child(-n+5){
-  color:#2ea3ff !important;
-}
-
-/* باقي كلمة Chat بلونها الطبيعي */
-.logo span:nth-child(n+6){
-  color:#ff9a00;
-}
+.logo span:nth-child(-n+5){ color:#2ea3ff !important; }
+.logo span:nth-child(n+6){ color:#ff9a00; }
 
 .logo span{
   display:inline-block;
   transition:0.4s;
 }
-
-/* Animation */
 .flip{
   animation:spinLetter 0.5s ease forwards;
 }
@@ -111,7 +91,12 @@ html, body{
   border-radius:8px;
   font-weight:bold;
   cursor:pointer;
-  display:block;
+  display:block !important;
+}
+
+/* ALWAYS visible on mobile */
+@media(max-width:768px){
+  #exitBtn{ display:block !important; }
 }
 
 #darkToggle{
@@ -122,119 +107,6 @@ html, body{
   border-radius:8px;
   cursor:pointer;
   margin-right:10px;
-}
-
-/* NOTIFICATIONS */
-.notify-box{position:relative;margin-right:12px;cursor:pointer;}
-#notifyIcon{font-size:24px;}
-#notifyDot{
-  width:10px;height:10px;background:red;border-radius:50%;
-  position:absolute;top:0;right:0;display:none;
-}
-#notifyMenu{
-  position:absolute;right:0;top:40px;width:220px;
-  background:#fff;border:1px solid #ccc;border-radius:8px;
-  display:none;max-height:250px;overflow-y:auto;z-index:999;
-}
-.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
-.notify-empty{padding:10px;text-align:center;color:#777;}
-
-/* ===================== */
-/*    STAGE CONTAINER    */
-/* ===================== */
-
-.stage{
-  position:absolute;
-  top:60px;
-  bottom:0;
-  left:0;
-  right:0;
-  display:flex;
-  gap:var(--gap);
-  padding:12px;
-  overflow:hidden;
-}
-
-/* LEFT SIDE */
-.left-col{
-  width:520px;
-  min-width:380px;
-  display:flex;
-  flex-direction:column;
-  gap:var(--gap);
-}
-
-/* VIDEO FRAMES */
-.video-frame{
-  position:relative;
-  border-radius:var(--radius);
-  border:6px solid var(--border);
-  overflow:hidden;
-  background:#000;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-
-.video-frame.top,
-.video-frame.bottom{
-  height:330px;
-}
-
-video{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  position:relative;
-  z-index:0;
-}
-
-.video-label{
-  position:absolute;top:8px;left:8px;background:#fff;
-  padding:4px 10px;border-radius:6px;z-index:6;color:#000;
-}
-.watermark{
-  position:absolute;bottom:10px;left:10px;font-size:14px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
-}
-
-/* SMALL MICROPHONE BUTTON */
-#micBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:var(--blue);
-  color:#fff;
-  padding:8px;
-  font-size:14px;
-  border-radius:50%;
-  cursor:pointer;
-  border:none;
-  z-index:10;
-  width:40px;
-  height:40px;
-}
-
-.spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;
-  animation:spin 1s linear infinite;z-index:20;
-}
-@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
-
-/* REPORT BTN */
-#reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:6px 10px;
-  font-size:12px;
-  border-radius:8px;
-  cursor:pointer;
-  border:none;
-  z-index:10;
 }
 
 /* ===================== */
@@ -253,6 +125,7 @@ video{
   color:var(--text);
 }
 
+/* ★★ شريط تمرير جانبي مخصص ★★ */
 .chat-area{
   flex:1;
   padding:12px;
@@ -263,23 +136,32 @@ video{
   scroll-behavior:smooth;
 }
 
+/* شكل الشريط (ويب + أندرويد + iOS) */
+.chat-area::-webkit-scrollbar{
+  width:10px;
+}
+.chat-area::-webkit-scrollbar-thumb{
+  background:#2ea3ff;
+  border-radius:10px;
+}
+.chat-area::-webkit-scrollbar-track{
+  background:#ddd;
+}
+
+/* الرسائل */
 .msg{
   padding:10px 14px;
   max-width:75%;
   border-radius:10px;
   font-size:14px;
-  color:var(--text);
 }
 
 .msg.system{background:var(--msgSystem);align-self:center;}
-.dark .msg.system{color:#fff;}
-
 .msg.you{
   background:var(--msgYou);
   border:1px solid #a7d8ff;
   align-self:flex-end;
 }
-
 .msg.stranger{
   background:var(--msgStranger);
   border:1px solid #ffbf85;
@@ -302,45 +184,35 @@ video{
   color:#000;
 }
 
-#status{
-  padding:6px 10px;
-  background:#fafafa;
-  border-radius:6px;
-  border:1px solid #ddd;
-  text-align:center;
-  color:#000;
+/* ===================== */
+/* MOBILE FIXES          */
+/* ===================== */
+
+@media (max-width:768px){
+
+  .stage{
+    flex-direction:column;
+    padding:8px;
+    overflow:hidden !important;
+  }
+
+  .left-col{width:100%;min-width:unset;gap:8px;}
+  .video-frame.top, .video-frame.bottom{ height:200px; }
+
+  /* زر الخروج ظاهر */
+  #exitBtn{ display:block !important; }
+
+  /* الشريط الجانبي يعمل ممتاز */
+  .chat-area{
+    max-height:55vh;
+    overflow-y:auto !important;
+  }
 }
-
-.input-container{display:flex;gap:8px;}
-
-#skipBtn{
-  background:#1f8cff;
-  color:#fff;
-  padding:12px 22px;
-  font-size:16px;
-  font-weight:bold;
-  border-radius:6px;
-  border:none;
-  cursor:pointer;
-  transition:0.2s ease;
-  box-shadow:0 3px 8px #0002;
-}
-
-#sendBtn{
-  width:42px;height:42px;background:var(--blue);
-  color:#fff;border-radius:8px;border:none;cursor:pointer;
-}
-
-#chatInput{
-  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;color:#000;
-}
-
 </style>
+
 </head>
 
 <body>
-
-<div id="autoScaleContainer">
 
 <div class="topbar">
   <div class="logo" id="logo">
@@ -349,14 +221,6 @@ video{
   </div>
 
   <div style="display:flex;gap:14px;align-items:center;">
-    <div class="notify-box">
-      <div id="notifyIcon">🔔</div>
-      <div id="notifyDot"></div>
-      <div id="notifyMenu">
-        <div class="notify-empty">No notifications</div>
-      </div>
-    </div>
-
     <button id="darkToggle">🌙</button>
     <button id="exitBtn">Exit</button>
   </div>
@@ -370,7 +234,6 @@ video{
       <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
-      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
@@ -378,20 +241,19 @@ video{
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
 
   <div class="right-col">
+
     <div id="chatMessages" class="chat-area">
       <div class="msg system">Connecting...</div>
     </div>
 
     <div class="chat-input-row">
       <div id="status">Loading...</div>
-
       <div class="input-container">
         <button id="skipBtn">Skip</button>
         <input id="chatInput" placeholder="Type..." disabled />
@@ -403,50 +265,12 @@ video{
 
 </div>
 
-</div> <!-- AUTO SCALE END -->
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
 <script>
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
-
-const logoLetters = document.querySelectorAll("#logo span");
-
-function flipRandomLetter(){
-  const randomIndex = Math.floor(Math.random() * logoLetters.length);
-  const letter = logoLetters[randomIndex];
-  letter.classList.add("flip");
-
-  setTimeout(()=>{ letter.classList.remove("flip"); }, 500);
-}
-
-setInterval(flipRandomLetter, 2500);
-
-
-
-/* ======== AUTO SCALE SCRIPT ======== */
-
-function autoScaleDesktopView() {
-  const baseWidth = 900;  // العرض الأصلي للتصميم
-  const baseHeight = 720; // الارتفاع الأصلي للتصميم
-
-  const scaleX = window.innerWidth / baseWidth;
-  const scaleY = window.innerHeight / baseHeight;
-
-  const finalScale = Math.min(scaleX, scaleY);
-
-  document.getElementById("autoScaleContainer").style.transform =
-    `scale(${finalScale})`;
-}
-
-window.addEventListener("resize", autoScaleDesktopView);
-autoScaleDesktopView();
-
 </script>
 
 </body>
