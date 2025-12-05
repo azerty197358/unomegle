@@ -17,7 +17,6 @@
   --bg:#ffffff;
   --text:#000;
 
-  /* ⭐ ألوان أوميجل */
   --msgYou:#cceaff;
   --msgStranger:#ffd8b0;
   --msgSystem:#e8e8e8;
@@ -40,7 +39,6 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
 
-/* ⭐ تكبير الشعار + جعله سبانات */
 .logo{
   font-size:32px;
   font-weight:bold;
@@ -54,10 +52,9 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   transition:0.3s;
 }
 .logo span:nth-child(6){
-  color:#3fa0ff; /* بداية كلمة Chat */
+  color:#3fa0ff;
 }
 
-/* ⭐ حركة الشقلبة */
 .flip {
   animation: flipAnim 0.6s ease forwards;
 }
@@ -69,13 +66,11 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 }
 
 #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
-
 #darkToggle{
   background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
   cursor:pointer;margin-right:10px;
 }
 
-/* Notification */
 .notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
@@ -95,17 +90,25 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
 }
 
+/* ⭐ تكبير الشاشات على حساب الرسائل */
 .left-col{
-  width:340px;min-width:240px;display:flex;flex-direction:column;gap:var(--gap);
+  width:480px;
+  min-width:360px;
+  display:flex;
+  flex-direction:column;
+  gap:var(--gap);
 }
 
+/* ⭐ تكبير حجم الفيديو */
 .video-frame{
   position:relative;border-radius:var(--radius);
   border:6px solid var(--border);overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
-.video-frame.top{height:300px;}
-.video-frame.bottom{height:220px;}
+
+.video-frame.top{height:360px;}     /* بدل 300px */
+.video-frame.bottom{height:260px;}  /* بدل 220px */
+
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 .video-label{
@@ -131,7 +134,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   border:none;z-index:10;min-width:48px;min-height:48px;
 }
 
-/* ⭐ زر الإبلاغ الجديد (أسفل + أصغر + BORN18+) */
+/* زر BORN18+ */
 #reportBtn{
   position:absolute;
   bottom:10px;
@@ -146,7 +149,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   z-index:10;
 }
 
-/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
@@ -158,7 +160,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-/* ⭐ ألوان رسائل أوميجل */
 .msg{
   padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
 }
@@ -193,7 +194,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 .input-container{display:flex;gap:8px;}
 
-/* ⭐ زر Skip نسخة أوميجل الحقيقي */
 #skipBtn{
   background:#1f8cff;
   color:#fff;
@@ -223,7 +223,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* MOBILE ONLY */
+/* MOBILE */
 @media (max-width: 768px){
 
   .stage{
@@ -262,7 +262,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   }
 }
 
-/* إخفاء زر الإخفاء على الكمبيوتر */
 @media (min-width: 769px){
   #toggleMessagesBtn{display:none !important;}
 }
@@ -273,7 +272,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 <div class="topbar">
 
-  <!-- ⭐ شعار جديد بحروف منفصلة -->
   <div class="logo" id="logo">
     <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span>
     <span>C</span><span>h</span><span>a</span><span>t</span>
@@ -341,14 +339,12 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 <script src="script.js"></script>
 
 <script>
-/* Dark Mode */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle Messages */
 const toggleBtn = document.getElementById("toggleMessagesBtn");
 toggleBtn.addEventListener("click", ()=>{
   document.body.classList.toggle("messages-hidden");
@@ -356,14 +352,12 @@ toggleBtn.addEventListener("click", ()=>{
     document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 });
 
-/* ⭐ نافذة تأكيد زر BORN18+ */
 document.getElementById("reportBtn").onclick = () => {
   if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
     alert("تم إرسال البلاغ بنجاح.");
   }
 };
 
-/* ⭐ شقلبة حرف من الشعار كل 3 ثواني */
 const logoLetters = document.querySelectorAll("#logo span");
 
 function flipRandomLetter(){
@@ -373,7 +367,7 @@ function flipRandomLetter(){
 
   setTimeout(()=>{
     letter.classList.remove("flip");
-  }, 600); // مدة الأنيميشن
+  }, 600);
 }
 
 setInterval(flipRandomLetter, 3000);
