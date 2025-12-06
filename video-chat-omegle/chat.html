@@ -57,31 +57,14 @@ html, body{
   z-index:9999;
 }
 
-/* LOGO */
 .logo{
   font-size:48px;
   font-weight:bold;
   display:flex;
   gap:3px;
-  user-select:none;
-  letter-spacing:1px;
 }
-
 .logo span:nth-child(-n+5){ color:#2ea3ff !important; }
 .logo span:nth-child(n+6){ color:#ff9a00; }
-
-.logo span{
-  display:inline-block;
-  transition:0.4s;
-}
-.flip{
-  animation:spinLetter 0.5s ease forwards;
-}
-@keyframes spinLetter{
-  0%   { transform: rotate(0deg) scale(1); }
-  50%  { transform: rotate(180deg) scale(1.2); }
-  100% { transform: rotate(360deg) scale(1); }
-}
 
 #exitBtn{
   background:red;
@@ -91,12 +74,6 @@ html, body{
   border-radius:8px;
   font-weight:bold;
   cursor:pointer;
-  display:block !important;
-}
-
-/* ALWAYS visible on mobile */
-@media(max-width:768px){
-  #exitBtn{ display:block !important; }
 }
 
 #darkToggle{
@@ -110,8 +87,34 @@ html, body{
 }
 
 /* ===================== */
-/*       CHAT AREA       */
+/*   MAIN STRUCTURE      */
 /* ===================== */
+
+.stage{
+  display:flex;
+  height:calc(100% - 60px);
+  gap:10px;
+  padding:10px;
+}
+
+.left-col{
+  width:50%;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.video-frame{
+  position:relative;
+  border:4px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+.video-frame video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
 
 .right-col{
   flex:1;
@@ -125,7 +128,6 @@ html, body{
   color:var(--text);
 }
 
-/* ★★ شريط تمرير جانبي مخصص ★★ */
 .chat-area{
   flex:1;
   padding:12px;
@@ -136,19 +138,6 @@ html, body{
   scroll-behavior:smooth;
 }
 
-/* شكل الشريط (ويب + أندرويد + iOS) */
-.chat-area::-webkit-scrollbar{
-  width:10px;
-}
-.chat-area::-webkit-scrollbar-thumb{
-  background:#2ea3ff;
-  border-radius:10px;
-}
-.chat-area::-webkit-scrollbar-track{
-  background:#ddd;
-}
-
-/* الرسائل */
 .msg{
   padding:10px 14px;
   max-width:75%;
@@ -168,11 +157,10 @@ html, body{
   align-self:flex-start;
 }
 
-/* INPUT AREA */
 .chat-input-row{
   display:flex;
   flex-direction:column;
-  gap:8px;
+  gap:6px;
   padding:10px;
   background:#fafafa;
   border-top:1px solid #ddd;
@@ -180,32 +168,55 @@ html, body{
   bottom:0;
   left:0;
   right:0;
-  z-index:50;
   color:#000;
 }
 
 /* ===================== */
-/* MOBILE FIXES          */
+/*      MOBILE MODE      */
 /* ===================== */
 
-@media (max-width:768px){
+@media (max-width:600px){
 
   .stage{
     flex-direction:column;
-    padding:8px;
-    overflow:hidden !important;
+    gap:6px;
+    padding:6px;
   }
 
-  .left-col{width:100%;min-width:unset;gap:8px;}
-  .video-frame.top, .video-frame.bottom{ height:200px; }
+  .left-col{
+    width:100%;
+    gap:6px;
+  }
 
-  /* زر الخروج ظاهر */
-  #exitBtn{ display:block !important; }
+  /* 🔥 تصغير الصور لتوفير مساحة */
+  .video-frame{
+    height:140px !important;
+  }
 
-  /* الشريط الجانبي يعمل ممتاز */
+  /* 🔥 تكبير مساحة الرسائل */
   .chat-area{
-    max-height:55vh;
-    overflow-y:auto !important;
+    max-height:65vh !important;
+  }
+
+  /* 🔥 تصغير الأزرار */
+  #exitBtn, #darkToggle, #sendBtn, #skipBtn, #micBtn, #reportBtn{
+    padding:6px 10px !important;
+    font-size:13px !important;
+  }
+
+  /* 🔥 تصغير خط المدخل */
+  #chatInput{
+    font-size:13px !important;
+    padding:8px !important;
+  }
+
+  .chat-input-row{
+    padding:8px;
+  }
+
+  .msg{
+    font-size:12px;
+    padding:8px 10px;
   }
 }
 </style>
@@ -232,15 +243,11 @@ html, body{
 
     <div class="video-frame top">
       <button id="reportBtn">🚨 BORN18+</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">Stranger</div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
     <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
