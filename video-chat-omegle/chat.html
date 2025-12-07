@@ -68,17 +68,23 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 }
 
 .left-col{
-  width:360px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
 }
 
-/* ⭐ الشاشتان أكبر قليلاً على الكمبيوتر */
+/* ⭐ الشاشتان أكبر وبنفس الحجم (تصميم الكمبيوتر فقط) */
 .video-frame{
   position:relative;border-radius:var(--radius);
   border:6px solid var(--border);overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
-.video-frame.top{height:340px;}      /* ← كانت 300 */
-.video-frame.bottom{height:260px;}   /* ← كانت 220 */
+
+/* ★ الشاشتان الآن بنفس الحجم تماما */
+.video-frame.top{
+  height:360px;   /* ← زيادة الحجم */
+}
+.video-frame.bottom{
+  height:360px;   /* ← نفس الحجم */
+}
 
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
@@ -98,14 +104,14 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic - ⭐ أصغر */
+/* Mic */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
   border:none;z-index:10;min-width:40px;min-height:40px;
 }
 
-/* Report - ⭐ أصغر */
+/* Report */
 #reportBtn{
   position:absolute;
   bottom:10px;
@@ -163,7 +169,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* MOBILE ONLY — لا تغيير */
+/* ⭐ MOBILE — بدون أي تغيير */
 @media (max-width: 768px){
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
   .left-col{width:100%;min-width:unset;gap:8px;}
