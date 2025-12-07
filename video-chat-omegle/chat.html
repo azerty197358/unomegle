@@ -38,8 +38,27 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   height:60px;display:flex;justify-content:space-between;align-items:center;
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
-.logo{font-size:24px;font-weight:bold;color:#ff9a00;}
-.logo span{color:#3fa0ff;}
+
+/* ⭐ شعار كبير + حركة Flip لكل حرف */
+.logo{
+  font-size:55px;
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:3px;
+}
+.logo span{
+  color:#3fa0ff;
+}
+.flip-char{
+  display:inline-block;
+  transition:transform 0.6s ease;
+  transform-origin: bottom;
+}
+.flip{
+  transform:rotateX(180deg);
+}
+
 #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
 
 #darkToggle{
@@ -71,20 +90,14 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
 }
 
-/* ⭐ الشاشتان أكبر وبنفس الحجم (تصميم الكمبيوتر فقط) */
 .video-frame{
   position:relative;border-radius:var(--radius);
   border:6px solid var(--border);overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
 
-/* ★ الشاشتان الآن بنفس الحجم تماما */
-.video-frame.top{
-  height:360px;   /* ← زيادة الحجم */
-}
-.video-frame.bottom{
-  height:360px;   /* ← نفس الحجم */
-}
+.video-frame.top{height:360px;}
+.video-frame.bottom{height:360px;}
 
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
@@ -169,7 +182,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* ⭐ MOBILE — بدون أي تغيير */
 @media (max-width: 768px){
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
   .left-col{width:100%;min-width:unset;gap:8px;}
@@ -201,7 +213,9 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 <body>
 
 <div class="topbar">
-  <div class="logo">Spark<span>Chat</span></div>
+  
+  <!-- هنا الشعار الديناميكي -->
+  <div class="logo" id="logo"></div>
 
   <div style="display:flex;gap:14px;align-items:center;">
     <div class="notify-box">
@@ -261,22 +275,52 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 </div>
 
+<!-- Socket -->
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 
 <script>
+/* ---------------------------
+      شعار SparkChat ينقلب حرفاً حرفاً
+----------------------------*/
+const logoText = "SparkChat";
+const logoContainer = document.getElementById("logo");
+
+logoText.split("").forEach(letter => {
+  const span = document.createElement("span");
+  span.className = "flip-char";
+  span.textContent = letter;
+  logoContainer.appendChild(span);
+});
+
+const letters = document.querySelectorAll(".flip-char");
+let index = 0;
+
+setInterval(() => {
+  letters.forEach((l, i) => {
+    if (i === index) {
+      l.classList.add("flip");
+      setTimeout(() => l.classList.remove("flip"), 600);
+    }
+  });
+  index = (index + 1) % letters.length;
+}, 3000);
+
+/* Dark mode */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
+/* Toggle messages */
 document.getElementById("toggleMessagesBtn").onclick = () => {
   document.body.classList.toggle("messages-hidden");
   toggleMessagesBtn.innerText =
     document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 };
 
+/* Report */
 document.getElementById("reportBtn").onclick = () => {
   if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
     alert("تم إرسال البلاغ بنجاح.");
