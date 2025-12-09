@@ -31,8 +31,18 @@
   --border:#444;
 }
 
-*{margin:0;padding:0;box-sizing:border-box;}
-html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
+*{
+  margin:0;padding:0;box-sizing:border-box;
+}
+html, body{
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text)
+}
+
+/* ---------------- LOGO ---------------- */
 
 .logo{
   font-size:48px;         
@@ -44,7 +54,6 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 .logo span{
   color:#3fa0ff;
 }
-
 .flip-char{
   display:inline-block;
   transition:transform 0.8s ease;
@@ -52,22 +61,41 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 }
 .flip{transform:rotateX(360deg);}
 
+
+/* ---------------- TOP BAR ---------------- */
+
 .topbar{
-  height:60px;display:flex;justify-content:space-between;align-items:center;
-  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
+  height:60px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 12px;
+  border-bottom:1px solid #ddd;
+  background:var(--bg);
 }
 
 #exitBtn{
-  background:red;color:#fff;padding:10px 14px;border:none;border-radius:8px;
-  font-weight:bold;cursor:pointer;
+  background:red;
+  color:#fff;
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  font-weight:bold;
+  cursor:pointer;
 }
 
 #darkToggle{
-  background:#444;color:#fff;border:none;padding:10px 14px;border-radius:8px;
-  cursor:pointer;margin-right:10px;
+  background:#444;
+  color:#fff;
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-right:10px;
 }
 
-/* Notification menu */
+/* ---------------- NOTIFICATIONS ---------------- */
+
 .notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
@@ -79,6 +107,11 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   background:#fff;border:1px solid #ccc;border-radius:8px;
   display:none;max-height:250px;overflow-y:auto;z-index:999;
 }
+.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+.notify-empty{padding:10px;text-align:center;color:#777;}
+
+
+/* ---------------- LAYOUT ---------------- */
 
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
@@ -86,157 +119,223 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 }
 
 .left-col{
-  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;
+  display:flex;flex-direction:column;gap:var(--gap);
 }
 
-/* VIDEO FRAMES */
+/* CAMERAS */
 .video-frame{
-  position:relative;border-radius:var(--radius);
-  border:6px solid var(--border);overflow:hidden;background:#000;
-  display:flex;justify-content:center;align-items:center;
+  position:relative;
+  border-radius:var(--radius);
+  border:6px solid var(--border);
+  overflow:hidden;
+  background:#000;
+  display:flex;
+  justify-content:center;
+  align-items:center;
 }
 
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
 
-video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
+video{
+  width:100%;height:100%;
+  object-fit:cover;
+  position:relative;
+  z-index:0;
+}
 
 .video-label{
-  position:absolute;top:8px;left:8px;background:#fff;
-  padding:4px 10px;border-radius:6px;z-index:6;font-size:13px;
+  position:absolute;top:8px;left:8px;
+  background:#fff;padding:4px 10px;border-radius:6px;
+  z-index:6;
 }
 .watermark{
-  position:absolute;bottom:10px;left:10px;font-size:14px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
+  position:absolute;bottom:10px;left:10px;
+  font-size:14px;color:#ffffffaa;font-weight:bold;
+  z-index:6;
 }
 
+.spinner{
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
+}
+@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+
+/* Mic */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
   border:none;z-index:10;min-width:40px;min-height:40px;
 }
 
+/* Report */
 #reportBtn{
   position:absolute;bottom:10px;right:10px;background:red;color:#fff;
-  padding:5px 10px;font-size:12px;border-radius:6px;cursor:pointer;border:none;z-index:10;
+  padding:4px 8px;font-size:10px;border-radius:6px;
+  cursor:pointer;border:none;z-index:10;
 }
 
+/* ---------------- CHAT ---------------- */
 
-/* CHAT RIGHT */
 .right-col{
-  flex:1;display:flex;flex-direction:column;
-  border:6px solid var(--border);border-radius:10px;
-  background:var(--bg);min-width:240px;height:100%;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  border:6px solid var(--border);
+  border-radius:10px;
+  background:var(--bg);
+  min-width:240px;
+  height:100%;
 }
 
 .chat-area{
-  flex:1;padding:12px;overflow-y:scroll;
-  display:flex;flex-direction:column;gap:8px;
+  flex:1;
+  padding:12px;
+  overflow-y:auto;        /* ← التمرير داخل الرسائل فقط */
+  display:flex;
+  flex-direction:column;
+  gap:8px;
 }
 
-.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;}
-.msg.you{background:var(--msgYou);border:1px solid #a7d8ff;align-self:flex-end;}
-.msg.stranger{background:var(--msgStranger);border:1px solid #ffbf85;align-self:flex-start;}
-.msg.system{background:var(--msgSystem);align-self:center;}
+.msg{
+  padding:10px 14px;
+  max-width:75%;
+  border-radius:10px;
+  font-size:14px;
+}
+.msg.you{
+  background:var(--msgYou);
+  border:1px solid #a7d8ff;
+  align-self:flex-end;
+}
+.msg.stranger{
+  background:var(--msgStranger);
+  border:1px solid #ffbf85;
+  align-self:flex-start;
+}
+.msg.system{
+  background:var(--msgSystem);
+  align-self:center;
+}
+
 
 .chat-input-row{
-  display:flex;flex-direction:column;gap:8px;padding:10px;
-  background:#fafafa;border-top:1px solid #ddd;
-  position:sticky;bottom:0;left:0;right:0;z-index:50;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px;
+  background:#fafafa;
+  border-top:1px solid #ddd;
+  position:sticky;
+  bottom:0;left:0;right:0;
+  z-index:50;
 }
 
 #status{
-  padding:6px 10px;background:#fafafa;
-  border-radius:6px;border:1px solid #ddd;text-align:center;
+  padding:6px 10px;
+  background:#fafafa;
+  border-radius:6px;
+  border:1px solid #ddd;
+  text-align:center;
 }
 
-.input-container{display:flex;gap:8px;}
+.input-container{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+
 #skipBtn{
-  background:#ff9a00;color:#fff;padding:10px 14px;
-  border-radius:8px;cursor:pointer;border:none;
-}
-#sendBtn{
-  width:42px;height:42px;background:var(--blue);
-  color:#fff;border-radius:8px;border:none;cursor:pointer;
-}
-#chatInput{
-  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
+  background:#ff9a00;
+  color:#fff;
+  padding:10px 14px;
+  border-radius:8px;
+  cursor:pointer;
+  border:none;
 }
 
-/* ====================================================
-   MOBILE DESIGN — إعادة تصميم شامل
-==================================================== */
+#chatInput{
+  flex:1;
+  padding:10px;
+  border:1px solid #ccc;
+  border-radius:8px;
+}
+
+#sendBtn{
+  width:46px;
+  height:46px;
+  background:var(--blue);
+  color:#fff;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  font-size:20px;
+}
+
+/* زر الخروج بجانب الإرسال */
+#exitChatBtn{
+  width:46px;
+  height:46px;
+  background:red;
+  color:#fff;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  font-size:14px;
+}
+
+/* ---------------- MOBILE WHATSAPP STYLE ---------------- */
+
 @media (max-width: 768px){
 
   .stage{
-    flex-direction:column;padding:8px;height:auto;overflow-y:auto;
+    flex-direction:column;
+    padding:8px;
+    overflow-y:auto;
   }
 
-  /* جعل شاشة الغريب أوضح */
+  .left-col{
+    width:100%;min-width:unset;
+    position:relative;
+    height:auto;
+  }
+
+  /* الشاشة الكبيرة (الغريب) */
   .video-frame.top{
-    height:65vh;
+    height:360px;
     border-width:4px;
-    border-radius:14px;
-    margin-bottom:10px;
+    position:relative;
   }
 
-  /* شاشة المستخدم داخل الغريب */
+  /* شاشة المستخدم الصغيرة */
   .video-frame.bottom{
     position:absolute;
-    width:150px;
-    height:130px;
-    bottom:20px;
-    right:20px;
-    border:3px solid var(--border);
-    border-radius:12px;
+    width:130px;
+    height:110px;
+    bottom:15px;
+    right:15px;
     z-index:99;
-    box-shadow:0 0 12px #00000088;
+    border:3px solid var(--border);
+    border-radius:10px;
+    background:#000;
   }
 
-  /* تحسين مكان الأزرار */
-  #exitBtn{
-    position:absolute;
-    top:10px;left:10px;
-    z-index:999;
-    padding:9px 14px;
-    font-size:15px;
-  }
-
-  #darkToggle{
-    position:absolute;
-    top:10px;right:10px;
-    z-index:999;
-  }
-
-  #reportBtn{
-    bottom:15px;right:15px;
-    padding:6px 10px;font-size:12px;
-  }
-
-  #micBtn{
-    bottom:8px;right:8px;
-  }
-
-  /* تحسين الدردشة */
+  /* صندوق الدردشة مثل واتساب */
   .right-col{
-    height:auto;
-    border-width:4px;
-    border-radius:12px;
+    height:55%;
+    border-width:3px;
   }
 
-  .chat-input-row{
-    background:#fff;
-    border-top:1px solid #ccc;
-  }
-
-  .input-container button,
-  #chatInput{
-    font-size:16px;
-  }
+  /* إلغاء زر الإخفاء */
+  #toggleMessagesBtn{display:none!important;}
 }
 
+
 @media (min-width: 769px){
-  /* لا شيء يتغير للكمبيوتر */
+  #toggleMessagesBtn{display:none!important;}
 }
 </style>
 </head>
@@ -244,9 +343,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 <body>
 
 <div class="topbar">
-
   <div class="logo" id="logo"></div>
-
   <div style="display:flex;gap:14px;align-items:center;">
     <div class="notify-box">
       <div id="notifyIcon">🔔</div>
@@ -255,9 +352,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
         <div class="notify-empty">No notifications</div>
       </div>
     </div>
-
     <button id="darkToggle">🌙</button>
-    <button id="exitBtn">Exit</button>
   </div>
 </div>
 
@@ -267,22 +362,25 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
     <!-- شاشة الغريب -->
     <div class="video-frame top">
-      <button id="reportBtn">🚨 Report</button>
+      <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
+      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
-    <!-- شاشة المستخدم (ستصبح داخل الكبيرة في الجوال) -->
+    <!-- شاشة المستخدم -->
     <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">You</div>
+      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
 
   </div>
 
+  <!-- الدردشة -->
   <div class="right-col">
 
     <div id="chatMessages" class="chat-area">
@@ -293,9 +391,16 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
       <div id="status">Loading...</div>
 
       <div class="input-container">
+
         <button id="skipBtn">Skip</button>
+
         <input id="chatInput" placeholder="Type..." disabled />
+
         <button id="sendBtn" disabled>➤</button>
+
+        <!-- زر الخروج بجانب الإرسال -->
+        <button id="exitChatBtn">Exit</button>
+
       </div>
     </div>
 
@@ -303,18 +408,25 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
 <script>
-/* شعار SparkChat */
+/* -------- Logo Animation -------- */
+
 const logoText = "SparkChat";
 const logoContainer = document.getElementById("logo");
+
 logoText.split("").forEach(letter => {
   const span = document.createElement("span");
   span.className = "flip-char";
   span.textContent = letter;
   logoContainer.appendChild(span);
 });
+
 const letters = document.querySelectorAll(".flip-char");
 let index = 0;
+
 setInterval(() => {
   letters.forEach((l, i) => {
     if (i === index) {
@@ -325,11 +437,25 @@ setInterval(() => {
   index = (index + 1) % letters.length;
 }, 3000);
 
-/* Dark Mode */
+
+/* -------- Dark Mode -------- */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
+};
+
+
+/* -------- Report -------- */
+document.getElementById("reportBtn").onclick = () => {
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
+    alert("تم إرسال البلاغ بنجاح.");
+  }
+};
+
+/* -------- Exit Chat -------- */
+document.getElementById("exitChatBtn").onclick = () => {
+  location.reload();   // يمكنك تغيير التصرف لاحقاً
 };
 </script>
 
