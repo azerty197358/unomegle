@@ -13,12 +13,15 @@
   --border:#e6d7c8;
   --gap:10px;
   --radius:12px;
+
   --bg:#ffffff;
   --text:#000;
+
   --msgYou:#cceaff;
   --msgStranger:#ffd8b0;
   --msgSystem:#e8e8e8;
 }
+
 .dark{
   --bg:#0f1115;
   --text:#f5f5f5;
@@ -27,8 +30,15 @@
   --msgSystem:#222;
   --border:#444;
 }
+
 *{margin:0;padding:0;box-sizing:border-box;}
-html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
+html, body{
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
 
 /* الشعار */
 .logo{
@@ -39,15 +49,24 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   gap:4px;
 }
 .logo span{color:#3fa0ff;}
+
 .flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin: bottom;}
 .flip{transform:rotateX(360deg);}
 
 /* TOP BAR */
 .topbar{
-  height:60px;display:flex;justify-content:space-between;align-items:center;
-  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
+  height:60px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 12px;
+  border-bottom:1px solid #ddd;
+  background:var(--bg);
 }
-#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+
+#exitBtn{
+  background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;
+}
 #darkToggle{
   background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
   cursor:pointer;margin-right:10px;
@@ -75,18 +94,29 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 }
 
 .left-col{
-  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;
+  display:flex;flex-direction:column;gap:var(--gap);
 }
 
 /* CAMERAS */
 .video-frame{
-  position:relative;border-radius:var(--radius);
-  border:6px solid var(--border);overflow:hidden;background:#000;
+  position:relative;
+  border-radius:var(--radius);
+  border:6px solid var(--border);
+  overflow:hidden;background:#000;
   display:flex;justify-content:center;align-items:center;
 }
+
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
-video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
+
+video{
+  width:100%;height:100%;
+  object-fit:cover;
+  position:relative;
+  z-index:0;
+}
+
 .video-label{
   position:absolute;top:8px;left:8px;background:#fff;
   padding:4px 10px;border-radius:6px;z-index:6;
@@ -95,6 +125,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   position:absolute;bottom:10px;left:10px;font-size:14px;
   color:#ffffffaa;font-weight:bold;z-index:6;
 }
+
 .spinner{
   position:absolute;width:60px;height:60px;border-radius:50%;
   border:6px solid #fff;border-top-color:transparent;
@@ -102,12 +133,17 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic & Report */
+/* Mic */
 #micBtn{
-  position:absolute;bottom:10px;right:10px;background:var(--blue);
-  color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
-  border:none;z-index:10;min-width:40px;min-height:40px;
+  position:absolute;
+  bottom:10px;right:10px;
+  background:var(--blue);
+  color:#fff;padding:7px;
+  font-size:16px;border-radius:50%;
+  cursor:pointer;border:none;z-index:40;
 }
+
+/* Report */
 #reportBtn{
   position:absolute;bottom:10px;right:10px;background:red;
   color:#fff;padding:4px 8px;font-size:10px;border-radius:6px;
@@ -120,25 +156,30 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   border:6px solid var(--border);border-radius:10px;
   background:var(--bg);min-width:240px;height:100%;
 }
+
 .chat-area{
   flex:1;padding:12px;overflow-y:auto;
   display:flex;flex-direction:column;gap:8px;
 }
+
 .msg{
   padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
 }
 .msg.you{background:var(--msgYou);border:1px solid #a7d8ff;align-self:flex-end;}
 .msg.stranger{background:var(--msgStranger);border:1px solid #ffbf85;align-self:flex-start;}
 .msg.system{background:var(--msgSystem);align-self:center;}
+
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
   background:#fafafa;border-top:1px solid #ddd;
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
+
 #status{
   padding:6px 10px;background:#fafafa;
   border-radius:6px;border:1px solid #ddd;text-align:center;
 }
+
 .input-container{display:flex;gap:8px;}
 #skipBtn{
   background:#ff9a00;color:#fff;padding:10px 14px;
@@ -154,9 +195,12 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 /* ===== MOBILE ===== */
 @media (max-width:768px){
+
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
   .left-col{width:100%;min-width:unset;gap:8px;}
+
   .video-frame.top{height:300px;}
+
   .video-frame.bottom{
     height:0 !important;
     min-height:0 !important;
@@ -165,55 +209,58 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     overflow:visible !important;
   }
 
-  /* شاشة اليوزر القابلة للسحب */
+  /* شاشة اليوزر المتحركة بالكامل */
   #localVideo{
     position:absolute !important;
-    width:130px !important;
-    height:170px !important;
-    bottom:15px;
-    right:15px;
-    border-radius:10px;
+    width:140px !important;
+    height:180px !important;
+    bottom:20px;
+    right:20px;
+    border-radius:12px;
     border:3px solid #fff;
     object-fit:cover;
-    z-index:30;
+    z-index:1000;
     touch-action:none;
   }
 
-  /* الشعار وزر المايك داخل الشاشة */
-  #localFrame .watermark,
-  #localFrame #micBtn {
+  /* الشعار داخل شاشة المستخدم */
+  #localLogo{
     position:absolute;
-    z-index:35;
-  }
-  #localFrame .watermark {
-    bottom:8px; left:8px; color:#fff;
+    top:8px;left:8px;
+    color:white;
+    font-size:14px;
     font-weight:bold;
-  }
-  #localFrame #micBtn {
-    top:8px; left:8px; width:42px; height:42px;
+    text-shadow:0 0 4px black;
+    z-index:1200;
   }
 
-  /* زر الإبلاغ */
-  .video-frame.top #reportBtn{
-    top:10px !important;
-    right:10px;
-    width:38px;height:38px;
-    border-radius:50%;
-    font-size:14px !important;
+  /* زر المايك فوق شاشة المستخدم */
+  #micBtn{
+    position:absolute !important;
+    bottom:10px !important;
+    right:10px !important;
+    z-index:1200 !important;
+    width:46px;height:46px;
   }
+
+  /* زر الرسائل */
   #toggleMessagesBtn{
     width:50px;height:50px;border-radius:50%;
     background:var(--blue);color:#fff;border:none;
     display:flex;justify-content:center;align-items:center;
     align-self:center;margin:10px 0;font-size:20px;
   }
+
   .right-col{
     max-height: calc(100vh - 60px - 300px - 90px);
     overflow:hidden;
   }
+
   .chat-area{overflow-y:auto;padding:10px;}
+
   .messages-hidden .right-col{display:none;}
   .messages-hidden .chat-input-row{display:none !important;}
+
   .messages-hidden #skipBtn{
     position:fixed;bottom:20px;left:50%;
     transform:translateX(-50%);
@@ -221,15 +268,19 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     font-size:18px;display:block !important;
   }
 }
+
 @media (min-width:769px){
   #toggleMessagesBtn{display:none !important;}
 }
+
 </style>
 </head>
 
 <body>
+
 <div class="topbar">
   <div class="logo" id="logo"></div>
+
   <div style="display:flex;gap:14px;align-items:center;">
     <div class="notify-box">
       <div id="notifyIcon">🔔</div>
@@ -244,7 +295,10 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 </div>
 
 <div class="stage">
+
   <div class="left-col">
+
+    <!-- Stranger -->
     <div class="video-frame top" id="remoteFrame">
       <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
@@ -253,20 +307,23 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
+    <!-- You -->
     <div class="video-frame bottom" id="localFrame">
+      <div id="localLogo">SparkChat</div>
       <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
       <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
+
   </div>
 
   <button id="toggleMessagesBtn">▼</button>
+
   <div class="right-col">
     <div id="chatMessages" class="chat-area">
       <div class="msg system">Connecting...</div>
     </div>
+
     <div class="chat-input-row">
       <div id="status">Loading...</div>
       <div class="input-container">
@@ -276,7 +333,11 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
       </div>
     </div>
   </div>
+
 </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
 
 <script>
 /* --- Logo flip --- */
@@ -301,10 +362,14 @@ setInterval(()=>{
 },3000);
 
 /* Dark mode */
-document.getElementById("darkToggle").onclick=()=>document.body.classList.toggle("dark");
+document.getElementById("darkToggle").onclick=()=>{
+  document.body.classList.toggle("dark");
+};
 
-/* Toggle messages */
-document.getElementById("toggleMessagesBtn").onclick=()=>document.body.classList.toggle("messages-hidden");
+/* Messages toggle */
+document.getElementById("toggleMessagesBtn").onclick=()=>{
+  document.body.classList.toggle("messages-hidden");
+};
 
 /* Report */
 document.getElementById("reportBtn").onclick=()=>{
@@ -314,38 +379,46 @@ document.getElementById("reportBtn").onclick=()=>{
 };
 
 /* ===========================================================
-   سحب شاشة المحلي إلى أي مكان (Mobile only)
+   سحب شاشة المستخدم في أي مكان يريد (FULL FREE DRAG)
    =========================================================== */
 (function(){
-  const local=document.getElementById("localVideo");
+
+  const box=document.getElementById("localVideo");
   let dragging=false,startX=0,startY=0,offsetX=0,offsetY=0;
 
-  local.addEventListener("pointerdown",(e)=>{
-    if(!window.matchMedia("(max-width:768px)").matches) return;
+  box.addEventListener("pointerdown",(e)=>{
     dragging=true;
-    local.setPointerCapture(e.pointerId);
-    const rect=local.getBoundingClientRect();
-    startX=e.clientX-rect.left;
-    startY=e.clientY-rect.top;
+    box.setPointerCapture(e.pointerId);
+
+    startX=e.clientX;
+    startY=e.clientY;
+
+    const rect=box.getBoundingClientRect();
+    offsetX=rect.left;
+    offsetY=rect.top;
   });
 
-  local.addEventListener("pointermove",(e)=>{
+  box.addEventListener("pointermove",(e)=>{
     if(!dragging) return;
+
     e.preventDefault();
-    let newLeft=e.clientX-startX;
-    let newTop=e.clientY-startY;
-    const maxLeft=window.innerWidth-local.offsetWidth-5;
-    const maxTop=window.innerHeight-local.offsetHeight-5;
-    newLeft=Math.max(5,Math.min(newLeft,maxLeft));
-    newTop=Math.max(65,Math.min(newTop,maxTop)); // لا يتداخل مع التوب بار
-    local.style.left=newLeft+"px";
-    local.style.top=newTop+"px";
+
+    let dx=e.clientX-startX;
+    let dy=e.clientY-startY;
+
+    let newLeft=offsetX+dx;
+    let newTop=offsetY+dy;
+
+    box.style.left=newLeft+"px";
+    box.style.top=newTop+"px";
   });
 
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>{
-    local.addEventListener(ev,()=>dragging=false);
+    box.addEventListener(ev,()=>dragging=false);
   });
+
 })();
 </script>
+
 </body>
 </html>
