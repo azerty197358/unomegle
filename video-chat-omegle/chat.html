@@ -35,8 +35,15 @@
 html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
 /* الشعار */
-.logo{font-size:48px;font-weight:bold;color:#ff9a00;display:flex;gap:4px;}
+.logo{
+  font-size:48px;
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:4px;
+}
 .logo span{color:#3fa0ff;}
+
 .flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin: bottom;}
 .flip{transform:rotateX(360deg);}
 
@@ -67,6 +74,7 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 .notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
 .notify-empty{padding:10px;text-align:center;color:#777;}
 
+/* صفحة */
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
@@ -83,8 +91,8 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
   display:flex;justify-content:center;align-items:center;
 }
 
-.video-frame.top{height:360px;position:relative;}
-.video-frame.bottom{height:360px;position:relative;}
+.video-frame.top{height:360px;}
+.video-frame.bottom{height:360px;}
 
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
@@ -104,37 +112,17 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* DRAGGABLE LOCAL VIDEO */
-#localVideoWrapper{
-  position:absolute;
-  width:130px;
-  height:170px;
-  bottom:15px;
-  right:15px;
-  z-index:50;
-  border-radius:10px;
-  overflow:hidden;
-  border:3px solid #fff;
-  touch-action:none;
-}
-
-#localVideo{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-
-/* Buttons inside frames */
+/* Mic & Report */
 #micBtn{
-  position:absolute;bottom:10px;left:10px;background:var(--blue);
-  color:#fff;padding:8px;font-size:18px;border-radius:50%;cursor:pointer;
-  border:none;z-index:100;
+  position:absolute;bottom:10px;right:10px;background:var(--blue);
+  color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
+  border:none;z-index:10;min-width:40px;min-height:40px;
 }
 
 #reportBtn{
   position:absolute;bottom:10px;right:10px;background:red;
-  color:#fff;padding:6px 10px;font-size:13px;border-radius:6px;
-  cursor:pointer;border:none;z-index:100;
+  color:#fff;padding:4px 8px;font-size:10px;border-radius:6px;
+  cursor:pointer;border:none;z-index:10;
 }
 
 /* CHAT */
@@ -149,7 +137,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-msg{
+.msg{
   padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
 }
 .msg.you{background:var(--msgYou);border:1px solid #a7d8ff;align-self:flex-end;}
@@ -180,42 +168,78 @@ msg{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* MOBILE */
+/* ===== MOBILE ===== */
 @media (max-width:768px){
 
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
-  .left-col{width:100%;min-width:unset;}
+  .left-col{width:100%;min-width:unset;gap:8px;}
 
-  .video-frame.top{height:320px;}
+  .video-frame.top{height:300px;}
 
-  /* remove bottom frame */
   .video-frame.bottom{
     height:0 !important;
     min-height:0 !important;
     padding:0 !important;
     border:none !important;
-    overflow:hidden !important;
+    overflow:visible !important;
   }
 
-  /* draggable inside remote frame only */
-  #localVideoWrapper{
-    width:120px;
-    height:150px;
-    bottom:10px;
+  /* شاشة اليوزر */
+  #localVideo{
+    position:absolute !important;
+    width:130px !important;
+    height:170px !important;
+    bottom:15px;
+    right:15px;
+    border-radius:10px;
+    border:3px solid #fff;
+    object-fit:cover;
+    z-index:30;
+    touch-action:none;
+  }
+
+  /* زر المايك داخل شاشة المحلي */
+  .video-frame.bottom #micBtn{
+    top:10px !important;
+    left:10px !important;
+    right:auto !important;
+    bottom:auto !important;
+    width:42px;height:42px;
+  }
+
+  /* زر الإبلاغ داخل شاشة الغريب */
+  .video-frame.top #reportBtn{
+    top:10px !important;
     right:10px;
+    width:38px;height:38px;
+    border-radius:50%;
+    font-size:14px !important;
   }
 
-  #micBtn{padding:5px;font-size:14px;}
-  #reportBtn{padding:3px 6px;font-size:11px;}
-
+  /* زر الرسائل */
   #toggleMessagesBtn{
     width:50px;height:50px;border-radius:50%;
     background:var(--blue);color:#fff;border:none;
-    margin:8px auto;font-size:20px;
-    display:flex;align-items:center;justify-content:center;
+    display:flex;justify-content:center;align-items:center;
+    align-self:center;margin:10px 0;font-size:20px;
   }
 
+  .right-col{
+    max-height: calc(100vh - 60px - 300px - 90px);
+    overflow:hidden;
+  }
+
+  .chat-area{overflow-y:auto;padding:10px;}
+
   .messages-hidden .right-col{display:none;}
+  .messages-hidden .chat-input-row{display:none !important;}
+
+  .messages-hidden #skipBtn{
+    position:fixed;bottom:20px;left:50%;
+    transform:translateX(-50%);
+    z-index:9999;width:140px;height:50px;
+    font-size:18px;display:block !important;
+  }
 }
 
 @media (min-width:769px){
@@ -224,6 +248,7 @@ msg{
 
 </style>
 </head>
+
 <body>
 
 <div class="topbar">
@@ -233,7 +258,9 @@ msg{
     <div class="notify-box">
       <div id="notifyIcon">🔔</div>
       <div id="notifyDot"></div>
-      <div id="notifyMenu"><div class="notify-empty">No notifications</div></div>
+      <div id="notifyMenu">
+        <div class="notify-empty">No notifications</div>
+      </div>
     </div>
     <button id="darkToggle">🌙</button>
     <button id="exitBtn">Exit</button>
@@ -244,21 +271,23 @@ msg{
 
   <div class="left-col">
 
+    <!-- Stranger -->
     <div class="video-frame top" id="remoteFrame">
-      <button id="reportBtn">🚨 Report</button>
+      <button id="reportBtn">🚨</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
       <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
-
-      <!-- draggable local video wrapper -->
-      <div id="localVideoWrapper">
-        <video id="localVideo" autoplay muted playsinline></video>
-        <button id="micBtn">🎤</button>
-      </div>
     </div>
 
-    <div class="video-frame bottom"></div>
+    <!-- You -->
+    <div class="video-frame bottom" id="localFrame">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
+      <div id="localSpinner" class="spinner"></div>
+      <video id="localVideo" autoplay muted playsinline></video>
+    </div>
 
   </div>
 
@@ -281,58 +310,103 @@ msg{
 
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
 <script>
-/* Logo animation */
-const logoText="SparkChat",logo=document.getElementById("logo");
-logoText.split("").forEach(l=>{const s=document.createElement("span");s.className="flip-char";s.textContent=l;logo.appendChild(s);});
-let letters=document.querySelectorAll(".flip-char"),i=0;
-setInterval(()=>{letters[i].classList.add("flip");setTimeout(()=>letters[i].classList.remove("flip"),800);i=(i+1)%letters.length;},3000);
+/* --- Logo flip --- */
+const logoText="SparkChat";
+const logoContainer=document.getElementById("logo");
+logoText.split("").forEach(letter=>{
+  const span=document.createElement("span");
+  span.className="flip-char";
+  span.textContent=letter;
+  logoContainer.appendChild(span);
+});
+const letters=document.querySelectorAll(".flip-char");
+let index=0;
+setInterval(()=>{
+  letters.forEach((l,i)=>{
+    if(i===index){
+      l.classList.add("flip");
+      setTimeout(()=>l.classList.remove("flip"),800);
+    }
+  });
+  index=(index+1)%letters.length;
+},3000);
 
 /* Dark mode */
 document.getElementById("darkToggle").onclick=()=>{
   document.body.classList.toggle("dark");
-  darkToggle.innerText=document.body.classList.contains("dark")?"☀️":"🌙";
 };
 
-/* Toggle messages (mobile) */
-toggleMessagesBtn.onclick=()=>{
+/* Messages toggle */
+document.getElementById("toggleMessagesBtn").onclick=()=>{
   document.body.classList.toggle("messages-hidden");
-  toggleMessagesBtn.innerText=document.body.classList.contains("messages-hidden")?"▲":"▼";
 };
 
-/* Drag local video inside remote frame only */
-const wrapper=document.getElementById("localVideoWrapper");
-const container=document.getElementById("remoteFrame");
+/* Report */
+document.getElementById("reportBtn").onclick=()=>{
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")){
+    alert("تم إرسال البلاغ بنجاح.");
+  }
+};
 
-let offsetX=0,offsetY=0,isDown=false;
+/* ===========================================================
+   سحب شاشة المحلي فقط داخل شاشة الغريب MOBILE ONLY
+   =========================================================== */
+(function(){
 
-wrapper.addEventListener("pointerdown",e=>{
-  isDown=true;
-  offsetX=e.clientX-wrapper.offsetLeft;
-  offsetY=e.clientY-wrapper.offsetTop;
-  wrapper.setPointerCapture(e.pointerId);
-});
+  const local=document.getElementById("localVideo");
+  const container=document.getElementById("remoteFrame");
 
-wrapper.addEventListener("pointerup",()=>{isDown=false;});
+  let dragging=false,startX=0,startY=0,offsetX=0,offsetY=0;
 
-wrapper.addEventListener("pointermove",e=>{
-  if(!isDown)return;
+  local.addEventListener("pointerdown",(e)=>{
+    if(!window.matchMedia("(max-width:768px)").matches) return;
 
-  let x=e.clientX-offsetX;
-  let y=e.clientY-offsetY;
+    dragging=true;
+    local.setPointerCapture(e.pointerId);
 
-  /* boundaries inside remote frame */
-  const maxX=container.clientWidth-wrapper.clientWidth-10;
-  const maxY=container.clientHeight-wrapper.clientHeight-10;
+    const rect=local.getBoundingClientRect();
+    const crect=container.getBoundingClientRect();
 
-  if(x<10)x=10;
-  if(y<10)y=10;
-  if(x>maxX)x=maxX;
-  if(y>maxY)y=maxY;
+    startX=e.clientX;
+    startY=e.clientY;
 
-  wrapper.style.left=x+"px";
-  wrapper.style.top=y+"px";
-});
+    offsetX=rect.left-crect.left;
+    offsetY=rect.top-crect.top;
+  });
+
+  local.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+
+    e.preventDefault();
+
+    const crect=container.getBoundingClientRect();
+    const lrect=local.getBoundingClientRect();
+
+    let dx=e.clientX-startX;
+    let dy=e.clientY-startY;
+
+    let newLeft=offsetX+dx;
+    let newTop=offsetY+dy;
+
+    const maxLeft=crect.width-lrect.width-5;
+    const maxTop =crect.height-lrect.height-5;
+
+    newLeft=Math.max(5,Math.min(newLeft,maxLeft));
+    newTop =Math.max(5,Math.min(newTop,maxTop));
+
+    local.style.left=newLeft+"px";
+    local.style.top =newTop+"px";
+  });
+
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>{
+    local.addEventListener(ev,()=>dragging=false);
+  });
+
+})();
 </script>
 
 </body>
