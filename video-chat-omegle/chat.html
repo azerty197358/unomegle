@@ -32,37 +32,34 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-html, body{
-  height:100%;
-  overflow:hidden;
-  font-family:Arial, sans-serif;
-  background:var(--bg);
-  color:var(--text);
-}
+html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
+/* الشعار */
 .logo{
-  font-size:48px;font-weight:bold;color:#ff9a00;
-  display:flex;gap:4px;
+  font-size:48px;
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:4px;
 }
 .logo span{color:#3fa0ff;}
 
 .flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin: bottom;}
 .flip{transform:rotateX(360deg);}
 
+/* TOP BAR */
 .topbar{
-  height:60px;display:flex;justify-content:space-between;
-  align-items:center;padding:0 12px;border-bottom:1px solid #ddd;
-  background:var(--bg);
-}
-#exitBtn{
-  background:red;color:#fff;padding:8px 12px;border:none;
-  border-radius:8px;font-weight:bold;cursor:pointer;
-}
-#darkToggle{
-  background:#444;color:#fff;border:none;padding:8px 12px;
-  border-radius:8px;cursor:pointer;margin-right:10px;
+  height:60px;display:flex;justify-content:space-between;align-items:center;
+  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
 
+#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+#darkToggle{
+  background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
+  cursor:pointer;margin-right:10px;
+}
+
+/* Notification */
 .notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
@@ -83,22 +80,20 @@ html, body{
 }
 
 .left-col{
-  width:380px;min-width:260px;
-  display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
 }
 
+/* CAMERAS */
 .video-frame{
   position:relative;border-radius:var(--radius);
-  border:6px solid var(--border);overflow:hidden;
-  background:#000;display:flex;justify-content:center;align-items:center;
+  border:6px solid var(--border);overflow:hidden;background:#000;
+  display:flex;justify-content:center;align-items:center;
 }
+
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
 
-video{
-  width:100%;height:100%;object-fit:cover;
-  position:relative;z-index:0;
-}
+video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 .video-label{
   position:absolute;top:8px;left:8px;background:#fff;
@@ -116,14 +111,13 @@ video{
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic */
+/* Mic & Report */
 #micBtn{
-  position:absolute;bottom:10px;right:10px;
-  background:var(--blue);color:#fff;padding:7px;
-  font-size:16px;border-radius:50%;cursor:pointer;border:none;z-index:40;
+  position:absolute;bottom:10px;right:10px;background:var(--blue);
+  color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
+  border:none;z-index:10;min-width:40px;min-height:40px;
 }
 
-/* Report */
 #reportBtn{
   position:absolute;bottom:10px;right:10px;background:red;
   color:#fff;padding:4px 8px;font-size:10px;border-radius:6px;
@@ -138,7 +132,7 @@ video{
 }
 
 .chat-area{
-  flex:1;padding:12px;overflow-y:auto;
+  flex:1;padding:12px;overflow-y:scroll;
   display:flex;flex-direction:column;gap:8px;
 }
 
@@ -154,9 +148,10 @@ video{
   background:#fafafa;border-top:1px solid #ddd;
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
+
 #status{
-  padding:6px 10px;background:#fafafa;border-radius:6px;
-  border:1px solid #ddd;text-align:center;
+  padding:6px 10px;background:#fafafa;
+  border-radius:6px;border:1px solid #ddd;text-align:center;
 }
 
 .input-container{display:flex;gap:8px;}
@@ -172,39 +167,48 @@ video{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* ===== MOBILE ===== */
+/* ========== MOBILE: شاشة داخل شاشة ========== */
 @media (max-width:768px){
 
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
   .left-col{width:100%;min-width:unset;gap:8px;}
 
-  .video-frame.top{height:300px;}
-
-  .video-frame.bottom{
-    height:0 !important;min-height:0 !important;padding:0 !important;
-    border:none !important;overflow:visible !important;
+  .video-frame.top{
+    height:300px;
+    position:relative;
   }
 
+  /* إخفاء إطار الكاميرا السفلية */
+  .video-frame.bottom{
+    height:0 !important;
+    min-height:0 !important;
+    padding:0 !important;
+    border:none !important;
+    overflow:visible !important;
+  }
+
+  /* تحويل كاميرا اليوزر إلى شاشة صغيرة داخل الكبيرة */
   #localVideo{
     position:absolute !important;
-    width:150px !important;height:190px !important;
-    bottom:20px;right:20px;border-radius:12px;
-    border:3px solid #fff;object-fit:cover;z-index:1000;
-    touch-action:none;transition:transform 0.12s ease-out;
+    width:130px !important;
+    height:170px !important;
+    bottom:15px;
+    right:15px;
+    border-radius:10px;
+    border:3px solid #fff;
+    object-fit:cover;
+    z-index:30;
   }
 
-  #localLogo{
-    position:absolute;top:8px;left:8px;color:white;
-    font-size:14px;font-weight:bold;text-shadow:0 0 4px black;
-    z-index:1200;
+  /* إخفاء العناصر من النافذة الصغيرة */
+  .video-frame.bottom .video-label,
+  .video-frame.bottom .watermark,
+  .video-frame.bottom #micBtn,
+  .video-frame.bottom #localSpinner{
+    display:none !important;
   }
 
-  #micBtn{
-    position:absolute !important;bottom:10px !important;
-    right:10px !important;z-index:1200 !important;
-    width:46px;height:46px;
-  }
-
+  /* زر تبديل الرسائل */
   #toggleMessagesBtn{
     width:50px;height:50px;border-radius:50%;
     background:var(--blue);color:#fff;border:none;
@@ -212,20 +216,14 @@ video{
     align-self:center;margin:10px 0;font-size:20px;
   }
 
-  .right-col{
-    max-height: calc(100vh - 60px - 300px - 90px);
-    overflow:hidden;
-  }
-  .chat-area{overflow-y:auto;padding:10px;}
-
   .messages-hidden .right-col{display:none;}
   .messages-hidden .chat-input-row{display:none !important;}
 
   .messages-hidden #skipBtn{
     position:fixed;bottom:20px;left:50%;
-    transform:translateX(-50%);z-index:9999;
-    width:140px;height:50px;font-size:18px;
-    display:block !important;
+    transform:translateX(-50%);
+    z-index:9999;width:140px;height:50px;
+    font-size:18px;display:block !important;
   }
 }
 
@@ -258,17 +256,18 @@ video{
 
   <div class="left-col">
 
-    <div class="video-frame top" id="remoteFrame">
-      <button id="reportBtn">🚨</button>
+    <div class="video-frame top">
+      <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
       <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
-    <div class="video-frame bottom" id="localFrame">
-      <div id="localLogo">SparkChat</div>
+    <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
       <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
@@ -298,92 +297,46 @@ video{
 <script src="script.js"></script>
 
 <script>
-/* Logo flip */
-const logoText="SparkChat";
-const logoContainer=document.getElementById("logo");
-logoText.split("").forEach(letter=>{
-  const span=document.createElement("span");
-  span.className="flip-char";
-  span.textContent=letter;
+const logoText = "SparkChat";
+const logoContainer = document.getElementById("logo");
+
+logoText.split("").forEach(letter => {
+  const span = document.createElement("span");
+  span.className = "flip-char";
+  span.textContent = letter;
   logoContainer.appendChild(span);
 });
-const letters=document.querySelectorAll(".flip-char");
-let index=0;
-setInterval(()=>{
-  letters.forEach((l,i)=>{
-    if(i===index){
+
+const letters = document.querySelectorAll(".flip-char");
+let index = 0;
+
+setInterval(() => {
+  letters.forEach((l, i) => {
+    if (i === index) {
       l.classList.add("flip");
-      setTimeout(()=>l.classList.remove("flip"),800);
+      setTimeout(() => l.classList.remove("flip"), 800);
     }
   });
-  index=(index+1)%letters.length;
-},3000);
+  index = (index + 1) % letters.length;
+}, 3000);
 
-/* Dark mode */
-document.getElementById("darkToggle").onclick=()=>document.body.classList.toggle("dark");
+document.getElementById("darkToggle").onclick = () => {
+  document.body.classList.toggle("dark");
+  document.getElementById("darkToggle").innerText =
+    document.body.classList.contains("dark") ? "☀️" : "🌙";
+};
 
-/* Toggle messages */
-document.getElementById("toggleMessagesBtn").onclick=()=>document.body.classList.toggle("messages-hidden");
+document.getElementById("toggleMessagesBtn").onclick = () => {
+  document.body.classList.toggle("messages-hidden");
+  toggleMessagesBtn.innerText =
+    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
+};
 
-/* Report */
-document.getElementById("reportBtn").onclick=()=>{
-  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")){
+document.getElementById("reportBtn").onclick = () => {
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
     alert("تم إرسال البلاغ بنجاح.");
   }
 };
-
-/* ===========================================================
-   ✔️ تحريك شاشة المستخدم داخل شاشة الغريب فقط
-   =========================================================== */
-(function () {
-  const box = document.getElementById("localVideo");
-  const container = document.getElementById("remoteFrame");
-
-  let dragging = false,
-      startX = 0, startY = 0,
-      offsetX = 0, offsetY = 0,
-      containerRect;
-
-  box.addEventListener("pointerdown", (e) => {
-    const rect = box.getBoundingClientRect();
-    containerRect = container.getBoundingClientRect();
-
-    startX = e.clientX;
-    startY = e.clientY;
-    offsetX = rect.left;
-    offsetY = rect.top;
-
-    dragging = true;
-    box.setPointerCapture(e.pointerId);
-  });
-
-  box.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-
-    let dx = e.clientX - startX;
-    let dy = e.clientY - startY;
-
-    let newX = offsetX + dx;
-    let newY = offsetY + dy;
-
-    const minX = containerRect.left;
-    const maxX = containerRect.right - box.offsetWidth;
-    const minY = containerRect.top;
-    const maxY = containerRect.bottom - box.offsetHeight;
-
-    newX = Math.max(minX, Math.min(maxX, newX));
-    newY = Math.max(minY, Math.min(maxY, newY));
-
-    box.style.position = "fixed";
-    box.style.left = newX + "px";
-    box.style.top = newY + "px";
-  });
-
-  ["pointerup","pointercancel","pointerleave"].forEach(ev=>{
-    box.addEventListener(ev,()=> dragging=false);
-  });
-
-})();
 </script>
 
 </body>
