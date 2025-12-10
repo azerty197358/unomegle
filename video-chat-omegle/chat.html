@@ -32,34 +32,39 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
+html, body{
+  height:100%;
+  overflow:hidden;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
 
-/* الشعار */
+/* LOGO */
 .logo{
-  font-size:48px;
-  font-weight:bold;
-  color:#ff9a00;
-  display:flex;
-  gap:4px;
+  font-size:48px;font-weight:bold;color:#ff9a00;
+  display:flex;gap:4px;
 }
 .logo span{color:#3fa0ff;}
-
 .flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin: bottom;}
 .flip{transform:rotateX(360deg);}
 
-/* TOP BAR */
+/* TOPBAR */
 .topbar{
-  height:60px;display:flex;justify-content:space-between;align-items:center;
-  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
+  height:60px;display:flex;justify-content:space-between;
+  align-items:center;padding:0 12px;border-bottom:1px solid #ddd;
+  background:var(--bg);
 }
-
-#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+#exitBtn{
+  background:red;color:#fff;padding:8px 12px;border:none;
+  border-radius:8px;font-weight:bold;cursor:pointer;
+}
 #darkToggle{
-  background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
-  cursor:pointer;margin-right:10px;
+  background:#444;color:#fff;border:none;padding:8px 12px;
+  border-radius:8px;cursor:pointer;margin-right:10px;
 }
 
-/* Notification */
+/* NOTIFICATIONS */
 .notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
@@ -74,26 +79,30 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 .notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
 .notify-empty{padding:10px;text-align:center;color:#777;}
 
+/* LAYOUT */
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
 }
 
 .left-col{
-  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;
+  display:flex;flex-direction:column;gap:var(--gap);
 }
 
-/* CAMERAS */
+/* VIDEO FRAMES */
 .video-frame{
   position:relative;border-radius:var(--radius);
-  border:6px solid var(--border);overflow:hidden;background:#000;
-  display:flex;justify-content:center;align-items:center;
+  border:6px solid var(--border);overflow:hidden;
+  background:#000;display:flex;justify-content:center;align-items:center;
 }
-
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
 
-video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
+video{
+  width:100%;height:100%;object-fit:cover;
+  position:relative;z-index:0;
+}
 
 .video-label{
   position:absolute;top:8px;left:8px;background:#fff;
@@ -111,17 +120,23 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic & Report */
-#micBtn{
-  position:absolute;bottom:10px;right:10px;background:var(--blue);
-  color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
-  border:none;z-index:10;min-width:40px;min-height:40px;
+/* Inside LOCAL FRAME */
+.local-buttons{
+  position:absolute;bottom:10px;right:10px;
+  display:flex;gap:10px;z-index:50;
 }
 
+#micBtn, #notifyIcon2{
+  background:var(--blue);color:#fff;border:none;
+  padding:10px;font-size:18px;border-radius:50%;
+  cursor:pointer;width:48px;height:48px;
+}
+
+/* Report inside REMOTE FRAME - now LEFT */
 #reportBtn{
-  position:absolute;bottom:10px;right:10px;background:red;
-  color:#fff;padding:4px 8px;font-size:10px;border-radius:6px;
-  cursor:pointer;border:none;z-index:10;
+  position:absolute;top:10px;left:10px !important;
+  background:red;color:#fff;padding:6px 10px;border-radius:6px;
+  cursor:pointer;border:none;z-index:10;font-size:12px;
 }
 
 /* CHAT */
@@ -132,7 +147,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 
 .chat-area{
-  flex:1;padding:12px;overflow-y:scroll;
+  flex:1;padding:12px;overflow-y:auto;
   display:flex;flex-direction:column;gap:8px;
 }
 
@@ -148,10 +163,9 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   background:#fafafa;border-top:1px solid #ddd;
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
-
 #status{
-  padding:6px 10px;background:#fafafa;
-  border-radius:6px;border:1px solid #ddd;text-align:center;
+  padding:6px 10px;background:#fafafa;border-radius:6px;
+  border:1px solid #ddd;text-align:center;
 }
 
 .input-container{display:flex;gap:8px;}
@@ -167,48 +181,26 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* ========== MOBILE: شاشة داخل شاشة ========== */
+/* MOBILE */
 @media (max-width:768px){
 
   .stage{flex-direction:column;padding:8px;overflow-y:auto;}
+
   .left-col{width:100%;min-width:unset;gap:8px;}
 
-  .video-frame.top{
-    height:300px;
-    position:relative;
-  }
+  .video-frame.top{height:300px;}
+  .video-frame.bottom{height:240px;}
 
-  /* إخفاء إطار الكاميرا السفلية */
-  .video-frame.bottom{
-    height:0 !important;
-    min-height:0 !important;
-    padding:0 !important;
-    border:none !important;
-    overflow:visible !important;
-  }
-
-  /* تحويل كاميرا اليوزر إلى شاشة صغيرة داخل الكبيرة */
+  /* منع التحريك → نزيل position:fixed */
   #localVideo{
-    position:absolute !important;
-    width:130px !important;
-    height:170px !important;
-    bottom:15px;
-    right:15px;
-    border-radius:10px;
-    border:3px solid #fff;
-    object-fit:cover;
-    z-index:30;
+    width:100% !important;height:100% !important;
+    position:relative !important;
   }
 
-  /* إخفاء العناصر من النافذة الصغيرة */
-  .video-frame.bottom .video-label,
-  .video-frame.bottom .watermark,
-  .video-frame.bottom #micBtn,
-  .video-frame.bottom #localSpinner{
-    display:none !important;
+  .local-buttons{
+    bottom:10px;right:10px;
   }
 
-  /* زر تبديل الرسائل */
   #toggleMessagesBtn{
     width:50px;height:50px;border-radius:50%;
     background:var(--blue);color:#fff;border:none;
@@ -216,37 +208,28 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     align-self:center;margin:10px 0;font-size:20px;
   }
 
+  .right-col{
+    max-height: calc(100vh - 60px - 300px - 70px);
+    overflow:hidden;
+  }
+
   .messages-hidden .right-col{display:none;}
   .messages-hidden .chat-input-row{display:none !important;}
-
-  .messages-hidden #skipBtn{
-    position:fixed;bottom:20px;left:50%;
-    transform:translateX(-50%);
-    z-index:9999;width:140px;height:50px;
-    font-size:18px;display:block !important;
-  }
 }
 
 @media (min-width:769px){
   #toggleMessagesBtn{display:none !important;}
 }
-
 </style>
 </head>
 
 <body>
 
+<!-- === TOP BAR === -->
 <div class="topbar">
   <div class="logo" id="logo"></div>
 
   <div style="display:flex;gap:14px;align-items:center;">
-    <div class="notify-box">
-      <div id="notifyIcon">🔔</div>
-      <div id="notifyDot"></div>
-      <div id="notifyMenu">
-        <div class="notify-empty">No notifications</div>
-      </div>
-    </div>
     <button id="darkToggle">🌙</button>
     <button id="exitBtn">Exit</button>
   </div>
@@ -256,26 +239,29 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
   <div class="left-col">
 
-    <div class="video-frame top">
-      <button id="reportBtn">🚨 BORN18+</button>
+    <!-- REMOTE FRAME -->
+    <div class="video-frame top" id="remoteFrame">
+      <button id="reportBtn">🚨 Report</button>
       <div class="watermark">SparkChat</div>
       <div class="video-label">Stranger</div>
       <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
-    <div class="video-frame bottom">
-      <button id="micBtn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
+    <!-- LOCAL FRAME -->
+    <div class="video-frame bottom" id="localFrame">
       <video id="localVideo" autoplay muted playsinline></video>
+      <div class="local-buttons">
+        <button id="notifyIcon2">🔔</button>
+        <button id="micBtn">🎤</button>
+      </div>
     </div>
 
   </div>
 
   <button id="toggleMessagesBtn">▼</button>
 
+  <!-- CHAT AREA -->
   <div class="right-col">
     <div id="chatMessages" class="chat-area">
       <div class="msg system">Connecting...</div>
@@ -297,44 +283,41 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 <script src="script.js"></script>
 
 <script>
-const logoText = "SparkChat";
-const logoContainer = document.getElementById("logo");
-
-logoText.split("").forEach(letter => {
-  const span = document.createElement("span");
-  span.className = "flip-char";
-  span.textContent = letter;
+/* Logo animation */
+const logoText="SparkChat";
+const logoContainer=document.getElementById("logo");
+logoText.split("").forEach(letter=>{
+  const span=document.createElement("span");
+  span.className="flip-char";
+  span.textContent=letter;
   logoContainer.appendChild(span);
 });
-
-const letters = document.querySelectorAll(".flip-char");
-let index = 0;
-
-setInterval(() => {
-  letters.forEach((l, i) => {
-    if (i === index) {
+const letters=document.querySelectorAll(".flip-char");
+let index=0;
+setInterval(()=>{
+  letters.forEach((l,i)=>{
+    if(i===index){
       l.classList.add("flip");
-      setTimeout(() => l.classList.remove("flip"), 800);
+      setTimeout(()=>l.classList.remove("flip"),800);
     }
   });
-  index = (index + 1) % letters.length;
-}, 3000);
+  index=(index+1)%letters.length;
+},3000);
 
-document.getElementById("darkToggle").onclick = () => {
+/* Dark mode */
+document.getElementById("darkToggle").onclick=()=>{
   document.body.classList.toggle("dark");
-  document.getElementById("darkToggle").innerText =
-    document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-document.getElementById("toggleMessagesBtn").onclick = () => {
+/* Toggle mobile messages */
+document.getElementById("toggleMessagesBtn").onclick=()=>{
   document.body.classList.toggle("messages-hidden");
-  toggleMessagesBtn.innerText =
-    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 };
 
-document.getElementById("reportBtn").onclick = () => {
-  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
-    alert("تم إرسال البلاغ بنجاح.");
+/* Report */
+document.getElementById("reportBtn").onclick=()=>{
+  if(confirm("Are you sure you want to report this user?")){
+    alert("Report sent.");
   }
 };
 </script>
