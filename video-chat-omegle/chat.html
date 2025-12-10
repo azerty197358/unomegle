@@ -209,11 +209,10 @@ video{
     overflow:visible !important;
   }
 
-  /* شاشة اليوزر المتحركة فقط عند النقر */
   #localVideo{
     position:absolute !important;
-    width:140px !important;
-    height:180px !important;
+    width:150px !important;
+    height:190px !important;
     bottom:20px;
     right:20px;
     border-radius:12px;
@@ -221,9 +220,10 @@ video{
     object-fit:cover;
     z-index:1000;
     touch-action:none;
+    transition:transform 0.12s ease-out;
   }
 
-  /* الشعار داخل شاشة المستخدم */
+  /* شعار داخل الشاشة */
   #localLogo{
     position:absolute;
     top:8px;left:8px;
@@ -234,7 +234,7 @@ video{
     z-index:1200;
   }
 
-  /* زر المايك يبقى داخل الشاشة ويتحرك معها */
+  /* زر المايك */
   #micBtn{
     position:absolute !important;
     bottom:10px !important;
@@ -378,7 +378,7 @@ document.getElementById("reportBtn").onclick=()=>{
 };
 
 /* ===========================================================
-   سحب شاشة المستخدم يبدأ فقط عند لمسها → ثم السحب
+   سحب شاشة المستخدم — سلاسة + حدود + تحريك ثابت
    =========================================================== */
 (function(){
 
@@ -393,7 +393,7 @@ document.getElementById("reportBtn").onclick=()=>{
     offsetX=rect.left;
     offsetY=rect.top;
 
-    dragging=true;  // يبدأ السحب فقط عند الحركة
+    dragging=true;
     box.setPointerCapture(e.pointerId);
   });
 
@@ -405,8 +405,17 @@ document.getElementById("reportBtn").onclick=()=>{
     let dx=e.clientX-startX;
     let dy=e.clientY-startY;
 
-    box.style.left=(offsetX+dx)+"px";
-    box.style.top=(offsetY+dy)+"px";
+    let newX=offsetX+dx;
+    let newY=offsetY+dy;
+
+    const maxX=window.innerWidth-box.offsetWidth-10;
+    const maxY=window.innerHeight-box.offsetHeight-10;
+
+    newX=Math.max(10,Math.min(maxX,newX));
+    newY=Math.max(70,Math.min(maxY,newY));
+
+    box.style.left=newX+"px";
+    box.style.top=newY+"px";
   });
 
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>{
