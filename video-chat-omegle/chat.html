@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>  
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
@@ -25,17 +25,13 @@
   --msgStrangerBorder:#ffbf85;
 }
 
-/* 🌙 الوضع الداكن */
 .dark{
   --bg:#0f1115;
   --text:#f5f5f5;
-
   --msgYou:#0d47a1;
   --msgStranger:#4e2a00;
   --msgSystem:#222;
-
   --border:#444;
-
   --msgYouBorder:#1565c0;
   --msgStrangerBorder:#ff9800;
 }
@@ -43,25 +39,19 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
-/* ----------------- الشعار ------------------ */
 .logo{
-  font-size:48px;         
+  font-size:48px;
   font-weight:bold;
-  color:#ff7b00;       /* اللون البرتقالي */
   display:flex;
   gap:4px;
 }
 
-.flip-char{
-  display:inline-block;
-  transition:transform 0.8s ease;
-  transform-origin:center;
-}
+.logo .spark { color:#ff9a00; }     /* برتقالي */
+.logo .chat { color:#3fa0ff; }      /* أزرق */
 
-/* شقلبة كاملة 360 من اليمين لليسار */
-.flip{
-  transform:rotateY(360deg);
-}
+/* حركة الشقلبة يمين → يسار */
+.flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin:center;}
+.flip{transform:rotateY(360deg);}
 
 .topbar{
   height:60px;display:flex;justify-content:space-between;align-items:center;
@@ -133,20 +123,11 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 /* Report */
 #reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:4px 8px;
-  font-size:10px;
-  border-radius:6px;
-  cursor:pointer;
-  border:none;
-  z-index:10;
+  position:absolute;bottom:10px;right:10px;
+  background:red;color:#fff;padding:4px 8px;
+  font-size:10px;border-radius:6px;cursor:pointer;border:none;z-index:10;
 }
 
-/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
@@ -158,36 +139,23 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-.msg{
-  padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
-}
+.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;}
 
 .msg.you{
-  background:var(--msgYou);
-  border:1px solid var(--msgYouBorder);
-  color:#000;
-  align-self:flex-end;
+  background:var(--msgYou);border:1px solid var(--msgYouBorder);
+  color:#000;align-self:flex-end;
 }
 
-.dark .msg.you{
-  color:#fff !important;
-}
+.dark .msg.you{color:#fff!important;}
 
 .msg.stranger{
-  background:var(--msgStranger);
-  border:1px solid var(--msgStrangerBorder);
-  color:#000;
-  align-self:flex-start;
+  background:var(--msgStranger);border:1px solid var(--msgStrangerBorder);
+  color:#000;align-self:flex-start;
 }
 
-.dark .msg.stranger{
-  color:#fff !important;
-}
+.dark .msg.stranger{color:#fff!important;}
 
-.msg.system{
-  background:var(--msgSystem);
-  align-self:center;
-}
+.msg.system{background:var(--msgSystem);align-self:center;}
 
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
@@ -204,16 +172,12 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 /* زر تخطي أزرق */
 #skipBtn{
-  background:#007bff;     /* الأزرق الجديد */
+  background:#2ea3ff;
   color:#fff;
   padding:10px 14px;
   border-radius:8px;
   cursor:pointer;
   border:none;
-  transition:0.2s;
-}
-#skipBtn:hover{
-  background:#0066d4;
 }
 
 #sendBtn{
@@ -222,53 +186,6 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 #chatInput{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
-}
-
-/* MOBILE */
-@media (max-width: 768px){
-  #exitBtn { display:none !important; }
-  .stage{
-    flex-direction:column;padding:8px;overflow-y:auto;
-  }
-  .left-col{
-    width:100%;min-width:unset;gap:8px;position:relative;
-  }
-  .video-frame.top{
-    height:310px;
-    border-width:4px;
-  }
-  .video-frame.bottom{
-    position:absolute;
-    bottom:12px;
-    right:12px;
-    width:190px;
-    height:150px;
-    border-width:2px;
-    z-index:999;
-  }
-  #reportBtn{
-    left:10px !important;
-    right:auto !important;
-  }
-  #micBtn{
-    bottom:4px;right:4px;
-    transform:scale(0.85);
-  }
-  #toggleMessagesBtn{
-    width:50px;height:50px;border-radius:50%;
-    border:none;background:var(--blue);color:#fff;
-    font-size:20px;align-self:center;margin:10px 0;
-    cursor:pointer;display:flex;justify-content:center;align-items:center;
-  }
-  .messages-hidden .right-col{display:none;}
-  .messages-hidden .video-frame.top{height:360px;}
-  .messages-hidden .video-frame.bottom{height:165px;width:210px;}
-}
-
-@media (min-width: 769px){
-  #toggleMessagesBtn{
-    display:none !important;
-  }
 }
 
 </style>
@@ -338,26 +255,39 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 </div>
 
 <script>
-/* شعار SPARK */
-const logoText = "SPARK";
+/* شعار Spark (برتقالي) + Chat (أزرق) */
 const logoContainer = document.getElementById("logo");
 
-logoText.split("").forEach(letter => {
+const spark = "Spark";
+const chat = "Chat";
+
+spark.split("").forEach(letter => {
   const span = document.createElement("span");
-  span.className = "flip-char";
+  span.className = "flip-char spark";
   span.textContent = letter;
   logoContainer.appendChild(span);
 });
 
+chat.split("").forEach(letter => {
+  const span = document.createElement("span");
+  span.className = "flip-char chat";
+  span.textContent = letter;
+  logoContainer.appendChild(span);
+});
+
+/* حركة الشقلبة */
 const letters = document.querySelectorAll(".flip-char");
 let index = 0;
 
-/* حركة قلب كامل 360 يمين → يسار */
 setInterval(() => {
-  letters[index].classList.add("flip");
-  setTimeout(() => letters[index].classList.remove("flip"), 800);
+  letters.forEach((l, i) => {
+    if (i === index) {
+      l.classList.add("flip");
+      setTimeout(() => l.classList.remove("flip"), 800);
+    }
+  });
   index = (index + 1) % letters.length;
-}, 2000);
+}, 3000);
 
 /* Dark mode */
 document.getElementById("darkToggle").onclick = () => {
@@ -366,7 +296,7 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle messages (mobile only) */
+/* Toggle (mobile) */
 document.getElementById("toggleMessagesBtn").onclick = () => {
   document.body.classList.toggle("messages-hidden");
   toggleMessagesBtn.innerText =
