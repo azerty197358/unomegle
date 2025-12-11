@@ -20,15 +20,27 @@
   --msgYou:#cceaff;
   --msgStranger:#ffd8b0;
   --msgSystem:#e8e8e8;
+
+  --msgYouBorder:#a7d8ff;
+  --msgStrangerBorder:#ffbf85;
 }
 
+/* 🌙 الوضع الداكن المعدّل */
 .dark{
   --bg:#0f1115;
   --text:#f5f5f5;
-  --msgYou:#1c2733;
-  --msgStranger:#332519;
+
+  /* 🎨 ألوان محسنة للرسائل */
+  --msgYou:#0d47a1;
+  --msgStranger:#4e2a00;
   --msgSystem:#222;
+
+  /* حدود محسنة */
   --border:#444;
+
+  /* حدود مخصصة */
+  --msgYouBorder:#1565c0;
+  --msgStrangerBorder:#ff9800;
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -144,9 +156,35 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 .msg{
   padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
 }
-.msg.you{background:var(--msgYou);border:1px solid #a7d8ff;align-self:flex-end;}
-.msg.stranger{background:var(--msgStranger);border:1px solid #ffbf85;align-self:flex-start;}
-.msg.system{background:var(--msgSystem);align-self:center;}
+
+/* 🎨 رسائل YOU */
+.msg.you{
+  background:var(--msgYou);
+  border:1px solid var(--msgYouBorder);
+  color:#000;
+  align-self:flex-end;
+}
+
+.dark .msg.you{
+  color:#fff !important;
+}
+
+/* 🎨 رسائل STRANGER */
+.msg.stranger{
+  background:var(--msgStranger);
+  border:1px solid var(--msgStrangerBorder);
+  color:#000;
+  align-self:flex-start;
+}
+
+.dark .msg.stranger{
+  color:#fff !important;
+}
+
+.msg.system{
+  background:var(--msgSystem);
+  align-self:center;
+}
 
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
@@ -172,27 +210,19 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
-/* ========================================
-   📱 موبايل + تكبير شاشة المستخدم
-   ======================================== */
+/* MOBILE */
 @media (max-width: 768px){
-
   #exitBtn { display:none !important; }
-
   .stage{
     flex-direction:column;padding:8px;overflow-y:auto;
   }
-
   .left-col{
     width:100%;min-width:unset;gap:8px;position:relative;
   }
-
   .video-frame.top{
     height:310px;
     border-width:4px;
   }
-
-  /* شاشة المستخدم أكبر */
   .video-frame.bottom{
     position:absolute;
     bottom:12px;
@@ -202,35 +232,28 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     border-width:2px;
     z-index:999;
   }
-
   #reportBtn{
     left:10px !important;
     right:auto !important;
   }
-
   #micBtn{
     bottom:4px;right:4px;
     transform:scale(0.85);
   }
-
-  /* زر إخفاء الدردشة يظهر فقط للجوال */
   #toggleMessagesBtn{
     width:50px;height:50px;border-radius:50%;
     border:none;background:var(--blue);color:#fff;
     font-size:20px;align-self:center;margin:10px 0;
     cursor:pointer;display:flex;justify-content:center;align-items:center;
   }
-
   .messages-hidden .right-col{display:none;}
   .messages-hidden .video-frame.top{height:360px;}
   .messages-hidden .video-frame.bottom{height:165px;width:210px;}
-
   .chat-area{
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #bbbbbb #f1f1f1;
   }
-
   .chat-area::-webkit-scrollbar{
     width: 4px;
   }
@@ -243,14 +266,13 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   }
 }
 
-/* ❌ إخفاء زر إخفاء الدردشة للكمبيوتر */
 @media (min-width: 769px){
   #toggleMessagesBtn{
     display:none !important;
   }
 }
 
-/* ✔️ جعل النص أسود حتى في الوضع الداكن */
+/* 👇 لا تغيير على النص في الوضع العادي */
 #chatInput,
 .msg,
 .msg.you,
@@ -258,15 +280,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 .msg.system,
 .chat-area,
 .chat-area * {
-  color:#000 !important;
-}
-
-.dark #chatInput,
-.dark .msg,
-.dark .msg.you,
-.dark .msg.stranger,
-.dark .msg.system {
-  color:#000 !important;
+  color:#000;
 }
 </style>
 </head>
