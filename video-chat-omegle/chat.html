@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
@@ -32,15 +32,14 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
-html, body{
-  height:100%;overflow:hidden;
-  font-family:Arial, sans-serif;
-  background:var(--bg);color:var(--text)
-}
+html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
 
 .logo{
-  font-size:48px;font-weight:bold;
-  color:#ff9a00;display:flex;gap:4px;
+  font-size:48px;         
+  font-weight:bold;
+  color:#ff9a00;
+  display:flex;
+  gap:4px;
 }
 .logo span{color:#3fa0ff;}
 
@@ -52,14 +51,12 @@ html, body{
   padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
 }
 
-/* Buttons */
 #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
 #darkToggle{
   background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
   cursor:pointer;margin-right:10px;
 }
 
-/* Notifications */
 .notify-box{position:relative;margin-right:12px;cursor:pointer;}
 #notifyIcon{font-size:24px;}
 #notifyDot{
@@ -74,18 +71,15 @@ html, body{
 .notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
 .notify-empty{padding:10px;text-align:center;color:#777;}
 
-/* Stage Layout */
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
   display:flex;gap:var(--gap);padding:12px;overflow:hidden;
 }
 
 .left-col{
-  width:380px;min-width:260px;
-  display:flex;flex-direction:column;gap:var(--gap);
+  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
 }
 
-/* Video Frames */
 .video-frame{
   position:relative;border-radius:var(--radius);
   border:6px solid var(--border);overflow:hidden;background:#000;
@@ -95,16 +89,12 @@ html, body{
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
 
-video{
-  width:100%;height:100%;object-fit:cover;
-  position:relative;z-index:0;
-}
+video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 .video-label{
   position:absolute;top:8px;left:8px;background:#fff;
   padding:4px 10px;border-radius:6px;z-index:6;
 }
-
 .watermark{
   position:absolute;bottom:10px;left:10px;font-size:14px;
   color:#ffffffaa;font-weight:bold;z-index:6;
@@ -117,7 +107,7 @@ video{
 }
 @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
 
-/* Mic Button */
+/* Mic */
 #micBtn{
   position:absolute;bottom:10px;right:10px;background:var(--blue);
   color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
@@ -126,17 +116,26 @@ video{
 
 /* Report */
 #reportBtn{
-  position:absolute;bottom:10px;right:10px;
-  background:red;color:#fff;padding:4px 8px;font-size:10px;
-  border-radius:6px;cursor:pointer;border:none;z-index:10;
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:4px 8px;
+  font-size:10px;
+  border-radius:6px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
 }
 
-/* Chat Panel */
+/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
   background:var(--bg);min-width:240px;height:100%;
 }
+
 .chat-area{
   flex:1;padding:12px;overflow-y:scroll;
   display:flex;flex-direction:column;gap:8px;
@@ -154,12 +153,17 @@ video{
   background:#fafafa;border-top:1px solid #ddd;
   position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
+
 #status{
-  padding:6px 10px;background:#fafafa;border-radius:6px;border:1px solid #ddd;text-align:center;
+  padding:6px 10px;background:#fafafa;
+  border-radius:6px;border:1px solid #ddd;text-align:center;
 }
 
 .input-container{display:flex;gap:8px;}
-#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
+#skipBtn{
+  background:#ff9a00;color:#fff;padding:10px 14px;
+  border-radius:8px;cursor:pointer;border:none;
+}
 #sendBtn{
   width:42px;height:42px;background:var(--blue);
   color:#fff;border-radius:8px;border:none;cursor:pointer;
@@ -169,7 +173,7 @@ video{
 }
 
 /* ===============================
-   📱 MOBILE MODE — شاشة المستخدم أكبر
+   📱 MOBILE MODE — تكبير شاشة المستخدم
    =============================== */
 @media (max-width: 768px){
 
@@ -183,16 +187,21 @@ video{
     width:100%;min-width:unset;gap:8px;position:relative;
   }
 
-  /* شاشة المستخدم — الأكبر */
-  .video-frame.bottom{
-    height:420px;
+  /* شاشة الغريب */
+  .video-frame.top{
+    height:310px;
     border-width:4px;
   }
 
-  /* شاشة الغريب — أصغر */
-  .video-frame.top{
-    height:200px;
-    border-width:3px;
+  /* 🔥 تكبير شاشة المستخدم المحلي ضمن شاشة الغريب */
+  .video-frame.bottom{
+    position:absolute;
+    bottom:12px;
+    right:12px;
+    width:190px;     /* كان 150 */
+    height:150px;    /* كان 110 */
+    border-width:2px;
+    z-index:999;
   }
 
   #reportBtn{
@@ -201,7 +210,8 @@ video{
   }
 
   #micBtn{
-    bottom:4px;right:4px;transform:scale(0.85);
+    bottom:4px;right:4px;
+    transform:scale(0.85);
   }
 
   #toggleMessagesBtn{
@@ -212,9 +222,29 @@ video{
   }
 
   .messages-hidden .right-col{display:none;}
-  .messages-hidden .video-frame.bottom{height:460px;}
-  .messages-hidden .video-frame.top{height:150px;}
+  .messages-hidden .video-frame.top{height:360px;}
+  .messages-hidden .video-frame.bottom{height:165px;width:210px;}
 
+  .chat-area{
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #bbbbbb #f1f1f1;
+  }
+
+  .chat-area::-webkit-scrollbar{
+    width: 4px;
+  }
+  .chat-area::-webkit-scrollbar-thumb{
+    background: #b5b5b5;
+    border-radius: 10px;
+  }
+  .chat-area::-webkit-scrollbar-track{
+    background: #f1f1f1;
+  }
+}
+
+@media (min-width: 769px){
+  #toggleMessagesBtn{display:none !important;}
 }
 </style>
 </head>
@@ -242,7 +272,6 @@ video{
 
   <div class="left-col">
 
-    <!-- Stranger small on mobile -->
     <div class="video-frame top">
       <button id="reportBtn">🚨 BORN18+</button>
       <div class="watermark">SparkChat</div>
@@ -251,7 +280,6 @@ video{
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
 
-    <!-- You big on mobile -->
     <div class="video-frame bottom">
       <button id="micBtn">🎤</button>
       <div class="watermark">SparkChat</div>
@@ -288,7 +316,7 @@ video{
 <script src="script.js"></script>
 
 <script>
-/* Logo Animation */
+/* شعار */
 const logoText = "SparkChat";
 const logoContainer = document.getElementById("logo");
 
@@ -312,21 +340,21 @@ setInterval(() => {
   index = (index + 1) % letters.length;
 }, 3000);
 
-/* Dark Mode */
+/* Dark mode */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
   document.getElementById("darkToggle").innerText =
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle Messages */
+/* Toggle messages */
 document.getElementById("toggleMessagesBtn").onclick = () => {
   document.body.classList.toggle("messages-hidden");
   toggleMessagesBtn.innerText =
     document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 };
 
-/* Report Button */
+/* Report */
 document.getElementById("reportBtn").onclick = () => {
   if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
     alert("تم إرسال البلاغ بنجاح.");
