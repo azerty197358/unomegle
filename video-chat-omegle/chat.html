@@ -34,12 +34,13 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html, body{
   height:100%;
-  overflow:hidden;
+  overflow:visible;         /* ← إصلاح التمرير */
   font-family:Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
 }
 
+/* ====================== الشعار ====================== */
 .logo{
   font-size:48px;font-weight:bold;color:#ff9a00;display:flex;gap:4px;
 }
@@ -58,10 +59,22 @@ html, body{
   cursor:pointer;margin-right:10px;
 }
 
+.notify-box{position:relative;margin-right:12px;cursor:pointer;}
+#notifyIcon{font-size:24px;}
+#notifyDot{width:10px;height:10px;background:red;border-radius:50%;position:absolute;top:0;right:0;display:none;}
+#notifyMenu{
+  position:absolute;right:0;top:40px;width:220px;
+  background:#fff;border:1px solid #ccc;border-radius:8px;
+  display:none;max-height:250px;overflow-y:auto;z-index:999;
+}
+.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+.notify-empty{padding:10px;text-align:center;color:#777;}
+
 .stage{
   position:absolute;top:60px;bottom:0;left:0;right:0;
   display:flex;gap:var(--gap);padding:12px;
-  overflow:hidden;
+  height:calc(100% - 60px);          /* ← إصلاح */
+  overflow:hidden;                   /* ← لا يؤثر على المحادثة */
 }
 
 .left-col{
@@ -76,25 +89,39 @@ html, body{
 .video-frame.top{height:360px;}
 .video-frame.bottom{height:360px;}
 
-video{width:100%;height:100%;object-fit:cover;}
+video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
+.video-label{
+  position:absolute;top:8px;left:8px;background:#fff;
+  padding:4px 10px;border-radius:6px;z-index:6;
+}
+.watermark{
+  position:absolute;bottom:10px;left:10px;font-size:14px;
+  color:#ffffffaa;font-weight:bold;z-index:6;
+}
+
+.spinner{
+  position:absolute;width:60px;height:60px;border-radius:50%;
+  border:6px solid #fff;border-top-color:transparent;
+  animation:spin 1s linear infinite;z-index:20;
+}
+@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+
+/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
   background:var(--bg);min-width:240px;height:100%;
 }
 
-/* ============================
-      منطقة الرسائل (مُصلحة)
-============================ */
 .chat-area{
   flex:1;
   padding:12px;
-  overflow-y:auto;
+  overflow-y:auto;               /* ← إصلاح أساسي */
   display:flex;
   flex-direction:column;
   gap:8px;
-  scroll-behavior:smooth;
+  scroll-behavior:smooth;        /* ← تمرير سلس */
 }
 
 .msg{
@@ -107,27 +134,28 @@ video{width:100%;height:100%;object-fit:cover;}
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
   background:#fafafa;border-top:1px solid #ddd;
-  position:sticky;bottom:0;
+  position:sticky;bottom:0;left:0;right:0;z-index:50;
 }
 
-/* ============================
-      إصلاح الجوال الكامل
-============================ */
+#status{
+  padding:6px 10px;background:#fafafa;
+  border-radius:6px;border:1px solid #ddd;text-align:center;
+}
+
+.input-container{display:flex;gap:8px;}
+#skipBtn{background:#ff9a00;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer;border:none;}
+#sendBtn{width:42px;height:42px;background:var(--blue);color:#fff;border-radius:8px;border:none;cursor:pointer;}
+#chatInput{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;}
+
 @media (max-width: 768px){
+  .stage{flex-direction:column;padding:8px;}
 
-  .stage{
-    flex-direction:column;
-    padding:8px;
-    overflow:hidden;
-  }
-
-  /* ارتفاع ديناميكي — يسمح بتمرير جميع الرسائل */
   .chat-area{
-    max-height: calc(100vh - 380px);
+    max-height: calc(100vh - 420px);
     overflow-y:auto;
   }
 
-  .left-col{width:100%;gap:8px;}
+  .left-col{width:100%;min-width:unset;gap:8px;}
 
   .video-frame.top,
   .video-frame.bottom{height:180px;border-width:4px;}
@@ -136,14 +164,19 @@ video{width:100%;height:100%;object-fit:cover;}
     width:50px;height:50px;border-radius:50%;
     border:none;background:var(--blue);color:#fff;
     font-size:20px;align-self:center;margin:10px 0;
-    cursor:pointer;
-    display:flex;justify-content:center;align-items:center;
+    cursor:pointer;display:flex;justify-content:center;align-items:center;
   }
 
   .messages-hidden .right-col{display:none;}
+  .messages-hidden .video-frame.top,
+  .messages-hidden .video-frame.bottom{height:240px;}
   .messages-hidden .chat-input-row{display:none !important;}
+  .messages-hidden #skipBtn{
+    position:fixed;bottom:20px;left:50%;
+    transform:translateX(-50%);z-index:9999;width:140px;
+    height:50px;font-size:18px;display:block !important;
+  }
 }
-
 @media (min-width: 769px){
   #toggleMessagesBtn{display:none !important;}
 }
@@ -154,17 +187,33 @@ video{width:100%;height:100%;object-fit:cover;}
 
 <div class="topbar">
   <div class="logo" id="logo"></div>
-  <button id="darkToggle">🌙</button>
-  <button id="exitBtn">Exit</button>
+  <div style="display:flex;gap:14px;align-items:center;">
+    <div class="notify-box">
+      <div id="notifyIcon">🔔</div>
+      <div id="notifyDot"></div>
+      <div id="notifyMenu"><div class="notify-empty">No notifications</div></div>
+    </div>
+    <button id="darkToggle">🌙</button>
+    <button id="exitBtn">Exit</button>
+  </div>
 </div>
 
 <div class="stage">
 
   <div class="left-col">
     <div class="video-frame top">
+      <button id="reportBtn">🚨 BORN18+</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">Stranger</div>
+      <div id="remoteSpinner" class="spinner"></div>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
+
     <div class="video-frame bottom">
+      <button id="micBtn">🎤</button>
+      <div class="watermark">SparkChat</div>
+      <div class="video-label">You</div>
+      <div id="localSpinner" class="spinner"></div>
       <video id="localVideo" autoplay muted playsinline></video>
     </div>
   </div>
@@ -177,60 +226,66 @@ video{width:100%;height:100%;object-fit:cover;}
     </div>
 
     <div class="chat-input-row">
-      <input id="chatInput" placeholder="Type..." />
-      <button id="sendBtn">➤</button>
+      <div id="status">Loading...</div>
+      <div class="input-container">
+        <button id="skipBtn">Skip</button>
+        <input id="chatInput" placeholder="Type..." disabled />
+        <button id="sendBtn" disabled>➤</button>
+      </div>
     </div>
   </div>
-
 </div>
 
 <script>
-/* شعار SparkChat */
+/* LOGO */
 const logoText = "SparkChat";
-const logo = document.getElementById("logo");
-logoText.split("").forEach(l=>{
-  const s=document.createElement("span");
-  s.className="flip-char";
-  s.textContent=l;
-  logo.appendChild(s);
+const logoContainer = document.getElementById("logo");
+logoText.split("").forEach(letter => {
+  const span = document.createElement("span");
+  span.className = "flip-char";
+  span.textContent = letter;
+  logoContainer.appendChild(span);
 });
+const letters = document.querySelectorAll(".flip-char");
+let index = 0;
+setInterval(() => {
+  letters.forEach((l, i) => {
+    if (i === index) {
+      l.classList.add("flip");
+      setTimeout(() => l.classList.remove("flip"), 800);
+    }
+  });
+  index = (index + 1) % letters.length;
+}, 3000);
 
-/* زر الوضع الليلي */
+/* Dark mode */
 document.getElementById("darkToggle").onclick = () => {
   document.body.classList.toggle("dark");
+  document.getElementById("darkToggle").innerText =
+    document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* زر إظهار/إخفاء الرسائل في الجوال */
+/* Toggle messages */
 document.getElementById("toggleMessagesBtn").onclick = () => {
   document.body.classList.toggle("messages-hidden");
+  toggleMessagesBtn.innerText =
+    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
 };
 
-/* ================
-   AUTO-SCROLL FIX
-================ */
-function scrollToBottom() {
-  const chat = document.querySelector(".chat-area");
-  chat.scrollTop = chat.scrollHeight;
-}
-
-/* إذا وصلت رسالة جديدة من السيرفر */
-function addMessage(text, type="system"){
-  const box = document.createElement("div");
-  box.className = "msg " + type;
-  box.textContent = text;
-  document.getElementById("chatMessages").appendChild(box);
-
-  scrollToBottom();  // ← مهم
-}
-
-/* زر إرسال */
-document.getElementById("sendBtn").onclick = () => {
-  const input = document.getElementById("chatInput");
-  if(!input.value.trim()) return;
-
-  addMessage(input.value, "you");
-  input.value = "";
+/* Report */
+document.getElementById("reportBtn").onclick = () => {
+  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
+    alert("تم إرسال البلاغ بنجاح.");
+  }
 };
+
+/* Auto-scroll عند وصول كل رسالة جديدة */
+const chatArea = document.getElementById("chatMessages");
+const observer = new MutationObserver(() => {
+  chatArea.scrollTop = chatArea.scrollHeight;
+});
+observer.observe(chatArea, { childList:true });
+
 </script>
 
 </body>
