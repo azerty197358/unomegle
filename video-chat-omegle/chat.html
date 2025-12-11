@@ -1,4 +1,4 @@
-<!DOCTYPE html>  
+<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
@@ -28,10 +28,13 @@
 .dark{
   --bg:#0f1115;
   --text:#f5f5f5;
+
   --msgYou:#0d47a1;
   --msgStranger:#4e2a00;
   --msgSystem:#222;
+
   --border:#444;
+
   --msgYouBorder:#1565c0;
   --msgStrangerBorder:#ff9800;
 }
@@ -42,16 +45,22 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 .logo{
   font-size:48px;
   font-weight:bold;
+  color:#ff9a00; /* كلمة spark */
   display:flex;
   gap:4px;
 }
+.logo span{
+  color:#3fa0ff; /* باقي الكلمة بالازرق */
+}
 
-.logo .spark { color:#ff9a00; }     /* برتقالي */
-.logo .chat { color:#3fa0ff; }      /* أزرق */
-
-/* حركة الشقلبة يمين → يسار */
-.flip-char{display:inline-block;transition:transform 0.8s ease;transform-origin:center;}
-.flip{transform:rotateY(360deg);}
+.flip-char{
+  display:inline-block;
+  transition:transform 0.8s ease;
+  transform-origin: right; /* الشقلبة من اليمين */
+}
+.flip{
+  transform:rotateY(360deg); /* دورة كاملة يمين → يسار */
+}
 
 .topbar{
   height:60px;display:flex;justify-content:space-between;align-items:center;
@@ -123,11 +132,20 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 /* Report */
 #reportBtn{
-  position:absolute;bottom:10px;right:10px;
-  background:red;color:#fff;padding:4px 8px;
-  font-size:10px;border-radius:6px;cursor:pointer;border:none;z-index:10;
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  background:red;
+  color:#fff;
+  padding:4px 8px;
+  font-size:10px;
+  border-radius:6px;
+  cursor:pointer;
+  border:none;
+  z-index:10;
 }
 
+/* CHAT */
 .right-col{
   flex:1;display:flex;flex-direction:column;
   border:6px solid var(--border);border-radius:10px;
@@ -139,23 +157,36 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-.msg{padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;}
+.msg{
+  padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
+}
 
 .msg.you{
-  background:var(--msgYou);border:1px solid var(--msgYouBorder);
-  color:#000;align-self:flex-end;
+  background:var(--msgYou);
+  border:1px solid var(--msgYouBorder);
+  color:#000;
+  align-self:flex-end;
 }
 
-.dark .msg.you{color:#fff!important;}
+.dark .msg.you{
+  color:#fff !important;
+}
 
 .msg.stranger{
-  background:var(--msgStranger);border:1px solid var(--msgStrangerBorder);
-  color:#000;align-self:flex-start;
+  background:var(--msgStranger);
+  border:1px solid var(--msgStrangerBorder);
+  color:#000;
+  align-self:flex-start;
 }
 
-.dark .msg.stranger{color:#fff!important;}
+.dark .msg.stranger{
+  color:#fff !important;
+}
 
-.msg.system{background:var(--msgSystem);align-self:center;}
+.msg.system{
+  background:var(--msgSystem);
+  align-self:center;
+}
 
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
@@ -170,24 +201,91 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 .input-container{display:flex;gap:8px;}
 
-/* زر تخطي أزرق */
 #skipBtn{
-  background:#2ea3ff;
-  color:#fff;
-  padding:10px 14px;
-  border-radius:8px;
-  cursor:pointer;
-  border:none;
+  background: var(--blue); /* ←← تم التعديل */
+  color:#fff;padding:10px 14px;
+  border-radius:8px;cursor:pointer;border:none;
 }
 
 #sendBtn{
   width:42px;height:42px;background:var(--blue);
   color:#fff;border-radius:8px;border:none;cursor:pointer;
 }
+
 #chatInput{
   flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
 }
 
+@media (max-width: 768px){
+  #exitBtn { display:none !important; }
+  .stage{
+    flex-direction:column;padding:8px;overflow-y:auto;
+  }
+  .left-col{
+    width:100%;min-width:unset;gap:8px;position:relative;
+  }
+  .video-frame.top{
+    height:310px;
+    border-width:4px;
+  }
+  .video-frame.bottom{
+    position:absolute;
+    bottom:12px;
+    right:12px;
+    width:190px;
+    height:150px;
+    border-width:2px;
+    z-index:999;
+  }
+  #reportBtn{
+    left:10px !important;
+    right:auto !important;
+  }
+  #micBtn{
+    bottom:4px;right:4px;
+    transform:scale(0.85);
+  }
+  #toggleMessagesBtn{
+    width:50px;height:50px;border-radius:50%;
+    border:none;background:var(--blue);color:#fff;
+    font-size:20px;align-self:center;margin:10px 0;
+    cursor:pointer;display:flex;justify-content:center;align-items:center;
+  }
+  .messages-hidden .right-col{display:none;}
+  .messages-hidden .video-frame.top{height:360px;}
+  .messages-hidden .video-frame.bottom{height:165px;width:210px;}
+  .chat-area{
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #bbbbbb #f1f1f1;
+  }
+  .chat-area::-webkit-scrollbar{
+    width: 4px;
+  }
+  .chat-area::-webkit-scrollbar-thumb{
+    background: #b5b5b5;
+    border-radius: 10px;
+  }
+  .chat-area::-webkit-scrollbar-track{
+    background: #f1f1f1;
+  }
+}
+
+@media (min-width: 769px){
+  #toggleMessagesBtn{
+    display:none !important;
+  }
+}
+
+#chatInput,
+.msg,
+.msg.you,
+.msg.stranger,
+.msg.system,
+.chat-area,
+.chat-area * {
+  color:#000;
+}
 </style>
 </head>
 
@@ -254,28 +352,29 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+
 <script>
-/* شعار Spark (برتقالي) + Chat (أزرق) */
+/* شعار */
+const logoText = "sparkchat"; 
 const logoContainer = document.getElementById("logo");
 
-const spark = "Spark";
-const chat = "Chat";
-
-spark.split("").forEach(letter => {
+logoText.split("").forEach((letter, i) => {
   const span = document.createElement("span");
-  span.className = "flip-char spark";
+  span.className = "flip-char";
+
+  /* spark برتقالي – الباقي ازرق */
+  if (i < 5) {
+    span.style.color = "#ff9a00";
+  } else {
+    span.style.color = "#3fa0ff";
+  }
+
   span.textContent = letter;
   logoContainer.appendChild(span);
 });
 
-chat.split("").forEach(letter => {
-  const span = document.createElement("span");
-  span.className = "flip-char chat";
-  span.textContent = letter;
-  logoContainer.appendChild(span);
-});
-
-/* حركة الشقلبة */
 const letters = document.querySelectorAll(".flip-char");
 let index = 0;
 
@@ -296,7 +395,7 @@ document.getElementById("darkToggle").onclick = () => {
     document.body.classList.contains("dark") ? "☀️" : "🌙";
 };
 
-/* Toggle (mobile) */
+/* Toggle messages (mobile only) */
 document.getElementById("toggleMessagesBtn").onclick = () => {
   document.body.classList.toggle("messages-hidden");
   toggleMessagesBtn.innerText =
