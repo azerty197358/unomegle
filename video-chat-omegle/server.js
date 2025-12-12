@@ -43,6 +43,7 @@ const DB_FALLBACK = "postgresql://unomegle:aHJr5qb4oCxffr2qs92cH2FPCxW6T2qX@dpg-
 const DATABASE_URL = process.env.DATABASE_URL || DB_FALLBACK;
 const pool = new Pool({
   connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
   max: 5,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000
@@ -616,3 +617,4 @@ setInterval(()=>{ loadBannedCountriesCache().catch(()=>{}); loadBansCache().catc
 // start server
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
+
