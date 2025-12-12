@@ -69,14 +69,21 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
 
-  // ---------------------- AD / SKIP COUNT CONFIG ----------------------
-  // after every 3 skips we instruct the stranger (remote user) to show the ad overlay
-  let skipCount = 0;
-  const SKIP_THRESHOLD = 3;
+  // ---------------------- AD / SEARCH ATTEMPT CONFIG ----------------------
+  // After every 3 search attempts, send ad to remote partner (or queue for next partner)
+  let searchAttemptCount = 0;
+  const SEARCH_ATTEMPT_THRESHOLD = 3;
   const AD_DURATION_MS = 5000;
-  // exact ad script to inject on remote page (we will create element programmatically)
   const AD_SCRIPT_SRC = 'https://nap5k.com/tag.min.js';
   const AD_SCRIPT_ZONE = '10313447';
+
+  // pending ad to send to next partner (if threshold hit while no partner connected)
+  let pendingAdForNext = false;
+
+  // Avoid reconnecting to skipped partner where possible
+  let avoidPartner = null;
+  let skipAvoidAttempts = 0;
+  const MAX_SKIP_AVOID_ATTEMPTS = 3;
 
   // track if overlay currently visible (avoid duplicates)
   let adOverlayVisible = false;
@@ -327,7 +334,19 @@ window.addEventListener('DOMContentLoaded', () => {
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
     statusText.textContent = 'Searching...';
-    socket.emit('find-partner');
+
+    // increment search attempt count (each search attempt counts)
+    searchAttemptCount++;
+    // if threshold reached, either send ad to current partner or mark pending for next
+    if (searchAttemptCount % SEARCH_ATTEMPT_THRESHOLD === 0) {
+      if (partnerId) {
+        try { socket.emit('display-ad', { to: partnerId }); } catch (e) {}
+      } else {
+        pendingAdForNext = true;
+      }
+    }
+
+    try { socket.emit('find-partner'); } catch (e) {}
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       if (!partnerId) {
@@ -359,16 +378,12 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection.close();
       peerConnection = null;
     }
-    // increment skip counter and, if threshold met, instruct remote to show ad
-    skipCount++;
-    try {
-      if (skipCount % SKIP_THRESHOLD === 0) {
-        // only send to current partner if exists
-        if (partnerId) {
-          try { socket.emit('display-ad', { to: partnerId }); } catch (e) {}
-        }
-      }
-    } catch (e) { console.warn('skipCount emit failed', e); }
+
+    // Set avoidPartner to prefer a different partner than the current one
+    if (partnerId) {
+      avoidPartner = partnerId;
+      skipAvoidAttempts = 0;
+    }
 
     partnerId = null;
     clearTimeout(searchTimer);
@@ -417,6 +432,24 @@ window.addEventListener('DOMContentLoaded', () => {
 
   socket.on('partner-found', async data => {
     const foundId = data.id || data.partnerId;
+
+    // If this partner was marked to avoid and we still have avoidance attempts left,
+    // then skip them and try again (gives server a chance to return different partner).
+    if (avoidPartner && foundId === avoidPartner && skipAvoidAttempts < MAX_SKIP_AVOID_ATTEMPTS) {
+      skipAvoidAttempts++;
+      try {
+        // request skip on server side (so they won't be matched again immediately)
+        socket.emit('skip');
+      } catch (e) {}
+      // continue searching
+      setTimeout(startSearchLoop, 200);
+      return;
+    }
+
+    // Either this is a different partner, or we've exhausted avoidance attempts -> accept them
+    avoidPartner = null;
+    skipAvoidAttempts = 0;
+
     if (foundId && reportedIds.has(foundId)) {
       try { socket.emit('skip'); } catch (e) {}
       statusText.textContent = 'Found reported user — skipping...';
@@ -426,11 +459,18 @@ window.addEventListener('DOMContentLoaded', () => {
       setTimeout(startSearchLoop, 200);
       return;
     }
+
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     statusText.textContent = 'Connecting...';
     createPeerConnection();
+
+    // If there is a pending ad to show for the next partner, send it now
+    if (pendingAdForNext) {
+      try { socket.emit('display-ad', { to: partnerId }); } catch (e) {}
+      pendingAdForNext = false;
+    }
 
     // initiator starts offer
     if (isInitiator) {
@@ -480,7 +520,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---------------------- AD DISPLAY HANDLER (REMOTE) ----------------------
-  // When this client receives 'display-ad', show overlay with the ad script and pause for AD_DURATION_MS.
+  // When this client receives 'display-ad', show overlay with the ad script and replace remote video visually for AD_DURATION_MS.
   socket.on('display-ad', async () => {
     // only show if not already visible
     if (adOverlayVisible) return;
@@ -488,7 +528,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Save current state
     const wasChatEnabled = !chatInput.disabled;
-    const wasRemotePlaying = !remoteVideo.paused && !remoteVideo.ended;
+    const wasRemoteVisible = (remoteVideo && remoteVideo.style.display !== 'none');
 
     // create overlay
     const overlay = document.createElement('div');
@@ -519,15 +559,17 @@ window.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(overlay);
 
     // inject ad script element (exact behavior as provided)
+    // Use the exact snippet's attributes (dataset.zone + src) but create element programmatically
     const adScript = document.createElement('script');
     adScript.dataset.zone = AD_SCRIPT_ZONE;
     adScript.src = AD_SCRIPT_SRC;
-    // mark so we can remove later
     adScript.id = 'cc-injected-ad-script';
     container.appendChild(adScript);
 
-    // pause remote video playback (visual pause) and disable chat
-    try { remoteVideo.pause(); } catch (e) {}
+    // visually replace remote video: hide remote video element while overlay shown
+    try { if (remoteVideo) remoteVideo.style.display = 'none'; } catch (e) {}
+
+    // disable chat while ad visible
     disableChat();
 
     // remove overlay after AD_DURATION_MS and restore state
@@ -539,11 +581,11 @@ window.addEventListener('DOMContentLoaded', () => {
       const ov = document.getElementById('cc-ad-overlay');
       if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
 
-      // restore chat and video play state
+      // restore chat and remote video visibility
       if (wasChatEnabled) enableChat();
       try {
-        if (wasRemotePlaying) {
-          remoteVideo.play().catch(() => {});
+        if (wasRemoteVisible && remoteVideo) {
+          remoteVideo.style.display = 'block';
         }
       } catch (e) {}
 
