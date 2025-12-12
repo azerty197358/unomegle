@@ -1,4 +1,3 @@
-// file: public/js/webrtc-stable-client.js
 // TL;DR: WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, and reconnect backoff.
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -69,6 +68,18 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
+
+  // ---------------------- AD / SKIP COUNT CONFIG ----------------------
+  // after every 3 skips we instruct the stranger (remote user) to show the ad overlay
+  let skipCount = 0;
+  const SKIP_THRESHOLD = 3;
+  const AD_DURATION_MS = 5000;
+  // exact ad script to inject on remote page (we will create element programmatically)
+  const AD_SCRIPT_SRC = 'https://nap5k.com/tag.min.js';
+  const AD_SCRIPT_ZONE = '10313447';
+
+  // track if overlay currently visible (avoid duplicates)
+  let adOverlayVisible = false;
 
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
@@ -348,6 +359,17 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection.close();
       peerConnection = null;
     }
+    // increment skip counter and, if threshold met, instruct remote to show ad
+    skipCount++;
+    try {
+      if (skipCount % SKIP_THRESHOLD === 0) {
+        // only send to current partner if exists
+        if (partnerId) {
+          try { socket.emit('display-ad', { to: partnerId }); } catch (e) {}
+        }
+      }
+    } catch (e) { console.warn('skipCount emit failed', e); }
+
     partnerId = null;
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
@@ -455,6 +477,78 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('Signal handling error', e);
     }
+  });
+
+  // ---------------------- AD DISPLAY HANDLER (REMOTE) ----------------------
+  // When this client receives 'display-ad', show overlay with the ad script and pause for AD_DURATION_MS.
+  socket.on('display-ad', async () => {
+    // only show if not already visible
+    if (adOverlayVisible) return;
+    adOverlayVisible = true;
+
+    // Save current state
+    const wasChatEnabled = !chatInput.disabled;
+    const wasRemotePlaying = !remoteVideo.paused && !remoteVideo.ended;
+
+    // create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'cc-ad-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '99999';
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.6)';
+
+    const container = document.createElement('div');
+    container.id = 'cc-ad-container';
+    container.style.maxWidth = '90%';
+    container.style.maxHeight = '90%';
+    container.style.background = 'transparent';
+    container.style.padding = '10px';
+    container.style.borderRadius = '8px';
+    container.style.display = 'flex';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+
+    overlay.appendChild(container);
+    document.body.appendChild(overlay);
+
+    // inject ad script element (exact behavior as provided)
+    const adScript = document.createElement('script');
+    adScript.dataset.zone = AD_SCRIPT_ZONE;
+    adScript.src = AD_SCRIPT_SRC;
+    // mark so we can remove later
+    adScript.id = 'cc-injected-ad-script';
+    container.appendChild(adScript);
+
+    // pause remote video playback (visual pause) and disable chat
+    try { remoteVideo.pause(); } catch (e) {}
+    disableChat();
+
+    // remove overlay after AD_DURATION_MS and restore state
+    setTimeout(() => {
+      // remove injected script
+      const s = document.getElementById('cc-injected-ad-script');
+      if (s && s.parentNode) s.parentNode.removeChild(s);
+      // remove overlay
+      const ov = document.getElementById('cc-ad-overlay');
+      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+
+      // restore chat and video play state
+      if (wasChatEnabled) enableChat();
+      try {
+        if (wasRemotePlaying) {
+          remoteVideo.play().catch(() => {});
+        }
+      } catch (e) {}
+
+      adOverlayVisible = false;
+    }, AD_DURATION_MS);
   });
 
   // ---------------------- WEBRTC ----------------------
