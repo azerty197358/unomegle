@@ -1,43 +1,45 @@
--- schema.sql
+-- visitors: active sockets
 CREATE TABLE IF NOT EXISTS visitors (
-  socket_id TEXT PRIMARY KEY,
-  ip TEXT,
-  fingerprint TEXT,
-  country CHAR(2),
-  ts TIMESTAMP WITH TIME ZONE DEFAULT now()
+    socket_id TEXT PRIMARY KEY,
+    ip TEXT,
+    fingerprint TEXT,
+    country TEXT,
+    ts TIMESTAMP DEFAULT NOW()
 );
 
+-- visitors history
 CREATE TABLE IF NOT EXISTS visitors_history (
-  id BIGSERIAL PRIMARY KEY,
-  ip TEXT,
-  fingerprint TEXT,
-  country CHAR(2),
-  ts TIMESTAMP WITH TIME ZONE DEFAULT now()
+    id SERIAL PRIMARY KEY,
+    ip TEXT,
+    fingerprint TEXT,
+    country TEXT,
+    ts TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS reports (
-  id BIGSERIAL PRIMARY KEY,
-  target TEXT NOT NULL,
-  reporter TEXT NOT NULL,
-  ts TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS report_screenshots (
-  target TEXT PRIMARY KEY,
-  image TEXT,
-  ts TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS bans (
-  id BIGSERIAL PRIMARY KEY,
-  kind TEXT NOT NULL, -- 'ip' | 'fingerprint'
-  value TEXT NOT NULL,
-  expires TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS bans_kind_value_idx ON bans(kind, value);
-
+-- banned countries
 CREATE TABLE IF NOT EXISTS banned_countries (
-  code CHAR(2) PRIMARY KEY,
-  ts TIMESTAMP WITH TIME ZONE DEFAULT now()
+    code TEXT PRIMARY KEY
+);
+
+-- bans (ip / fingerprint)
+CREATE TABLE IF NOT EXISTS bans (
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    expires TIMESTAMP NOT NULL,
+    PRIMARY KEY(kind, value)
+);
+
+-- reports
+CREATE TABLE IF NOT EXISTS reports (
+    id SERIAL PRIMARY KEY,
+    target TEXT NOT NULL,
+    reporter TEXT NOT NULL,
+    ts TIMESTAMP DEFAULT NOW()
+);
+
+-- screenshots
+CREATE TABLE IF NOT EXISTS report_screenshots (
+    target TEXT PRIMARY KEY,
+    image TEXT,
+    ts TIMESTAMP DEFAULT NOW()
 );
