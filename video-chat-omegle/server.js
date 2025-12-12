@@ -1,6 +1,6 @@
 // File: server.js
-// FULL SERVER — POSTGRES PERSISTENCE + CLEANUP + RESOURCE TUNING
-// Minimal critical comments only.
+// Full server — PostgreSQL persistence, cleanup, admin panel, low-memory for Render free plan.
+// TL;DR: place schema.sql in same dir, set env DATABASE_URL (or use fallback), then run.
 
 const express = require("express");
 const path = require("path");
@@ -10,47 +10,57 @@ const geoip = require("geoip-lite");
 const { Pool } = require("pg");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const httpLib = require("http");
+const socketIo = require("socket.io");
 
+// ---------- Configuration ----------
+const DB_FALLBACK = "postgresql://unomegle:aHJr5qb4oCxffr2qs92cH2FPCxW6T2qX@dpg-d4u3diur433s73d9j580-a.oregon-postgres.render.com/unomegle";
+const DATABASE_URL = process.env.DATABASE_URL || DB_FALLBACK;
+const PORT = process.env.PORT || 3000;
+const ADMIN_USERS = { admin: process.env.ADMIN_PASS || "admin" };
+const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
+const VISITORS_HISTORY_KEEP_DAYS = 30;
+const REPORTS_KEEP_DAYS = 90;
+
+// ---------- App setup ----------
 const app = express();
-app.set("trust proxy", true);
-
-const http = require("http").createServer(app);
-const io = require("socket.io")(http, { pingTimeout: 30000, transports: ["websocket", "polling"] });
+// Render runs behind a single proxy; set to 1 to avoid permissive trust proxy warnings
+app.set("trust proxy", 1);
 
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(compression());
 
-// basic rate limit to reduce abusive traffic (adjust as needed)
-app.use(rateLimit({
+// rate limiter — use ip as key, short window for free plan, small max to limit work
+const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
-  legacyHeaders: false
-}));
+  legacyHeaders: false,
+  // keyGenerator uses req.ip which respects trust proxy above
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress || "anon"
+});
+app.use(limiter);
 
-// ADMIN CREDENTIALS - change as needed or set via env
-const ADMIN_USERS = { admin: process.env.ADMIN_PASS || "admin" };
+// basic admin auth
 const adminAuth = basicAuth({
   users: ADMIN_USERS,
   challenge: true,
   realm: "Admin Area",
 });
 
-// DB setup: prefer env var DATABASE_URL
-const DB_FALLBACK = "postgresql://unomegle:aHJr5qb4oCxffr2qs92cH2FPCxW6T2qX@dpg-d4u3diur433s73d9j580-a.oregon-postgres.render.com/unomegle";
-const DATABASE_URL = process.env.DATABASE_URL || DB_FALLBACK;
+// ---------- DB pool ----------
 const pool = new Pool({
   connectionString: DATABASE_URL,
-   ssl: { rejectUnauthorized: false },  // ← هذا السطر عندك مكسور نحويًا
+  ssl: { rejectUnauthorized: false }, // required for Render Postgres
   max: 5,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000
 });
 
-// simple helper to run queries
-async function q(text, params) {
+// simple query helper
+async function q(text, params=[]) {
   const client = await pool.connect();
   try {
     return await client.query(text, params);
@@ -59,9 +69,15 @@ async function q(text, params) {
   }
 }
 
-// create tables if not exist
+// ensure schema.sql exists and run it
 async function ensureSchema() {
-  const sql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
+  const sqlPath = path.join(__dirname, "schema.sql");
+  if (!fs.existsSync(sqlPath)) {
+    console.error("schema.sql not found in project root. Create schema.sql and redeploy.");
+    process.exit(1);
+  }
+  const sql = fs.readFileSync(sqlPath, "utf8");
+  // Run as a single batch. Keep reasonably idempotent CREATE TABLE IF NOT EXISTS statements.
   await q(sql);
 }
 ensureSchema().catch(err => {
@@ -69,8 +85,180 @@ ensureSchema().catch(err => {
   process.exit(1);
 });
 
-// --- static list of countries (ISO2 -> name) ---
-const COUNTRIES = { /* AS BEFORE: omitted here for brevity - keep the same mapping */ 
+// ---------- Caches (lightweight) ----------
+let bannedCountriesCache = new Set();
+async function loadBannedCountriesCache() {
+  try {
+    const res = await q("SELECT code FROM banned_countries");
+    bannedCountriesCache = new Set(res.rows.map(r => r.code));
+  } catch (e) {
+    bannedCountriesCache = new Set();
+  }
+}
+
+let bansIpCache = new Map(); // ip -> Date
+let bansFpCache = new Map(); // fp -> Date
+async function loadBansCache() {
+  try {
+    const res = await q("SELECT kind, value, expires FROM bans WHERE expires > NOW()");
+    bansIpCache = new Map();
+    bansFpCache = new Map();
+    for (const r of res.rows) {
+      if (r.kind === "ip") bansIpCache.set(r.value, new Date(r.expires));
+      else if (r.kind === "fingerprint") bansFpCache.set(r.value, new Date(r.expires));
+    }
+  } catch (e) {
+    bansIpCache = new Map();
+    bansFpCache = new Map();
+  }
+}
+
+// initial caches
+loadBannedCountriesCache().catch(()=>{});
+loadBansCache().catch(()=>{});
+setInterval(() => { loadBannedCountriesCache().catch(()=>{}); loadBansCache().catch(()=>{}); }, 5 * 60 * 1000);
+
+// ---------- Admin snapshot (reads from DB on-demand) ----------
+async function getAdminSnapshot() {
+  // counts
+  const connected = io.of("/").sockets.size;
+  const waiting = (await q("SELECT count(*) FROM visitors WHERE waiting = TRUE")).rows[0] ? parseInt((await q("SELECT count(*) FROM visitors WHERE waiting = TRUE")).rows[0].count,10) : 0;
+  const partnered = (await q("SELECT count(*) FROM visitors WHERE paired = TRUE")).rows[0] ? parseInt((await q("SELECT count(*) FROM visitors WHERE paired = TRUE")).rows[0].count,10) : 0;
+  const countriesRes = await q("SELECT country, count(*) FROM visitors_history WHERE country IS NOT NULL GROUP BY country");
+  const countryCounts = {};
+  for (const r of countriesRes.rows) countryCounts[r.country] = parseInt(r.count, 10);
+  const totalVisitorsRes = await q("SELECT count(*) FROM visitors_history");
+  const totalVisitors = parseInt(totalVisitorsRes.rows[0].count, 10);
+
+  // bans
+  const ipBans = [];
+  for (const [ip, expires] of bansIpCache) {
+    if (expires instanceof Date && expires.getTime() > Date.now()) ipBans.push({ ip, expires: expires.getTime() });
+  }
+  const fpBans = [];
+  for (const [fp, expires] of bansFpCache) {
+    if (expires instanceof Date && expires.getTime() > Date.now()) fpBans.push({ fp, expires: expires.getTime() });
+  }
+
+  // reported users
+  const repRes = await q("SELECT target, COUNT(DISTINCT reporter) AS cnt FROM reports GROUP BY target ORDER BY cnt DESC");
+  const reportedUsers = [];
+  for (const r of repRes.rows) {
+    const ss = await q("SELECT image FROM report_screenshots WHERE target = $1", [r.target]);
+    const reporters = (await q("SELECT reporter FROM reports WHERE target = $1 LIMIT 20", [r.target])).rows.map(x => x.reporter);
+    reportedUsers.push({ target: r.target, count: parseInt(r.cnt,10), reporters, screenshot: ss.rows[0] ? ss.rows[0].image : null });
+  }
+
+  const recentVisitors = (await q("SELECT ip, fingerprint AS fp, country, ts FROM visitors_history ORDER BY ts DESC LIMIT 500")).rows;
+
+  return {
+    stats: { connected, waiting, partnered, totalVisitors, countryCounts },
+    activeIpBans: ipBans,
+    activeFpBans: fpBans,
+    reportedUsers,
+    recentVisitors,
+    bannedCountries: Array.from(bannedCountriesCache)
+  };
+}
+
+// helper to emit snapshot to admin sockets
+function emitAdminUpdate() {
+  getAdminSnapshot().then(snap => io.of("/").emit("adminUpdate", snap)).catch(err => console.error("emitAdminUpdate error:", err));
+}
+
+// ---------- Ban helpers (persist) ----------
+async function banUserPersist(kind, value, durationMs) {
+  const expires = new Date(Date.now() + durationMs);
+  await q("INSERT INTO bans(kind, value, expires) VALUES($1,$2,$3) ON CONFLICT (kind, value) DO UPDATE SET expires = EXCLUDED.expires", [kind, value, expires]);
+  await loadBansCache();
+  emitAdminUpdate();
+}
+async function unbanPersist(kind, value) {
+  await q("DELETE FROM bans WHERE kind=$1 AND value=$2", [kind, value]);
+  await loadBansCache();
+  emitAdminUpdate();
+}
+
+// banned countries helpers
+async function addBannedCountry(code) {
+  await q("INSERT INTO banned_countries(code) VALUES($1) ON CONFLICT DO NOTHING", [code]);
+  await loadBannedCountriesCache();
+  emitAdminUpdate();
+}
+async function removeBannedCountry(code) {
+  await q("DELETE FROM banned_countries WHERE code=$1", [code]);
+  await loadBannedCountriesCache();
+  emitAdminUpdate();
+}
+async function clearBannedCountries() {
+  await q("TRUNCATE banned_countries");
+  await loadBannedCountriesCache();
+  emitAdminUpdate();
+}
+
+// ---------- Cleanup job ----------
+async function cleanupOldData() {
+  try {
+    await q("DELETE FROM visitors_history WHERE ts < NOW() - INTERVAL '30 days'");
+    await q("DELETE FROM reports WHERE ts < NOW() - INTERVAL '90 days'");
+    await q("DELETE FROM report_screenshots WHERE ts < NOW() - INTERVAL '90 days'");
+    // keep bans and banned_countries (admin-managed)
+    // refresh caches
+    await loadBannedCountriesCache();
+    await loadBansCache();
+  } catch (e) {
+    console.error("cleanupOldData error:", e);
+  }
+}
+cleanupOldData();
+setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
+
+// ---------- Persistence helpers ----------
+async function persistVisitor(socketId, ip, country, fingerprint=null, waiting=false, paired=false) {
+  const now = new Date();
+  try {
+    await q(
+      `INSERT INTO visitors(socket_id, ip, fingerprint, country, ts, waiting, paired)
+       VALUES($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (socket_id) DO UPDATE SET ip=EXCLUDED.ip, fingerprint=EXCLUDED.fingerprint, country=EXCLUDED.country, ts=EXCLUDED.ts, waiting=EXCLUDED.waiting, paired=EXCLUDED.paired`,
+      [socketId, ip, fingerprint, country, now, waiting, paired]
+    );
+    await q("INSERT INTO visitors_history(ip, fingerprint, country, ts) VALUES($1,$2,$3,$4)", [ip, fingerprint, country, now]);
+  } catch (e) {
+    console.error("persistVisitor error:", e);
+  }
+}
+
+// persist report and possibly ban when threshold reached
+async function persistReport(target, reporter) {
+  try {
+    await q("INSERT INTO reports(target, reporter) VALUES($1,$2)", [target, reporter]);
+    const res = await q("SELECT COUNT(DISTINCT reporter) AS cnt FROM reports WHERE target=$1", [target]);
+    const cnt = parseInt(res.rows[0].cnt, 10);
+    if (cnt >= 3) {
+      const t = await q("SELECT ip, fingerprint FROM visitors WHERE socket_id = $1", [target]);
+      if (t.rows[0]) {
+        const targetIp = t.rows[0].ip;
+        const targetFp = t.rows[0].fingerprint;
+        if (targetIp) await banUserPersist("ip", targetIp, BAN_DURATION_MS);
+        if (targetFp) await banUserPersist("fingerprint", targetFp, BAN_DURATION_MS);
+      }
+    }
+  } catch (e) {
+    console.error("persistReport error:", e);
+  }
+}
+
+async function saveScreenshot(target, image) {
+  try {
+    await q("INSERT INTO report_screenshots(target, image, ts) VALUES($1,$2,NOW()) ON CONFLICT (target) DO UPDATE SET image=EXCLUDED.image, ts=NOW()", [target, image]);
+  } catch (e) {
+    console.error("saveScreenshot error:", e);
+  }
+}
+
+// ---------- Admin UI templates ----------
+const COUNTRIES = {
   "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
   "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
   "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
@@ -104,198 +292,18 @@ const COUNTRIES = { /* AS BEFORE: omitted here for brevity - keep the same mappi
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
 
-const waitingQueue = [];
-const partners = new Map();
-const userFingerprint = new Map();
-const userIp = new Map();
-
-const BAN_DURATION = 24 * 60 * 60 * 1000;
-
-const cache = {
-  bannedCountries: new Set(),
-  bansIp: new Map(), // ip -> expires
-  bansFp: new Map()  // fp -> expires
-};
-
-// load banned countries cache from DB
-async function loadBannedCountriesCache() {
-  try {
-    const res = await q("SELECT code FROM banned_countries");
-    cache.bannedCountries = new Set(res.rows.map(r => r.code));
-  } catch (e) { cache.bannedCountries = new Set(); }
-}
-async function loadBansCache() {
-  try {
-    const now = new Date();
-    const res = await q("SELECT kind, value, expires FROM bans WHERE expires > now()");
-    cache.bansIp = new Map();
-    cache.bansFp = new Map();
-    for (const r of res.rows) {
-      if (r.kind === "ip") cache.bansIp.set(r.value, new Date(r.expires));
-      else if (r.kind === "fingerprint") cache.bansFp.set(r.value, new Date(r.expires));
-    }
-  } catch (e) {
-    cache.bansIp = new Map();
-    cache.bansFp = new Map();
-  }
-}
-
-// init caches
-loadBannedCountriesCache().catch(()=>{});
-loadBansCache().catch(()=>{});
-
-// helper: admin snapshot build from DB + memory
-async function getAdminSnapshot() {
-  const connected = io.of("/").sockets.size;
-  const waiting = waitingQueue.length;
-  const partnered = partners.size / 2;
-  const countriesRes = await q("SELECT country, count(*) FROM visitors_history WHERE country IS NOT NULL GROUP BY country");
-  const countryCounts = {};
-  for (const r of countriesRes.rows) countryCounts[r.country] = parseInt(r.count, 10);
-  const totalVisitorsRes = await q("SELECT count(*) FROM visitors_history");
-  const totalVisitors = parseInt(totalVisitorsRes.rows[0].count, 10);
-  const ipBans = [];
-  for (const [ip, expires] of cache.bansIp) {
-    if (expires instanceof Date && expires.getTime() > Date.now()) ipBans.push({ ip, expires: expires.getTime() });
-  }
-  const fpBans = [];
-  for (const [fp, expires] of cache.bansFp) {
-    if (expires instanceof Date && expires.getTime() > Date.now()) fpBans.push({ fp, expires: expires.getTime() });
-  }
-  const reported = [];
-  const repRes = await q("SELECT target, COUNT(DISTINCT reporter) AS cnt FROM reports GROUP BY target");
-  for (const r of repRes.rows) {
-    const ss = await q("SELECT image FROM report_screenshots WHERE target = $1", [r.target]);
-    reported.push({ target: r.target, count: parseInt(r.cnt,10), reporters: [], screenshot: ss.rows[0] ? ss.rows[0].image : null });
-    // reporters list (limited)
-    const rp = await q("SELECT reporter FROM reports WHERE target = $1 LIMIT 20", [r.target]);
-    reported[reported.length-1].reporters = rp.rows.map(x=>x.reporter);
-  }
-
-  const recentVisitors = await q("SELECT ip, fingerprint as fp, country, ts FROM visitors_history ORDER BY ts DESC LIMIT 500");
-  return {
-    stats: { connected, waiting, partnered, totalVisitors, countryCounts },
-    activeIpBans: ipBans,
-    activeFpBans: fpBans,
-    reportedUsers: reported,
-    recentVisitors: recentVisitors.rows,
-    bannedCountries: Array.from(cache.bannedCountries)
-  };
-}
-
-function emitAdminUpdate() {
-  getAdminSnapshot().then(snap => io.of("/").emit("adminUpdate", snap)).catch(()=>{});
-}
-
-// ban helpers (persist to DB + update cache)
-async function banUserPersist(kind, value, durationMs) {
-  const expires = new Date(Date.now() + durationMs);
-  await q("INSERT INTO bans(kind, value, expires) VALUES($1,$2,$3) ON CONFLICT (kind, value) DO UPDATE SET expires = EXCLUDED.expires", [kind, value, expires]);
-  await loadBansCache();
-  emitAdminUpdate();
-}
-async function unbanPersist(kind, value) {
-  await q("DELETE FROM bans WHERE kind=$1 AND value=$2", [kind, value]);
-  await loadBansCache();
-  emitAdminUpdate();
-}
-
-// banned countries DB helpers
-async function addBannedCountry(code) {
-  await q("INSERT INTO banned_countries(code) VALUES($1) ON CONFLICT DO NOTHING", [code]);
-  cache.bannedCountries.add(code);
-  emitAdminUpdate();
-}
-async function removeBannedCountry(code) {
-  await q("DELETE FROM banned_countries WHERE code=$1", [code]);
-  cache.bannedCountries.delete(code);
-  emitAdminUpdate();
-}
-async function clearBannedCountries() {
-  await q("TRUNCATE banned_countries");
-  cache.bannedCountries.clear();
-  emitAdminUpdate();
-}
-
-// periodic cleanup job: delete visitor_history older than 30 days, run daily
-async function cleanupOldData() {
-  try {
-    await q("DELETE FROM visitors_history WHERE ts < NOW() - INTERVAL '30 days'");
-    // optional: delete old reports/screenshots older than 90 days (not requested but good)
-    await q("DELETE FROM reports WHERE ts < NOW() - INTERVAL '90 days'");
-    await q("DELETE FROM report_screenshots WHERE ts < NOW() - INTERVAL '90 days'");
-  } catch (e) {
-    console.error("Cleanup error:", e);
-  }
-}
-// run cleanup daily at startup and every 24h
-cleanupOldData();
-setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
-
-// helper to persist visitor (upsert current socket + append history)
-async function persistVisitor(socketId, ip, country, fingerprint=null) {
-  const tsNow = new Date();
-  try {
-    await q(
-      `INSERT INTO visitors(socket_id, ip, fingerprint, country, ts) VALUES($1,$2,$3,$4,$5)
-       ON CONFLICT (socket_id) DO UPDATE SET ip=EXCLUDED.ip, fingerprint=EXCLUDED.fingerprint, country=EXCLUDED.country, ts=EXCLUDED.ts`,
-      [socketId, ip, fingerprint, country, tsNow]
-    );
-    await q("INSERT INTO visitors_history(ip, fingerprint, country, ts) VALUES($1,$2,$3,$4)", [ip, fingerprint, country, tsNow]);
-  } catch (e) {
-    console.error("persistVisitor error:", e);
-  }
-}
-
-// reports persistence
-async function persistReport(target, reporter) {
-  try {
-    await q("INSERT INTO reports(target, reporter) VALUES($1,$2)", [target, reporter]);
-    // count unique reporters
-    const res = await q("SELECT COUNT(DISTINCT reporter) AS cnt FROM reports WHERE target=$1", [target]);
-    const cnt = parseInt(res.rows[0].cnt, 10);
-    if (cnt >= 3) {
-      // ban by ip and fingerprint if available
-      // try to fetch target's ip and fingerprint from visitors
-      const t = await q("SELECT ip, fingerprint FROM visitors WHERE socket_id = $1", [target]);
-      if (t.rows[0]) {
-        const targetIp = t.rows[0].ip;
-        const targetFp = t.rows[0].fingerprint;
-        if (targetIp) await banUserPersist("ip", targetIp, BAN_DURATION);
-        if (targetFp) await banUserPersist("fingerprint", targetFp, BAN_DURATION);
-      }
-      // notify and disconnect socket if present (handled by main code)
-    }
-    emitAdminUpdate();
-  } catch (e) {
-    console.error("persistReport error:", e);
-  }
-}
-async function saveScreenshot(target, image) {
-  try {
-    await q("INSERT INTO report_screenshots(target, image) VALUES($1,$2) ON CONFLICT (target) DO UPDATE SET image=EXCLUDED.image, ts=NOW()", [target, image]);
-    emitAdminUpdate();
-  } catch (e) {
-    console.error("saveScreenshot error:", e);
-  }
-}
-
-// --- admin UI templates (minimal changes) ---
 function adminHeader(title) {
   return `<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Admin — ${title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:;base64,iVBORw0KGgo=">
-<style>body{font-family:Arial;padding:16px;background:#f7f7f7} .topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px} .tab{padding:8px 12px;border-radius:6px;background:#fff;cursor:pointer;border:1px solid #eee} .panel{background:#fff;padding:12px;border-radius:8px}</style></head><body><h1>Admin — ${title}</h1>
-<div class="topbar"><a class="tab" href="/admin/dashboard">Dashboard</a><a class="tab" href="/admin/countries">Countries</a><a class="tab" href="/admin/stats">Stats</a><a class="tab" href="/admin/reports">Reports</a><a class="tab" href="/admin/bans">Bans</a><div style="margin-left:auto;color:#666">Signed in as admin</div></div>`;
+<html><head><meta charset="utf-8"><title>Admin — ${title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial;padding:16px;background:#f7f7f7} .topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px} .tab{padding:8px 12px;border-radius:6px;background:#fff;cursor:pointer;border:1px solid #eee} .panel{background:#fff;padding:12px;border-radius:8px} .screenshot-thumb{max-width:140px;max-height:90px;border:1px solid #eee;margin-left:8px;vertical-align:middle} .rep-card{padding:10px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;background:#fff}</style></head><body><h1>Admin — ${title}</h1><div class="topbar"><a class="tab" href="/admin/dashboard">Dashboard</a><a class="tab" href="/admin/countries">Countries</a><a class="tab" href="/admin/stats">Stats</a><a class="tab" href="/admin/reports">Reports</a><a class="tab" href="/admin/bans">Bans</a><div style="margin-left:auto;color:#666">Signed in as admin</div></div>`;
 }
 function adminFooter() {
-  return `<script src="/socket.io/socket.io.js"></script><script>const socket=io(); socket.emit('admin-join'); socket.on('connect',()=>socket.emit('admin-join')); socket.on('adminUpdate',snap=>{ if (typeof handleAdminUpdate==='function') handleAdminUpdate(snap); }); const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)}; function COUNTRY_NAME(c){return ALL_COUNTRIES[c]||c;}</script></body></html>`;
+  return `<script src="/socket.io/socket.io.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script>const socket=io(); socket.emit('admin-join'); socket.on('connect', ()=> socket.emit('admin-join')); socket.on('adminUpdate', snap => { if (typeof handleAdminUpdate === 'function') handleAdminUpdate(snap); }); const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)}; function COUNTRY_NAME(c){return ALL_COUNTRIES[c]||c;}</script></body></html>`;
 }
 
-// routes (admin pages reuse previous UI but call DB-backed snapshot)
-app.get("/admin", adminAuth, (req,res)=>res.redirect("/admin/dashboard"));
+// ---------- Admin routes ----------
+app.get("/admin", adminAuth, (req,res) => res.redirect("/admin/dashboard"));
 
-app.get("/admin/dashboard", adminAuth, async (req,res)=>{
+app.get("/admin/dashboard", adminAuth, async (req,res) => {
   const html = adminHeader("Dashboard") + `
 <div class="panel">
   <div style="display:flex;gap:12px">
@@ -336,49 +344,38 @@ function handleAdminUpdate(snap){ renderSnapshot(snap); }
   res.send(html);
 });
 
-// countries endpoints (backed by DB)
-app.get("/admin/countries", adminAuth, (req,res)=>{
-  const html = adminHeader("Countries") + `<div class="panel"><h3>Countries — Block / Unblock</h3><div id="country-area"></div><script>
-async function load() {
-  const res = await fetch('/admin/countries-list');
-  const data = await res.json();
-  const container = document.getElementById('country-area');
-  container.innerHTML = '';
-  const codes = Object.keys(${JSON.stringify(COUNTRIES)}).sort((a,b)=>${JSON.stringify(COUNTRIES)}[a].localeCompare(${JSON.stringify(COUNTRIES)}[b]));
-  const banned = new Set(data.banned||[]);
-  codes.forEach(code=>{ const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; const left=document.createElement('div'); left.textContent=code+' — '+(${JSON.stringify(COUNTRIES)}[code]||code); const btn=document.createElement('button'); btn.textContent = banned.has(code)?'Unblock':'Block'; btn.onclick=async()=>{ if(banned.has(code)) await fetch('/admin/unblock-country',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})}); else await fetch('/admin/block-country',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})}); load(); }; row.appendChild(left); row.appendChild(btn); container.appendChild(row); });
-}
-load();
-</script></div>` + adminFooter();
+// countries endpoints
+app.get("/admin/countries", adminAuth, (req,res) => {
+  const html = adminHeader("Countries") + `<div class="panel"><h3>Countries — Block / Unblock</h3><div id="country-area"></div><script>async function load(){ const res=await fetch('/admin/countries-list'); const data=await res.json(); const container=document.getElementById('country-area'); container.innerHTML=''; const codes=Object.keys(${JSON.stringify(COUNTRIES)}).sort((a,b)=>${JSON.stringify(COUNTRIES)}[a].localeCompare(${JSON.stringify(COUNTRIES)}[b])); const banned=new Set(data.banned||[]); codes.forEach(code=>{ const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; const left=document.createElement('div'); left.textContent=code+' — '+(${JSON.stringify(COUNTRIES)}[code]||code); const btn=document.createElement('button'); btn.textContent = banned.has(code)?'Unblock':'Block'; btn.onclick=async()=>{ if(banned.has(code)) await fetch('/admin/unblock-country',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})}); else await fetch('/admin/block-country',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})}); load(); }; row.appendChild(left); row.appendChild(btn); container.appendChild(row); }); } load(); </script></div>` + adminFooter();
   res.send(html);
 });
 
-app.get("/admin/countries-list", adminAuth, async (req,res)=> {
-  const resDb = await q("SELECT code FROM banned_countries");
-  res.send({ all: Object.keys(COUNTRIES), banned: resDb.rows.map(r=>r.code) });
+app.get("/admin/countries-list", adminAuth, async (req,res) => {
+  const r = await q("SELECT code FROM banned_countries");
+  res.send({ all: Object.keys(COUNTRIES), banned: r.rows.map(x=>x.code) });
 });
 
-app.post("/admin/block-country", adminAuth, async (req,res)=>{
+app.post("/admin/block-country", adminAuth, async (req,res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
   await addBannedCountry(code);
-  res.send({ ok:true, banned: Array.from(cache.bannedCountries) });
+  res.send({ ok:true, banned: Array.from(bannedCountriesCache) });
 });
 
-app.post("/admin/unblock-country", adminAuth, async (req,res)=>{
+app.post("/admin/unblock-country", adminAuth, async (req,res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code) return res.status(400).send({ error: "invalid" });
   await removeBannedCountry(code);
-  res.send({ ok:true, banned: Array.from(cache.bannedCountries) });
+  res.send({ ok:true, banned: Array.from(bannedCountriesCache) });
 });
 
-app.post("/admin/clear-blocked", adminAuth, async (req,res)=>{
+app.post("/admin/clear-blocked", adminAuth, async (req,res) => {
   await clearBannedCountries();
   res.send({ ok:true });
 });
 
-// stats-data (aggregates from visitors_history)
-app.get("/admin/stats-data", adminAuth, async (req,res)=>{
+// stats-data
+app.get("/admin/stats-data", adminAuth, async (req,res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
   let where = [];
@@ -394,44 +391,41 @@ app.get("/admin/stats-data", adminAuth, async (req,res)=>{
 });
 
 // admin actions
-app.post("/admin-broadcast", adminAuth, (req,res)=>{
+app.post("/admin-broadcast", adminAuth, (req,res) => {
   const msg = req.body.message || "";
   if (msg && msg.trim()) io.emit("adminMessage", msg.trim());
   res.send({ ok:true });
 });
 
-app.post("/unban-ip", adminAuth, async (req,res)=>{
+app.post("/unban-ip", adminAuth, async (req,res) => {
   const ip = req.body.ip;
   if (!ip) return res.status(400).send({ error:true });
   await unbanPersist("ip", ip);
   res.send({ ok:true });
 });
 
-app.post("/unban-fingerprint", adminAuth, async (req,res)=>{
+app.post("/unban-fingerprint", adminAuth, async (req,res) => {
   const fp = req.body.fp;
   if (!fp) return res.status(400).send({ error:true });
   await unbanPersist("fingerprint", fp);
   res.send({ ok:true });
 });
 
-app.post("/manual-ban", adminAuth, async (req,res)=>{
+app.post("/manual-ban", adminAuth, async (req,res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error:true });
   const t = await q("SELECT ip, fingerprint FROM visitors WHERE socket_id = $1", [target]);
   if (t.rows[0]) {
-    if (t.rows[0].ip) await banUserPersist("ip", t.rows[0].ip, BAN_DURATION);
-    if (t.rows[0].fingerprint) await banUserPersist("fingerprint", t.rows[0].fingerprint, BAN_DURATION);
+    if (t.rows[0].ip) await banUserPersist("ip", t.rows[0].ip, BAN_DURATION_MS);
+    if (t.rows[0].fingerprint) await banUserPersist("fingerprint", t.rows[0].fingerprint, BAN_DURATION_MS);
   }
   const s = io.sockets.sockets.get(target);
-  if (s) {
-    s.emit("banned", { message: "You were banned by admin." });
-    s.disconnect(true);
-  }
+  if (s) { s.emit("banned", { message: "You were banned by admin." }); s.disconnect(true); }
   emitAdminUpdate();
   res.send({ ok:true });
 });
 
-app.post("/remove-report", adminAuth, async (req,res)=>{
+app.post("/remove-report", adminAuth, async (req,res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error:true });
   await q("DELETE FROM reports WHERE target = $1", [target]);
@@ -440,95 +434,70 @@ app.post("/remove-report", adminAuth, async (req,res)=>{
   res.send({ ok:true });
 });
 
-// socket logic
+// ---------- Socket.io logic ----------
+const http = httpLib.createServer(app);
+const io = socketIo(http, { pingTimeout: 30000, transports: ["websocket", "polling"] });
+
+// Note: we persist most state in DB; keep socket logic lightweight.
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
-  userIp.set(socket.id, ip);
+  const headerCountry = (socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"] || "").toUpperCase();
+  let country = headerCountry || (geoip.lookup(ip) ? geoip.lookup(ip).country : null);
 
-  let country = null;
-  const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
-  if (headerCountry) country = headerCountry.toUpperCase();
-  else {
-    try {
-      const g = geoip.lookup(ip);
-      if (g && g.country) country = g.country;
-    } catch (e) { country = null; }
-  }
-
-  const ts = new Date();
-  // persist visitor (async, non-blocking)
-  persistVisitor(socket.id, ip, country, null).catch(()=>{});
-  // in-memory minimal
-  userFingerprint.set(socket.id, null);
-  visitorsSetupLocal(socket.id, ip, country, ts);
-
-  // check IP ban cache
-  const ipBan = cache.bansIp.get(ip);
+  // quick ban checks via cache
+  const ipBan = bansIpCache.get(ip);
   if (ipBan && ipBan.getTime && ipBan.getTime() > Date.now()) {
     socket.emit("banned", { message: "You are banned (IP)." });
     socket.disconnect(true);
-    emitAdminUpdate();
     return;
   }
-
-  // country block
-  if (country && cache.bannedCountries.has(country)) {
+  if (country && bannedCountriesCache.has(country)) {
     socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
-    emitAdminUpdate();
     return;
   }
 
+  // persist visitor
+  persistVisitor(socket.id, ip, country, null, false, false).catch(()=>{});
   emitAdminUpdate();
 
-  socket.on("identify", ({ fingerprint }) => {
+  socket.on("identify", async ({ fingerprint }) => {
     if (fingerprint) {
-      userFingerprint.set(socket.id, fingerprint);
-      persistVisitor(socket.id, userIp.get(socket.id) || ip, country, fingerprint).catch(()=>{});
-      // check fingerprint ban
-      const fpBan = cache.bansFp.get(fingerprint);
+      await q("UPDATE visitors SET fingerprint=$1 WHERE socket_id=$2", [fingerprint, socket.id]);
+      // Update latest visitors_history fingerprint row (best-effort)
+      try {
+        await q("UPDATE visitors_history SET fingerprint=$1 WHERE ip=$2 AND ts = (SELECT max(ts) FROM visitors_history WHERE ip=$2)", [fingerprint, ip]);
+      } catch (e) {}
+      await loadBansCache(); // ensure fresh
+      const fpBan = bansFpCache.get(fingerprint);
       if (fpBan && fpBan.getTime && fpBan.getTime() > Date.now()) {
         socket.emit("banned", { message: "Device banned." });
         socket.disconnect(true);
-        emitAdminUpdate();
         return;
       }
     }
     emitAdminUpdate();
   });
 
-  socket.on("find-partner", () => {
-    const fp = userFingerprint.get(socket.id);
-    if (fp) {
-      const fExp = cache.bansFp.get(fp);
-      if (fExp && fExp.getTime && fExp.getTime() > Date.now()) {
-        socket.emit("banned", { message: "You are banned (device)." });
-        socket.disconnect(true);
-        emitAdminUpdate();
-        return;
-      }
-    }
-    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
-    emitAdminUpdate();
-  });
-
-  function tryMatch() {
-    while (waitingQueue.length >= 2) {
-      const a = waitingQueue.shift();
-      const b = waitingQueue.shift();
+  socket.on("find-partner", async () => {
+    // minimal in-memory matchmaking (kept simple)
+    if (!global.waitingQueue) global.waitingQueue = [];
+    if (!global.partners) global.partners = new Map();
+    if (!global.waitingQueue.includes(socket.id) && !global.partners.has(socket.id)) global.waitingQueue.push(socket.id);
+    // try match
+    while (global.waitingQueue.length >= 2) {
+      const a = global.waitingQueue.shift();
+      const b = global.waitingQueue.shift();
       if (!a || !b) break;
-      if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
-      partners.set(a, b); partners.set(b, a);
-      io.to(a).emit("partner-found", { id: b, initiator: true });
-      io.to(b).emit("partner-found", { id: a, initiator: false });
+      const sa = io.sockets.sockets.get(a);
+      const sb = io.sockets.sockets.get(b);
+      if (!sa || !sb) continue;
+      global.partners.set(a, b);
+      global.partners.set(b, a);
+      await q("UPDATE visitors SET waiting=FALSE, paired=TRUE WHERE socket_id IN ($1,$2)", [a,b]).catch(()=>{});
+      sa.emit("partner-found", { id: b, initiator: true });
+      sb.emit("partner-found", { id: a, initiator: false });
     }
-  }
-
-  socket.on("admin-screenshot", ({ image, partnerId }) => {
-    if (!image) return;
-    const target = partnerId || partners.get(socket.id);
-    if (!target) return;
-    saveScreenshot(target, image).catch(()=>{});
+    emitAdminUpdate();
   });
 
   socket.on("signal", ({ to, data }) => {
@@ -541,81 +510,77 @@ io.on("connection", (socket) => {
     if (t) t.emit("chat-message", { message });
   });
 
-  socket.on("report", ({ partnerId }) => {
+  socket.on("report", async ({ partnerId }) => {
     if (!partnerId) return;
-    persistReport(partnerId, socket.id).catch(()=>{});
-    // in-memory reports as before (for live summary)
+    await persistReport(partnerId, socket.id);
     emitAdminUpdate();
-    // if count >=3 will have triggered bans in persistReport and stored in DB
-    // disconnect banned sockets if present:
-    q("SELECT ip, fingerprint FROM visitors WHERE socket_id = $1", [partnerId]).then(async t=>{
+    // disconnect target if newly banned
+    const rpCount = (await q("SELECT COUNT(DISTINCT reporter) AS cnt FROM reports WHERE target=$1", [partnerId])).rows[0].cnt;
+    if (parseInt(rpCount,10) >= 3) {
+      const t = await q("SELECT ip, fingerprint FROM visitors WHERE socket_id = $1", [partnerId]);
       if (t.rows[0]) {
         const targetIp = t.rows[0].ip;
         const targetFp = t.rows[0].fingerprint;
-        // check bans cache updated
-        await loadBansCache();
-        const ipB = cache.bansIp.get(targetIp);
-        const fpB = cache.bansFp.get(targetFp);
-        const targetSocket = io.sockets.sockets.get(partnerId);
-        if ((ipB && ipB.getTime()>Date.now()) || (fpB && fpB.getTime()>Date.now())) {
-          if (targetSocket) {
-            targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
-            targetSocket.disconnect(true);
-          }
-          emitAdminUpdate();
-        }
+        if (targetIp) await banUserPersist("ip", targetIp, BAN_DURATION_MS);
+        if (targetFp) await banUserPersist("fingerprint", targetFp, BAN_DURATION_MS);
       }
-    }).catch(()=>{});
+      const targetSocket = io.sockets.sockets.get(partnerId);
+      if (targetSocket) {
+        targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
+        targetSocket.disconnect(true);
+      }
+      emitAdminUpdate();
+    }
+  });
+
+  socket.on("admin-screenshot", async ({ image, partnerId }) => {
+    if (!image) return;
+    const target = partnerId || (global.partners && global.partners.get(socket.id));
+    if (!target) return;
+    await saveScreenshot(target, image);
+    emitAdminUpdate();
   });
 
   socket.on("skip", () => {
-    const p = partners.get(socket.id);
-    if (p) {
-      const other = io.sockets.sockets.get(p);
-      if (other) other.emit("partner-disconnected");
-      partners.delete(p);
-      partners.delete(socket.id);
+    if (global.partners) {
+      const p = global.partners.get(socket.id);
+      if (p) {
+        const other = io.sockets.sockets.get(p);
+        if (other) other.emit("partner-disconnected");
+        global.partners.delete(p);
+      }
+      global.partners.delete(socket.id);
     }
-    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
+    if (!global.waitingQueue) global.waitingQueue = [];
+    if (!global.waitingQueue.includes(socket.id)) global.waitingQueue.push(socket.id);
     emitAdminUpdate();
   });
 
-  socket.on("disconnect", () => {
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-    const p = partners.get(socket.id);
-    if (p) {
-      const other = io.sockets.sockets.get(p);
-      if (other) other.emit("partner-disconnected");
-      partners.delete(p);
+  socket.on("disconnect", async () => {
+    // mark not waiting/paired
+    try {
+      await q("UPDATE visitors SET waiting=FALSE, paired=FALSE WHERE socket_id=$1", [socket.id]);
+    } catch (e) {}
+    if (global.partners) {
+      const p = global.partners.get(socket.id);
+      if (p) {
+        const other = io.sockets.sockets.get(p);
+        if (other) other.emit("partner-disconnected");
+        global.partners.delete(p);
+      }
+      global.partners.delete(socket.id);
     }
-    partners.delete(socket.id);
-    userFingerprint.delete(socket.id);
-    userIp.delete(socket.id);
-    // remove current visitor row
-    q("DELETE FROM visitors WHERE socket_id = $1", [socket.id]).catch(()=>{});
     emitAdminUpdate();
   });
 
-  socket.on("admin-join", () => {
-    getAdminSnapshot().then(snap=> socket.emit("adminUpdate", snap)).catch(()=>{});
+  socket.on("admin-join", async () => {
+    socket.emit("adminUpdate", await getAdminSnapshot());
   });
-
-  emitAdminUpdate();
 });
 
-// lightweight local visitors map used only for counts per-country (to reduce DB hits)
-const localVisitors = new Map();
-function visitorsSetupLocal(socketId, ip, country, ts) {
-  localVisitors.set(socketId, { ip, country, ts });
-}
-
-// utility to refresh caches periodically (bans/countries)
-setInterval(()=>{ loadBannedCountriesCache().catch(()=>{}); loadBansCache().catch(()=>{}); }, 5 * 60 * 1000);
-
-// start server
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log("Server listening on port " + PORT));
-
-
+// ---------- Start server ----------
+http.listen(PORT, () => {
+  console.log("Server listening on port " + PORT);
+  // emit initial admin update once ready
+  setTimeout(() => emitAdminUpdate(), 1500);
+});
