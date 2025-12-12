@@ -1,4 +1,6 @@
-// app.js
+// file: public/js/webrtc-stable-client.js   
+// TL;DR: WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, and reconnect backoff.
+
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
@@ -68,19 +70,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
 
-  // ---------------------- AD / SKIP COUNT CONFIG ----------------------
-  let skipCount = 0;
-  const SKIP_THRESHOLD = 3;
-  const AD_DURATION_MS = 5000;
-  const AD_SCRIPT_SRC = 'https://nap5k.com/tag.min.js';
-  const AD_SCRIPT_ZONE = '10313447';
-  let adOverlayVisible = false;
-
-  // ---------------------- AD WHILE SEARCHING ----------------------
-  let searchAdTimer = null;
-  const SEARCH_AD_INTERVAL = 30000;   // 30 seconds
-  const SEARCH_AD_DURATION = 5000;    // 5 seconds
-
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -144,10 +133,12 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!sender.track || sender.track.kind !== 'video') continue;
         const params = sender.getParameters();
         if (!params.encodings) params.encodings = [{}];
+        // apply single encoding maxBitrate
         params.encodings = params.encodings.map(enc => ({ ...enc, maxBitrate: targetBps }));
         await sender.setParameters(params);
       }
     } catch (e) {
+      // some browsers don't support setParameters; ignore gracefully
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
@@ -306,11 +297,6 @@ window.addEventListener('DOMContentLoaded', () => {
       statusText.textContent = 'You reported the user — skipping...';
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
-      // stop search ad timer if running
-      if (searchAdTimer) {
-        clearInterval(searchAdTimer);
-        searchAdTimer = null;
-      }
       searchTimer = setTimeout(startSearchLoop, 300);
     };
   }
@@ -331,14 +317,6 @@ window.addEventListener('DOMContentLoaded', () => {
     showRemoteSpinnerOnly(true);
     statusText.textContent = 'Searching...';
     socket.emit('find-partner');
-
-    // تشغيل مؤقت الإعلان أثناء البحث (كل 30 ثانية)
-    if (!searchAdTimer) {
-      searchAdTimer = setInterval(() => {
-        if (!partnerId) showSearchAd();
-      }, SEARCH_AD_INTERVAL);
-    }
-
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       if (!partnerId) {
@@ -370,26 +348,9 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection.close();
       peerConnection = null;
     }
-    // increment skip counter and, if threshold met, instruct remote to show ad
-    skipCount++;
-    try {
-      if (skipCount % SKIP_THRESHOLD === 0) {
-        if (partnerId) {
-          try { socket.emit('display-ad', { to: partnerId }); } catch (e) {}
-        }
-      }
-    } catch (e) { console.warn('skipCount emit failed', e); }
-
     partnerId = null;
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
-
-    // stop search ad timer if running, restart when loop restarts
-    if (searchAdTimer) {
-      clearInterval(searchAdTimer);
-      searchAdTimer = null;
-    }
-
     startSearchLoop();
   };
 
@@ -429,21 +390,10 @@ window.addEventListener('DOMContentLoaded', () => {
     clearTimeout(searchTimer);
     clearTimeout(pauseTimer);
     reconnectAttempts = 0;
-    // stop search ad timer
-    if (searchAdTimer) {
-      clearInterval(searchAdTimer);
-      searchAdTimer = null;
-    }
     startSearchLoop();
   });
 
   socket.on('partner-found', async data => {
-    // stop search ad timer immediately when found
-    if (searchAdTimer) {
-      clearInterval(searchAdTimer);
-      searchAdTimer = null;
-    }
-
     const foundId = data.id || data.partnerId;
     if (foundId && reportedIds.has(foundId)) {
       try { socket.emit('skip'); } catch (e) {}
@@ -460,6 +410,7 @@ window.addEventListener('DOMContentLoaded', () => {
     statusText.textContent = 'Connecting...';
     createPeerConnection();
 
+    // initiator starts offer
     if (isInitiator) {
       try {
         makingOffer = true;
@@ -475,8 +426,10 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('signal', async ({ from, data }) => {
+    // handle incoming signal (offer/answer/candidate)
     if (!peerConnection) createPeerConnection();
 
+    // candidates may come before pc is ready: buffer them
     if (data && data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
@@ -487,6 +440,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) {
+          // let the other side continue or resolve glare
           return;
         }
         await peerConnection.setRemoteDescription(data);
@@ -503,121 +457,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ---------------------- AD DISPLAY HANDLER (REMOTE) ----------------------
-  socket.on('display-ad', async () => {
-    if (adOverlayVisible) return;
-    adOverlayVisible = true;
-
-    const wasChatEnabled = !chatInput.disabled;
-    const wasRemotePlaying = !remoteVideo.paused && !remoteVideo.ended;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'cc-ad-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '99999';
-    overlay.style.backgroundColor = 'rgba(0,0,0,0.6)';
-
-    const container = document.createElement('div');
-    container.id = 'cc-ad-container';
-    container.style.maxWidth = '90%';
-    container.style.maxHeight = '90%';
-    container.style.background = 'transparent';
-    container.style.padding = '10px';
-    container.style.borderRadius = '8px';
-    container.style.display = 'flex';
-    container.style.alignItems = 'center';
-    container.style.justifyContent = 'center';
-
-    overlay.appendChild(container);
-    document.body.appendChild(overlay);
-
-    const adScript = document.createElement('script');
-    adScript.dataset.zone = AD_SCRIPT_ZONE;
-    adScript.src = AD_SCRIPT_SRC;
-    adScript.id = 'cc-injected-ad-script';
-    container.appendChild(adScript);
-
-    try { remoteVideo.pause(); } catch (e) {}
-    disableChat();
-
-    setTimeout(() => {
-      const s = document.getElementById('cc-injected-ad-script');
-      if (s && s.parentNode) s.parentNode.removeChild(s);
-      const ov = document.getElementById('cc-ad-overlay');
-      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
-
-      if (wasChatEnabled) enableChat();
-      try {
-        if (wasRemotePlaying) {
-          remoteVideo.play().catch(() => {});
-        }
-      } catch (e) {}
-
-      adOverlayVisible = false;
-    }, AD_DURATION_MS);
-  });
-
-  // ---------------------- SHOW SEARCH AD (LOCAL overlay shown while searching) ----------------------
-  function showSearchAd() {
-    if (partnerId) return;
-
-    // avoid showing if ad already visible
-    if (document.getElementById('search-ad-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'search-ad-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0,0,0,0.65)';
-    overlay.style.zIndex = '999999';
-    overlay.style.display = 'flex';
-    overlay.style.flexDirection = 'column';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.color = '#fff';
-    overlay.style.fontSize = '26px';
-    overlay.style.fontWeight = 'bold';
-
-    const label = document.createElement('div');
-    label.textContent = "ADs";
-    label.style.position = 'absolute';
-    label.style.top = '20px';
-    label.style.background = 'red';
-    label.style.padding = '8px 18px';
-    label.style.borderRadius = '8px';
-    overlay.appendChild(label);
-
-    const box = document.createElement('div');
-    box.textContent = "الإعلان يظهر الآن...";
-    box.style.padding = '20px 40px';
-    box.style.background = 'rgba(0,0,0,0.4)';
-    box.style.borderRadius = '10px';
-    overlay.appendChild(box);
-
-    document.body.appendChild(overlay);
-
-    // زيادة مدة التوقف عند ظهور الإعلان (تم رفعها قليلاً)
-    clearTimeout(pauseTimer);
-    pauseTimer = setTimeout(startSearchLoop, 3000);
-
-    setTimeout(() => {
-      const ov = document.getElementById('search-ad-overlay');
-      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
-    }, SEARCH_AD_DURATION);
-  }
-
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
+    // cleanup old if any
     if (peerConnection) {
       try { peerConnection.close(); } catch (e) {}
       peerConnection = null;
@@ -627,10 +469,12 @@ window.addEventListener('DOMContentLoaded', () => {
     makingOffer = false;
     ignoreOffer = false;
 
+    // add local tracks
     if (localStream) {
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
     }
 
+    // create datachannel when initiator
     if (isInitiator) {
       try {
         keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -648,8 +492,11 @@ window.addEventListener('DOMContentLoaded', () => {
       enableChat();
       addMessage('Connected with a stranger!', 'system');
       showRemoteSpinnerOnly(false);
+      // flush any buffered candidates now that remoteDescription likely set
       flushBufferedCandidates();
+      // reset reconnect attempts
       reconnectAttempts = 0;
+      // start stats monitor
       startStatsMonitor();
     };
 
@@ -674,6 +521,7 @@ window.addEventListener('DOMContentLoaded', () => {
           try { peerConnection.close(); } catch (e) {}
           peerConnection = null;
         }
+        // try ICE restart first, else rematch
         if (autoReconnect) attemptRecovery();
       }
     };
@@ -682,6 +530,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const s = peerConnection.iceConnectionState;
       console.debug('iceConnectionState', s);
       if (s === 'failed') {
+        // try ICE restart
         await attemptIceRestartWithBackoff();
       }
     };
@@ -704,15 +553,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // attempt recovery: try ICE-restart a few times, otherwise rematch
   async function attemptRecovery() {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      // give up and rematch
       partnerId = null;
       clearInterval(statsInterval);
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
-      // stop search ad timer
-      if (searchAdTimer) {
-        clearInterval(searchAdTimer);
-        searchAdTimer = null;
-      }
       startSearchLoop();
       reconnectAttempts = 0;
       return;
@@ -723,6 +568,7 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
       try {
         if (!peerConnection) {
+          // try to recreate with same local tracks and new PC, then ICE restart
           createPeerConnection();
           if (isInitiator) {
             makingOffer = true;
@@ -730,6 +576,7 @@ window.addEventListener('DOMContentLoaded', () => {
             await peerConnection.setLocalDescription(offer);
             socket.emit('signal', { to: partnerId, data: offer });
           } else {
+            // Non-initiator waits for remote to restart, but proactively try negotiation if allowed:
             try { await performIceRestartIfPossible(); } catch (_) {}
           }
         } else {
@@ -741,6 +588,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }, delay);
   }
 
+  // iceRestart wrapper with backoff guard
   let lastIceRestartAt = 0;
   const ICE_RESTART_MIN_INTERVAL = 5000;
   async function attemptIceRestartWithBackoff() {
@@ -754,6 +602,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // perform iceRestart: createOffer({iceRestart:true}) and send
   async function performIceRestart() {
     if (!peerConnection || !partnerId) return;
     try {
@@ -766,6 +615,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // another helper to attempt ice restart only if signalling state allows
   async function performIceRestartIfPossible() {
     if (!peerConnection || peerConnection.signalingState !== 'stable') return;
     try {
@@ -780,6 +630,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!dc) return;
     dc.onopen = () => {
       lastPong = Date.now();
+      // start periodic ping
       startPingLoop();
     };
     dc.onmessage = (ev) => {
@@ -787,6 +638,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'ping') {
+          // reply with pong
           dc.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         } else if (msg.type === 'pong') {
           lastPong = Date.now();
@@ -794,6 +646,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     };
     dc.onclose = () => {
+      // closed -> treat as potential issue
       console.debug('keepAlive channel closed');
     };
     dc.onerror = (err) => {
@@ -806,11 +659,14 @@ window.addEventListener('DOMContentLoaded', () => {
     stopPingLoop();
     pingTimer = setInterval(() => {
       if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
+        // channel not available => can't rely on it
         return;
       }
+      // send ping
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {}
+      // if no pong within timeout -> try recovery
       if (Date.now() - lastPong > PONG_TIMEOUT) {
         console.warn('PONG timeout -> triggering recovery');
         attemptRecovery();
@@ -827,7 +683,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const stats = await peerConnection.getStats(null);
         let outboundVideoReport = null;
-        let remoteInboundRtp = null;
+        let remoteInboundRtp = null; // sometimes available as remote-inbound-rtp
         stats.forEach(report => {
           if (report.type === 'outbound-rtp' && report.kind === 'video') {
             outboundVideoReport = report;
@@ -837,8 +693,11 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         });
 
+        // compute packet loss ratio if possible
         let lossRatio = 0;
         if (outboundVideoReport && typeof outboundVideoReport.packetsSent === 'number') {
+          // try to get remotes if available
+          // fallback: use remoteInboundRtp for packetsLost
           if (remoteInboundRtp && typeof remoteInboundRtp.packetsLost === 'number') {
             const lost = remoteInboundRtp.packetsLost;
             const sent = remoteInboundRtp.packetsReceived + lost || 1;
@@ -848,10 +707,13 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
 
+        // RTT / jitter checks
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
 
+        // Decide bitrate level based on metrics
         if (lossRatio > 0.08 || rtt > 0.5) {
+          // high loss or high rtt -> low bitrate
           await setSenderMaxBitrate(BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
           await setSenderMaxBitrate(BITRATE_MEDIUM);
@@ -894,11 +756,6 @@ window.addEventListener('DOMContentLoaded', () => {
     try { socket.emit('stop'); } catch (e) {}
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     try { if (peerConnection) peerConnection.close(); } catch (e) {}
-    // clear ad timer on unload
-    if (searchAdTimer) {
-      clearInterval(searchAdTimer);
-      searchAdTimer = null;
-    }
   };
 
   // ---------------------- UTILITY: Start/Stop Ping & Stats on PC close ----------------------
@@ -906,4 +763,7 @@ window.addEventListener('DOMContentLoaded', () => {
     stopPingLoop();
     stopStatsMonitor();
   };
+  // ensure we stop timers when peerConnection closed explicitly elsewhere
+  // (we already stop in the onconnectionstatechange handlers above)
+
 });
