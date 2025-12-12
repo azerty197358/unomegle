@@ -13,7 +13,6 @@
       overflow-x: hidden;
     }
 
-    /* ==================== الشاشة الأولى - مطابقة Omegle 100% ==================== */
     .hero {
       height: 100vh;
       display: flex;
@@ -23,6 +22,7 @@
       background: #fff;
     }
 
+    /* ==================== الشعار ==================== */
     .logo {
       position: fixed;
       top: 24px;
@@ -34,39 +34,18 @@
       text-shadow: 2px 2px 6px rgba(0,0,0,0.25);
       user-select: none;
     }
-    .logo span { display: inline-block; }
-    .logo span:first-child {
-      animation: flip 6s infinite ease-in-out;
-      transform-origin: center;
-    }
-    @keyframes flip {
-      0%   { transform: rotateY(0deg); }
-      8%   { transform: rotateY(90deg); }
-      16%  { transform: rotateY(360deg); }
-      100% { transform: rotateY(360deg); }
-    }
-    .logo span:not(:first-child) { animation: jitter 3.5s infinite; }
-    .logo span:nth-child(2) { animation-delay: 0.1s; }
-    .logo span:nth-child(3) { animation-delay: 0.2s; }
-    .logo span:nth-child(4) { animation-delay: 0.05s; }
-    .logo span:nth-child(5) { animation-delay: 0.3s; }
-    .logo span:nth-child(6) { animation-delay: 0.15s; }
-    .logo span:nth-child(7) { animation-delay: 0.25s; }
-    .logo span:nth-child(8) { animation-delay: 0.35s; }
-    .logo span:nth-child(9) { animation-delay: 0.4s; }
-    @keyframes jitter {
-      0%,100%{transform:translate(0,0) rotate(0deg);}
-      10%{transform:translate(-1px,-2px) rotate(-1deg);}
-      20%{transform:translate(-2px,0) rotate(1deg);}
-      30%{transform:translate(2px,2px) rotate(0deg);}
-      40%{transform:translate(1px,-1px) rotate(1deg);}
-      50%{transform:translate(-1px,2px) rotate(-1deg);}
-      60%{transform:translate(-2px,1px) rotate(0deg);}
-      70%{transform:translate(2px,1px) rotate(-1deg);}
-      80%{transform:translate(-1px,-1px) rotate(1deg);}
-      90%{transform:translate(1px,2px) rotate(0deg);}
+
+    .logo span { 
+      display: inline-block; 
+      transition: transform 0.6s ease-in-out;
     }
 
+    /* أنيميشن الشقلبة */
+    .flip {
+      transform: rotateX(360deg);
+    }
+
+    /* باقي التصميمات كما هي */
     .modal {
       background: #fafafa;
       border: 1px solid #ddd;
@@ -112,7 +91,6 @@
       box-shadow: 0 12px 30px rgba(74,144,226,0.6);
     }
 
-    /* ==================== قسم المميزات عند التمرير ==================== */
     .features-section {
       padding: 100px 20px;
       background: linear-gradient(135deg, #fff8f0 0%, #fff0e6 100%);
@@ -154,10 +132,6 @@
       font-size: 16px;
       line-height: 1.6;
     }
-    .icon {
-      font-size: 60px;
-      margin-bottom: 10px;
-    }
 
     .footer {
       padding: 30px;
@@ -178,9 +152,8 @@
 </head>
 <body>
 
-  <!-- الشاشة الأولى -->
   <section class="hero">
-    <div class="logo" aria-hidden="true">
+    <div class="logo" id="logo">
       <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span><span>C</span><span>h</span><span>a</span><span>t</span>
     </div>
 
@@ -200,7 +173,6 @@
     </div>
   </section>
 
-  <!-- قسم المميزات الجذاب عند التمرير -->
   <section class="features-section">
     <h2>Why SparkChat is Better</h2>
     <div class="features-grid">
@@ -240,6 +212,23 @@
   <div class="footer">
     © 2025 SparkChat • <a href="#">Terms</a> • <a href="#">Privacy</a> • <a href="#">Guidelines</a>
   </div>
+
+  <!-- ==================== JavaScript: قلب حرف كل 3 ثواني ==================== -->
+  <script>
+    const letters = document.querySelectorAll("#logo span");
+
+    setInterval(() => {
+      const random = Math.floor(Math.random() * letters.length);
+      const letter = letters[random];
+
+      letter.classList.add("flip");
+
+      setTimeout(() => {
+        letter.classList.remove("flip");
+      }, 700);
+
+    }, 3000);
+  </script>
 
 </body>
 </html>
