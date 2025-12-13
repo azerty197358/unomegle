@@ -1045,15 +1045,15 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
     document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
 
     // Countries
-    const cl = document.getElementById('country-list');
-    const entries = Object.entries(snap.stats.countryCounts || {});
-    if (entries.length === 0) {
-      cl.textContent = 'No data (24h)';
-    } else {
-      cl.innerHTML = entries.sort((a,b)=>b[1]-a[1])
-        .map(([country, cnt]) => `<div>${COUNTRY_NAME(country)}: <strong>${cnt}</strong></div>`)
-        .join('');
-    }
+  const cl = document.getElementById('country-list');
+  const entries = Object.entries(snap.stats.countryCounts || {});
+  if (entries.length === 0) {
+    cl.textContent = 'No data (24h)';
+  } else {
+    cl.innerHTML = entries.sort((a,b)=>b[1]-a[1])
+      .map(([country, cnt]) => '<div>' + COUNTRY_NAME(country) + ': <strong>' + cnt + '</strong></div>')
+      .join('');
+  }
 
     // Active bans count
     const ipCount = snap.activeIpBans?.length || 0;
@@ -1590,3 +1590,4 @@ http.listen(PORT, () => {
   console.log("📊 Admin Panel: http://localhost:" + PORT + "/admin");
   console.log("===========================================");
 });
+
