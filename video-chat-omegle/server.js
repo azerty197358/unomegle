@@ -1,5 +1,6 @@
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin
-// ENHANCED: Fixed template literal syntax errors for deployment
+// SQLITE PERSISTENCE — COMPLETE INTEGRATION
+// ENHANCED: Beautiful UI + Fixed messaging + Improved UX
 
 const express = require("express");
 const path = require("path");
@@ -11,8 +12,12 @@ app.set("trust proxy", true);
 
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
-  pingTimeout: 60000, pingInterval: 25000
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(express.static(__dirname));
@@ -22,15 +27,20 @@ app.use(express.json());
 /* ================= ADMIN IP AUTHENTICATION ================= */
 const ADMIN_IP = "197.205.203.158"; // ⚠️ CHANGE THIS TO YOUR IP
 
+// Helper function to normalize IP addresses
 function normalizeIp(ip) {
   if (!ip) return ip;
-  if (ip.startsWith('::ffff:')) return ip.substring(7);
+  if (ip.startsWith('::ffff:')) {
+    return ip.substring(7);
+  }
   return ip;
 }
 
 function adminAuth(req, res, next) {
   const clientIp = normalizeIp(req.ip);
-  if (clientIp === ADMIN_IP) return next();
+  if (clientIp === ADMIN_IP) {
+    return next();
+  }
   
   return res.status(403).send(`
     <!DOCTYPE html>
@@ -39,7 +49,17 @@ function adminAuth(req, res, next) {
       <meta charset="utf-8">
       <title>Access Denied</title>
       <style>
-        body { font-family: 'Segoe UI', system-ui, sans-serif; padding: 50px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        body { 
+          font-family: 'Segoe UI', system-ui, sans-serif; 
+          padding: 50px; 
+          text-align: center; 
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
         .error-box { background: rgba(255,255,255,0.1); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px); }
         .error { color: #ff6b6b; font-size: 48px; margin-bottom: 20px; }
         .ip-info { margin-top: 20px; font-family: monospace; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; }
@@ -63,16 +83,48 @@ function adminAuth(req, res, next) {
 const db = new Database("data.db");
 db.pragma('journal_mode = WAL');
 
+// Initialize tables
 db.exec(`
-CREATE TABLE IF NOT EXISTS visitors (ip TEXT, fp TEXT, country TEXT, ts INTEGER);
-CREATE TABLE IF NOT EXISTS banned_ips (ip TEXT PRIMARY KEY, expires INTEGER);
-CREATE TABLE IF NOT EXISTS banned_fps (fp TEXT PRIMARY KEY, expires INTEGER);
-CREATE TABLE IF NOT EXISTS reports (target TEXT, reporter TEXT);
-CREATE TABLE IF NOT EXISTS screenshots (target TEXT PRIMARY KEY, image TEXT);
-CREATE TABLE IF NOT EXISTS banned_countries (code TEXT PRIMARY KEY);
-CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, message TEXT, timestamp INTEGER);
+CREATE TABLE IF NOT EXISTS visitors (
+  ip TEXT,
+  fp TEXT,
+  country TEXT,
+  ts INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS banned_ips (
+  ip TEXT PRIMARY KEY,
+  expires INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS banned_fps (
+  fp TEXT PRIMARY KEY,
+  expires INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+  target TEXT,
+  reporter TEXT
+);
+
+CREATE TABLE IF NOT EXISTS screenshots (
+  target TEXT PRIMARY KEY,
+  image TEXT
+);
+
+CREATE TABLE IF NOT EXISTS banned_countries (
+  code TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sender TEXT,
+  message TEXT,
+  timestamp INTEGER
+);
 `);
 
+// Create indexes
 try {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
@@ -83,10 +135,44 @@ try {
     CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target);
     CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
   `);
-} catch(e) { console.log("Index creation warning:", e.message); }
+} catch(e) {
+  console.log("Index creation warning:", e.message);
+}
 
 // Countries list
-const COUNTRIES = {"AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla","AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria","AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize","BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil","IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso","BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic","TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros","CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia","CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic","EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia","FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia","GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada","GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti","HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland","IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya","KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia","LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi","MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius","YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat","MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia","NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway","OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines","PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa","SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone","SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea","SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin","PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland","SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga","TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine","AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City","VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"};
+const COUNTRIES = {
+  "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
+  "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
+  "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
+  "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
+  "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
+  "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
+  "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
+  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d'Ivoire","HR":"Croatia",
+  "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
+  "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
+  "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
+  "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
+  "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
+  "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
+  "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
+  "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
+  "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
+  "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
+  "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
+  "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
+  "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
+  "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
+  "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
+  "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
+  "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
+  "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
+  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
+  "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
+  "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
+  "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
+  "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
+};
 
 /* ================= CORE DATA ================= */
 const waitingQueue = [];
@@ -103,7 +189,10 @@ function initializeAdminProtection() {
     console.log("=== INITIALIZING ADMIN PROTECTION ===");
     const deleted = db.prepare("DELETE FROM banned_ips WHERE ip=?").run(normalizedAdminIp);
     console.log("Cleared", deleted.changes, "existing admin IP bans");
-  } catch(e) { console.error("Error initializing admin protection:", e); }
+    console.log("Admin protection initialized successfully");
+  } catch(e) {
+    console.error("Error initializing admin protection:", e);
+  }
 }
 
 function isIpBanned(ip) {
@@ -119,7 +208,10 @@ function isIpBanned(ip) {
       return false;
     }
     return true;
-  } catch(e) { console.error("Error in isIpBanned:", e); return false; }
+  } catch(e) {
+    console.error("Error in isIpBanned:", e);
+    return false;
+  }
 }
 
 function isFpBanned(fp) {
@@ -132,32 +224,48 @@ function isFpBanned(fp) {
       return false;
     }
     return true;
-  } catch(e) { console.error("Error in isFpBanned:", e); return false; }
+  } catch(e) {
+    console.error("Error in isFpBanned:", e);
+    return false;
+  }
 }
 
 function banUser(ip, fp) {
   try {
     const exp = Date.now() + BAN_DURATION;
+    
     if (ip && normalizeIp(ip) === normalizeIp(ADMIN_IP)) {
       console.warn("⚠️ ATTEMPT TO BAN ADMIN IP BLOCKED:", ip);
       return;
     }
-    if (ip) db.prepare("INSERT OR REPLACE INTO banned_ips VALUES (?,?)").run(normalizeIp(ip), exp);
-    if (fp) db.prepare("INSERT OR REPLACE INTO banned_fps VALUES (?,?)").run(fp, exp);
-  } catch(e) { console.error("❌ Error in banUser:", e); }
+    
+    if (ip) {
+      const normalizedIp = normalizeIp(ip);
+      db.prepare("INSERT OR REPLACE INTO banned_ips VALUES (?,?)").run(normalizedIp, exp);
+    }
+    if (fp) {
+      db.prepare("INSERT OR REPLACE INTO banned_fps VALUES (?,?)").run(fp, exp);
+    }
+  } catch(e) {
+    console.error("❌ Error in banUser:", e);
+  }
 }
 
 function unbanUser(ip, fp) {
   try {
     if (ip) db.prepare("DELETE FROM banned_ips WHERE ip=?").run(normalizeIp(ip));
     if (fp) db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
-  } catch(e) { console.error("❌ Error in unbanUser:", e); }
+  } catch(e) {
+    console.error("❌ Error in unbanUser:", e);
+  }
 }
 
 function getBannedCountries() {
   try {
     return new Set(db.prepare("SELECT code FROM banned_countries").all().map(r => r.code));
-  } catch(e) { return new Set(); }
+  } catch(e) {
+    return new Set();
+  }
 }
 
 function loadCountryCounts() {
@@ -165,20 +273,29 @@ function loadCountryCounts() {
   const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
   try {
     const rows = db.prepare("SELECT country, COUNT(DISTINCT ip) c FROM visitors WHERE ts > ? AND country IS NOT NULL GROUP BY country").all(twentyFourHoursAgo);
-    for (const r of rows) if (r.country) counts[r.country] = r.c;
-  } catch(e) { console.error("Error in loadCountryCounts:", e); }
+    for (const r of rows) {
+      if (r.country) counts[r.country] = r.c;
+    }
+  } catch(e) {
+    console.error("Error in loadCountryCounts:", e);
+  }
   return counts;
 }
 
 /* ================= ADMIN SNAPSHOT ================= */
 function getAdminSnapshot() {
   const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+  
+  // Clean expired bans
   try {
     db.prepare("DELETE FROM banned_ips WHERE expires <= ?").run(Date.now());
     db.prepare("DELETE FROM banned_fps WHERE expires <= ?").run(Date.now());
-  } catch(e) { console.error("Error cleaning expired bans:", e); }
+  } catch(e) {
+    console.error("Error cleaning expired bans:", e);
+  }
 
   let activeIpBans = [], activeFpBans = [], reportsMap = new Map();
+
   try {
     activeIpBans = db.prepare("SELECT ip,expires FROM banned_ips ORDER BY expires DESC").all();
     activeFpBans = db.prepare("SELECT fp,expires FROM banned_fps ORDER BY expires DESC").all();
@@ -187,12 +304,19 @@ function getAdminSnapshot() {
       if (!reportsMap.has(r.target)) reportsMap.set(r.target, []);
       reportsMap.get(r.target).push(r.reporter);
     }
-  } catch(e) { console.error("Error in getAdminSnapshot:", e); }
+  } catch(e) {
+    console.error("Error in getAdminSnapshot:", e);
+  }
 
   const reportedUsers = [];
   for (const [target, reporters] of reportsMap) {
     const sc = db.prepare("SELECT image FROM screenshots WHERE target=?").get(target);
-    reportedUsers.push({ target, count: reporters.length, reporters, screenshot: sc ? sc.image : null });
+    reportedUsers.push({
+      target,
+      count: reporters.length,
+      reporters,
+      screenshot: sc ? sc.image : null
+    });
   }
 
   const recentVisitors = db.prepare(`SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500`).all();
@@ -219,8 +343,12 @@ function getAdminSnapshot() {
 function emitAdminUpdate() {
   const snapshot = getAdminSnapshot();
   adminSockets.forEach(socket => {
-    try { socket.emit("adminUpdate", snapshot); }
-    catch(e) { console.error("Error emitting to admin socket:", e); adminSockets.delete(socket); }
+    try {
+      socket.emit("adminUpdate", snapshot);
+    } catch(e) {
+      console.error("Error emitting to admin socket:", e);
+      adminSockets.delete(socket);
+    }
   });
 }
 
@@ -230,39 +358,59 @@ io.on("connection", socket => {
   const ip = normalizeIp(rawIp);
   userIp.set(socket.id, ip);
 
+  // NEW: Load and send recent messages to new connections
   socket.on("request-messages", () => {
     try {
       const messages = db.prepare("SELECT sender, message, timestamp FROM messages ORDER BY timestamp DESC LIMIT 50").all();
       socket.emit("message-history", messages.reverse());
-    } catch(e) { console.error("Error loading messages:", e); }
+    } catch(e) {
+      console.error("Error loading messages:", e);
+    }
+  });
+
+  console.log("🔌 New connection:", {
+    socketId: socket.id,
+    ip: ip,
+    isAdmin: ip === normalizeIp(ADMIN_IP),
+    timestamp: new Date().toISOString()
   });
 
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
-  if (headerCountry) country = headerCountry.toUpperCase();
-  else {
+  if (headerCountry) {
+    country = headerCountry.toUpperCase();
+  } else {
     try {
       const g = geoip.lookup(ip);
       if (g && g.country) country = g.country;
-    } catch(e) { country = null; }
+    } catch(e) {
+      country = null;
+    }
   }
 
+  // Check banned countries
   if (country && getBannedCountries().has(country)) {
     socket.emit("country-blocked", { message: "🌍 Access restricted in your country", country });
     socket.disconnect();
     return;
   }
 
+  // Check IP ban
   if (ip !== normalizeIp(ADMIN_IP) && isIpBanned(ip)) {
     socket.emit("banned", { message: "🚫 Your IP is banned" });
     socket.disconnect(true);
     return;
   }
 
+  // Log visitor
   const ts = Date.now();
-  try { db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts); }
-  catch(e) { console.error("❌ Error inserting visitor:", e); }
+  try {
+    db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
+  } catch(e) {
+    console.error("❌ Error inserting visitor:", e);
+  }
 
+  // Admin connection
   if (ip === normalizeIp(ADMIN_IP)) {
     adminSockets.add(socket);
     socket.emit("adminUpdate", getAdminSnapshot());
@@ -272,13 +420,19 @@ io.on("connection", socket => {
   socket.on("identify", ({ fingerprint }) => {
     if (!fingerprint) return;
     userFingerprint.set(socket.id, fingerprint);
-    try { db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts); }
-    catch(e) { console.error("❌ Error updating fingerprint:", e); }
+    
+    try {
+      db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
+    } catch(e) {
+      console.error("❌ Error updating fingerprint:", e);
+    }
+
     if (isFpBanned(fingerprint)) {
       socket.emit("banned", { message: "🚫 Device banned" });
       socket.disconnect(true);
       return;
     }
+
     emitAdminUpdate();
   });
 
@@ -289,7 +443,10 @@ io.on("connection", socket => {
       socket.disconnect(true);
       return;
     }
-    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
+
+    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) {
+      waitingQueue.push(socket.id);
+    }
     tryMatch();
     emitAdminUpdate();
   });
@@ -312,18 +469,26 @@ io.on("connection", socket => {
     io.to(to).emit("signal", { from: socket.id, data });
   });
 
+  // FIXED: Chat message handler with persistence
   socket.on("chat-message", ({ to, message, sender }) => {
+    // Save message to DB
     try {
       db.prepare("INSERT INTO messages (sender, message, timestamp) VALUES (?,?,?)")
         .run(sender || socket.id, message, Date.now());
-    } catch(e) { console.error("❌ Error saving message:", e); }
-    io.to(to).emit("chat-message", { message: message, sender: sender || socket.id });
+    } catch(e) {
+      console.error("❌ Error saving message:", e);
+    }
+    
+    io.to(to).emit("chat-message", { message, sender: sender || socket.id });
   });
 
   socket.on("admin-screenshot", ({ image, partnerId }) => {
     if (!image || !partnerId) return;
-    try { db.prepare("INSERT OR REPLACE INTO screenshots VALUES (?,?)").run(partnerId, image); }
-    catch(e) { console.error("❌ Error saving screenshot:", e); }
+    try {
+      db.prepare("INSERT OR REPLACE INTO screenshots VALUES (?,?)").run(partnerId, image);
+    } catch(e) {
+      console.error("❌ Error saving screenshot:", e);
+    }
     emitAdminUpdate();
   });
 
@@ -332,6 +497,7 @@ io.on("connection", socket => {
     try {
       db.prepare("INSERT INTO reports VALUES (?,?)").run(partnerId, socket.id);
       const count = db.prepare("SELECT COUNT(*) c FROM reports WHERE target=?").get(partnerId).c;
+
       if (count >= 3) {
         const ip2 = userIp.get(partnerId);
         const fp2 = userFingerprint.get(partnerId);
@@ -342,7 +508,9 @@ io.on("connection", socket => {
           s.disconnect(true);
         }
       }
-    } catch(e) { console.error("❌ Error in report:", e); }
+    } catch(e) {
+      console.error("❌ Error in report:", e);
+    }
     emitAdminUpdate();
   });
 
@@ -362,6 +530,7 @@ io.on("connection", socket => {
   socket.on("disconnect", () => {
     const i = waitingQueue.indexOf(socket.id);
     if (i !== -1) waitingQueue.splice(i, 1);
+
     const p = partners.get(socket.id);
     if (p) {
       const other = io.sockets.sockets.get(p);
@@ -371,7 +540,9 @@ io.on("connection", socket => {
     partners.delete(socket.id);
     userFingerprint.delete(socket.id);
     userIp.delete(socket.id);
+    
     const wasAdmin = adminSockets.delete(socket);
+    
     emitAdminUpdate();
   });
 
@@ -391,11 +562,14 @@ app.get("/admin", adminAuth, (req, res) => {
   res.redirect("/admin/dashboard");
 });
 
+// NEW: Get recent messages API
 app.get("/admin/messages", adminAuth, (req, res) => {
   try {
     const messages = db.prepare("SELECT * FROM messages ORDER BY timestamp DESC LIMIT 100").all();
     res.json({ messages });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 function adminHeader(title) {
@@ -405,56 +579,316 @@ function adminHeader(title) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>لوحة الإدية - ${title}</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg ' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 <style>
-  :root { --primary: #6366f1; --primary-dark: #4f46e5; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --dark: #1f2937; --gray: #6b7280; --light: #f9fafb; --card-bg: #ffffff; --shadow: 0 4px 6px -1px rgba(0,0,0,0.1); --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1); --radius: 12px; }
+  :root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --dark: #1f2937;
+    --gray: #6b7280;
+    --light: #f9fafb;
+    --card-bg: #ffffff;
+    --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1);
+    --radius: 12px;
+  }
+  
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: var(--dark); padding: 20px; }
-  .container { max-width: 1400px; margin: 0 auto; background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-lg); overflow: hidden; }
-  .header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 25px 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-  .header h1 { font-size: 28px; display: flex; align-items: center; gap: 10px; }
-  .admin-badge { background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-family: monospace; }
-  .nav-tabs { display: flex; background: var(--light); padding: 0 20px; border-bottom: 2px solid #e5e7eb; overflow-x: auto; gap: 5px; }
-  .tab { padding: 16px 24px; text-decoration: none; color: var(--gray); border-bottom: 3px solid transparent; transition: all 0.3s ease; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-  .tab.active, .tab:hover { color: var(--primary); border-bottom-color: var(--primary); }
-  .content { padding: 30px; }
-  .error-banner { background: var(--danger); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: none; animation: slideDown 0.3s ease; }
-  @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 24px; }
-  .card { background: var(--card-bg); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); border: 1px solid #e5e7eb; transition: transform 0.2s ease; }
-  .card:hover { transform: translateY(-2px); }
-  .card h3 { color: var(--dark); margin-bottom: 18px; display: flex; align-items: center; gap: 10px; font-size: 18px; }
-  .stat { font-size: 32px; font-weight: 700; color: var(--primary); display: block; margin: 10px 0; }
-  .stat-label { font-size: 14px; color: var(--gray); }
-  button { padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
-  button:hover { transform: scale(1.03); }
+  
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: var(--dark);
+    padding: 20px;
+  }
+  
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  
+  .header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    padding: 25px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+  
+  .header h1 {
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .admin-badge {
+    background: rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-family: monospace;
+  }
+  
+  .nav-tabs {
+    display: flex;
+    background: var(--light);
+    padding: 0 20px;
+    border-bottom: 2px solid #e5e7eb;
+    overflow-x: auto;
+    gap: 5px;
+  }
+  
+  .tab {
+    padding: 16px 24px;
+    text-decoration: none;
+    color: var(--gray);
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .tab.active, .tab:hover {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  
+  .content {
+    padding: 30px;
+  }
+  
+  .error-banner {
+    background: var(--danger);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: none;
+    animation: slideDown 0.3s ease;
+  }
+  
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    border: 1px solid #e5e7eb;
+    transition: transform 0.2s ease;
+  }
+  
+  .card:hover {
+    transform: translateY(-2px);
+  }
+  
+  .card h3 {
+    color: var(--dark);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+  }
+  
+  .stat {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    display: block;
+    margin: 10px 0;
+  }
+  
+  .stat-label {
+    font-size: 14px;
+    color: var(--gray);
+  }
+  
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  button:hover {
+    transform: scale(1.03);
+  }
+  
   .btn-primary { background: var(--primary); color: white; }
   .btn-success { background: var(--success); color: white; }
   .btn-danger { background: var(--danger); color: white; }
   .btn-warning { background: var(--warning); color: white; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-  th { background: var(--light); font-weight: 600; color: var(--dark); }
-  tr:hover { background: #f9fafb; }
-  input, textarea, select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
-  input:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
-  textarea { resize: vertical; min-height: 100px; }
-  .badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  
+  th, td {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+  }
+  
+  th {
+    background: var(--light);
+    font-weight: 600;
+    color: var(--dark);
+  }
+  
+  tr:hover {
+    background: #f9fafb;
+  }
+  
+  input, textarea, select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+  
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+  
+  .badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+  }
+  
   .badge-success { background: #d1fae5; color: #065f46; }
   .badge-danger { background: #fee2e2; color: #991b1b; }
   .badge-warning { background: #fef3c7; color: #92400e; }
-  .screenshot-thumb { max-width: 160px; max-height: 100px; border-radius: 8px; border: 2px solid #e5e7eb; cursor: pointer; transition: transform 0.2s; }
-  .screenshot-thumb:hover { transform: scale(1.05); }
-  .country-list { max-height: 420px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; }
-  .country-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #f3f4f6; }
-  .country-item:last-child { border-bottom: none; }
-  .flex-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .text-muted { color: var(--gray); font-size: 13px; }
-  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .nav-tabs { flex-wrap: wrap; } .header { flex-direction: column; text-align: center; } }
-  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--dark); color: white; padding: 16px 24px; border-radius: 8px; box-shadow: var(--shadow-lg); display: none; animation: slideUp 0.3s ease; z-index: 1000; }
-  @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-  .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
-  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  
+  .screenshot-thumb {
+    max-width: 160px;
+    max-height: 100px;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  
+  .screenshot-thumb:hover {
+    transform: scale(1.05);
+  }
+  
+  .country-list {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px;
+  }
+  
+  .country-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  
+  .country-item:last-child {
+    border-bottom: none;
+  }
+  
+  .flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .text-muted {
+    color: var(--gray);
+    font-size: 13px;
+  }
+  
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    .nav-tabs { flex-wrap: wrap; }
+    .header { flex-direction: column; text-align: center; }
+  }
+  
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--dark);
+    color: white;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    display: none;
+    animation: slideUp 0.3s ease;
+    z-index: 1000;
+  }
+  
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 </style>
 </head>
 <body>
@@ -485,32 +919,35 @@ function adminFooter() {
 <div class="toast" id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
 <script>
   const socket = io({ reconnection: true, reconnectionDelay: 1000 });
   
-  function showToast(message, type) {
+  // Toast notification system
+  function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
-    toast.style.background = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--dark)';
+    toast.style.background = type === 'success' ? 'var(--success)' : 
+                            type === 'error' ? 'var(--danger)' : 'var(--dark)';
     toast.style.display = 'block';
     setTimeout(() => { toast.style.display = 'none'; }, 4000);
   }
   
-  socket.on('connect', () => {
+  socket.on('connect', ()=> {
     console.log('✅ Connected to server');
     socket.emit('admin-join');
     showToast('🔌 Connected to admin panel', 'success');
   });
   
-  socket.on('disconnect', () => {
+  socket.on('disconnect', ()=> {
     showToast('⚠️ Disconnected from server', 'error');
   });
   
   socket.on('adminUpdate', snap => {
     if (typeof handleAdminUpdate === 'function') {
-      try { handleAdminUpdate(snap); }
-      catch(e) {
+      try {
+        handleAdminUpdate(snap);
+      } catch(e) {
         console.error('❌ Error in handleAdminUpdate:', e);
         showToast('Error updating data', 'error');
       }
@@ -530,7 +967,7 @@ function adminFooter() {
 `;
 }
 
-// Dashboard - FIXED
+// Dashboard
 app.get("/admin/dashboard", adminAuth, (req, res) => {
   const html = adminHeader("Dashboard") + `
 <div class="grid">
@@ -601,55 +1038,56 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   };
 
   function handleAdminUpdate(snap) {
+    // Stats
     document.getElementById('stat-connected').textContent = snap.stats.connected || 0;
     document.getElementById('stat-waiting').textContent = snap.stats.waiting || 0;
     document.getElementById('stat-partnered').textContent = snap.stats.partnered || 0;
     document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
 
-    // FIXED: No template literals inside string
+    // Countries
     const cl = document.getElementById('country-list');
     const entries = Object.entries(snap.stats.countryCounts || {});
     if (entries.length === 0) {
       cl.textContent = 'No data (24h)';
     } else {
       cl.innerHTML = entries.sort((a,b)=>b[1]-a[1])
-        .map(([country, cnt]) => '<div>' + COUNTRY_NAME(country) + ': <strong>' + cnt + '</strong></div>')
+        .map(([country, cnt]) => '<div>' + (ALL_COUNTRIES[country] || country) + ': <strong>' + cnt + '</strong></div>')
         .join('');
     }
 
-    // FIXED: No template literals inside string
-    const ipCount = snap.activeIpBans ? snap.activeIpBans.length : 0;
-    const fpCount = snap.activeFpBans ? snap.activeFpBans.length : 0;
+    // Active bans count
+    const ipCount = snap.activeIpBans?.length || 0;
+    const fpCount = snap.activeFpBans?.length || 0;
     document.getElementById('active-bans-info').innerHTML = 
-      '<span class="badge badge-danger">IP Bans: ' + ipCount + '</span>' + 
-      '<span class="badge badge-warning" style="margin-left: 8px;">Device Bans: ' + fpCount + '</span>';
+      '<span class="badge badge-danger">IP Bans: ' + ipCount + '</span> 
+       <span class="badge badge-warning" style="margin-left: 8px;">Device Bans: ' + fpCount + '</span>';
 
-    // FIXED: No template literals inside string
+    // Reports
     const rep = document.getElementById('reported-list');
-    if (!snap.reportedUsers || snap.reportedUsers.length === 0) {
+    if (!snap.reportedUsers?.length) {
       rep.textContent = 'No reports';
     } else {
-      rep.innerHTML = snap.reportedUsers.map(r => 
-        '<div style="padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">' +
-          '<div class="flex-between">' +
-            '<strong>' + r.target + '</strong>' +
-            '<span class="badge badge-danger">' + r.count + ' reports</span>' +
-          '</div>' +
-        '</div>'
-      ).join('');
+      rep.innerHTML = snap.reportedUsers.map(r => '
+        <div style="padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">
+          <div class="flex-between">
+            <strong>' + r.target + '</strong>
+            <span class="badge badge-danger">' + r.count + ' reports</span>
+          </div>
+        </div>
+      ').join('');
     }
 
-    // FIXED: No template literals inside string
+    // Visitors
     const vis = document.getElementById('visitors-list');
-    if (!snap.recentVisitors || snap.recentVisitors.length === 0) {
+    if (!snap.recentVisitors?.length) {
       vis.textContent = 'No visitors';
     } else {
-      vis.innerHTML = snap.recentVisitors.slice(0, 50).map(v => 
-        '<div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">' +
-          '<div><strong>' + v.ip + '</strong> <span class="badge" style="background: #e0e7ff; color: #3730a3;">' + (v.country || 'Unknown') + '</span></div>' +
-          '<div class="text-muted">' + new Date(v.ts).toLocaleString() + '</div>' +
-        '</div>'
-      ).join('');
+      vis.innerHTML = snap.recentVisitors.slice(0, 50).map(v => '
+        <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+          <div><strong>' + v.ip + '</strong> <span class="badge" style="background: #e0e7ff; color: #3730a3;">' + (v.country || 'Unknown') + '</span></div>
+          <div class="text-muted">' + new Date(v.ts).toLocaleString() + '</div>
+        </div>
+      ').join('');
     }
   }
 </script>
@@ -657,7 +1095,7 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// Countries - FIXED
+// Countries page
 app.get("/admin/countries", adminAuth, (req, res) => {
   const html = adminHeader("Countries") + `
 <div class="card">
@@ -666,7 +1104,7 @@ app.get("/admin/countries", adminAuth, (req, res) => {
     <div>
       <h4>All Countries</h4>
       <div class="country-list" id="all-countries">
-        <span class="text-muted">Loading...</span>
+        <div class="loading"></div>
       </div>
     </div>
     <div>
@@ -689,31 +1127,32 @@ app.get("/admin/countries", adminAuth, (req, res) => {
     try {
       const res = await fetch('/admin/countries-list');
       const data = await res.json();
-      const banned = data.banned || [];
       
+      // All countries
       const container = document.getElementById('all-countries');
       const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
       
-      container.innerHTML = codes.map(code => 
-        '<div class="country-item">' +
-          '<div style="display: flex; align-items: center; gap: 10px;">' +
-            '<input type="checkbox" id="cb-' + code + '" ' + (banned.includes(code) ? 'checked' : '') + 
-                   ' onchange="toggleCountry(\'' + code + '\')" style="width: auto;">' +
-            '<label for="cb-' + code + '"><strong>' + code + '</strong> — ' + ALL_COUNTRIES[code] + '</label>' +
-          '</div>' +
-          '<button class="' + (banned.includes(code) ? 'btn-success' : 'btn-danger') + 
-                  '" onclick="toggleCountry(\'' + code + '\')" style="padding: 6px 12px; font-size: 12px;">' +
-            (banned.includes(code) ? '✅ Unblock' : '⛔ Block') +
-          '</button>' +
-        '</div>'
-      ).join('');
+      container.innerHTML = codes.map(code => '
+        <div class="country-item">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="cb-' + code + '" ' + (data.banned.includes(code) ? 'checked' : '') + ' 
+                   onchange="toggleCountry(\'' + code + '\')" style="width: auto;">
+            <label for="cb-' + code + '"><strong>' + code + '</strong> — ' + ALL_COUNTRIES[code] + '</label>
+          </div>
+          <button class="' + (data.banned.includes(code) ? 'btn-success' : 'btn-danger') + '" 
+                  onclick="toggleCountry(\'' + code + '\')" style="padding: 6px 12px; font-size: 12px;">
+            ' + (data.banned.includes(code) ? '✅ Unblock' : '⛔ Block') + '
+          </button>
+        </div>
+      ').join('');
       
+      // Blocked list
       const bc = document.getElementById('blocked-countries');
-      if (banned.length === 0) {
+      if (data.banned.length === 0) {
         bc.innerHTML = '<span class="text-muted">No blocked countries</span>';
       } else {
-        bc.innerHTML = banned.map(c => 
-          '<div style="padding: 8px;"><strong>' + c + '</strong> — ' + COUNTRY_NAME(c) + '</div>'
+        bc.innerHTML = data.banned.map(c => 
+          '<div style="padding: 8px;"><strong>' + c + '</strong> — ' + ALL_COUNTRIES[c] + '</div>'
         ).join('');
       }
     } catch(e) {
@@ -725,14 +1164,10 @@ app.get("/admin/countries", adminAuth, (req, res) => {
     const res = await fetch('/admin/block-country', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ code: code })
+      body: JSON.stringify({ code })
     });
     const data = await res.json();
-    if (data.ok) {
-      loadCountries();
-    } else {
-      showToast('❌ Operation failed', 'error');
-    }
+    if (!data.ok) showToast('❌ Operation failed', 'error');
   }
   
   document.getElementById('clear-blocks').onclick = async () => {
@@ -752,7 +1187,7 @@ app.get("/admin/countries", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// Stats - FIXED
+// Stats page
 app.get("/admin/stats", adminAuth, (req, res) => {
   const html = adminHeader("Stats") + `
 <div class="card">
@@ -821,7 +1256,7 @@ app.get("/admin/stats", adminAuth, (req, res) => {
       countryChart = new Chart(ctx2, {
         type: 'doughnut',
         data: {
-          labels: data.countries.slice(0, 8).map(c => COUNTRY_NAME(c.country)),
+          labels: data.countries.slice(0, 8).map(c => ALL_COUNTRIES[c.country]),
           datasets: [{
             data: data.countries.slice(0, 8).map(c => c.count),
             backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
@@ -832,15 +1267,15 @@ app.get("/admin/stats", adminAuth, (req, res) => {
       
       // Recent visitors
       const list = document.getElementById('stat-visitors-list');
-      list.innerHTML = data.recent.slice(0, 30).map(v => 
-        '<div style="padding: 10px; border-bottom: 1px solid #f3f4f6;">' +
-          '<div class="flex-between">' +
-            '<strong>' + v.ip + '</strong>' +
-            '<span class="badge" style="background: #e0e7ff; color: #3730a3;">' + (v.country || 'Unknown') + '</span>' +
-          '</div>' +
-          '<div class="text-muted">' + new Date(v.ts).toLocaleString() + '</div>' +
-        '</div>'
-      ).join('');
+      list.innerHTML = data.recent.slice(0, 30).map(v => '
+        <div style="padding: 10px; border-bottom: 1px solid #f3f4f6;">
+          <div class="flex-between">
+            <strong>' + v.ip + '</strong>
+            <span class="badge" style="background: #e0e7ff; color: #3730a3;">' + (v.country || 'Unknown') + '</span>
+          </div>
+          <div class="text-muted">' + new Date(v.ts).toLocaleString() + '</div>
+        </div>
+      ').join('');
     } catch(e) {
       showToast('❌ Error loading stats', 'error');
     }
@@ -853,7 +1288,7 @@ app.get("/admin/stats", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// Reports - FIXED
+// Reports page
 app.get("/admin/reports", adminAuth, (req, res) => {
   const html = adminHeader("Reports") + `
 <div class="card">
@@ -866,35 +1301,35 @@ app.get("/admin/reports", adminAuth, (req, res) => {
 <script>
   function handleAdminUpdate(snap) {
     const container = document.getElementById('reports-panel');
-    if (!snap.reportedUsers || snap.reportedUsers.length === 0) {
+    if (!snap.reportedUsers?.length) {
       container.innerHTML = '<span class="text-muted">No reports</span>';
       return;
     }
     
-    container.innerHTML = snap.reportedUsers.map(r => 
-      '<div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 15px;">' +
-        '<div class="flex-between" style="margin-bottom: 15px;">' +
-          '<div>' +
-            '<strong style="font-size: 18px;">' + r.target + '</strong>' +
-            '<span class="badge badge-danger" style="margin-left: 10px;">' + r.count + ' reports</span>' +
-          '</div>' +
-          '<div>' +
-            '<button class="btn-danger" onclick="banUser(\\'' + r.target + '\\')">' +
-              '<span>🔨</span> Ban User' +
-            '</button>' +
-            '<button class="btn-warning" onclick="removeReport(\\'' + r.target + '\\')" style="margin-left: 8px;">' +
-              '<span>🗑️</span> Remove' +
-            '</button>' +
-          '</div>' +
-        '</div>' +
+    container.innerHTML = snap.reportedUsers.map(r => '
+      <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 15px;">
+        <div class="flex-between" style="margin-bottom: 15px;">
+          <div>
+            <strong style="font-size: 18px;">' + r.target + '</strong>
+            <span class="badge badge-danger" style="margin-left: 10px;">' + r.count + ' reports</span>
+          </div>
+          <div>
+            <button class="btn-danger" onclick="banUser(\'' + r.target + '\')">
+              <span>🔨</span> Ban User
+            </button>
+            <button class="btn-warning" onclick="removeReport(\'' + r.target + '\')" style="margin-left: 8px;">
+              <span>🗑️</span> Remove
+            </button>
+          </div>
+        </div>
         
-        (r.screenshot ? 
-          '<div style="margin: 15px 0;"><img src="' + r.screenshot + '" class="screenshot-thumb" onclick="window.open(\\'' + r.screenshot + '\\', \'_blank\')"></div>' : 
-          '<div class="text-muted">No screenshot</div>') +
+        ' + (r.screenshot ? 
+          '<div style="margin: 15px 0;"><img src="' + r.screenshot + '" class="screenshot-thumb" onclick="window.open(\'' + r.screenshot + '\', \'_blank\')"></div>' : 
+          '<div class="text-muted">No screenshot</div>') + '
         
-        '<div class="text-muted">Reporters: ' + (r.reporters ? r.reporters.join(', ') : '—') + '</div>' +
-      '</div>'
-    ).join('');
+        <div class="text-muted">Reporters: ' + (r.reporters?.join(', ') || '—') + '</div>
+      </div>
+    ').join('');
   }
   
   async function banUser(target) {
@@ -902,7 +1337,7 @@ app.get("/admin/reports", adminAuth, (req, res) => {
     const res = await fetch('/manual-ban', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ target: target })
+      body: JSON.stringify({ target })
     });
     const data = await res.json();
     if (data.ok) showToast('✅ User banned successfully', 'success');
@@ -913,7 +1348,7 @@ app.get("/admin/reports", adminAuth, (req, res) => {
     const res = await fetch('/remove-report', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ target: target })
+      body: JSON.stringify({ target })
     });
     const data = await res.json();
     if (data.ok) showToast('✅ Report removed', 'success');
@@ -923,7 +1358,7 @@ app.get("/admin/reports", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// Bans - FIXED
+// Bans page
 app.get("/admin/bans", adminAuth, (req, res) => {
   const html = adminHeader("Bans") + `
 <div class="grid">
@@ -942,38 +1377,38 @@ app.get("/admin/bans", adminAuth, (req, res) => {
   function handleAdminUpdate(snap) {
     // IP Bans
     const ipList = document.getElementById('ip-bans-list');
-    if (!snap.activeIpBans || snap.activeIpBans.length === 0) {
+    if (!snap.activeIpBans?.length) {
       ipList.innerHTML = '<span class="text-muted">No IP bans</span>';
     } else {
-      ipList.innerHTML = snap.activeIpBans.map(b => 
-        '<div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">' +
-          '<div class="flex-between">' +
-            '<div>' +
-              '<strong>' + b.ip + '</strong>' +
-              '<div class="text-muted">Expires: ' + new Date(b.expires).toLocaleString() + '</div>' +
-            '</div>' +
-            '<button class="btn-success" onclick="unbanIp(\\'' + b.ip + '\\')">✅ Unban</button>' +
-          '</div>' +
-        '</div>'
-      ).join('');
+      ipList.innerHTML = snap.activeIpBans.map(b => '
+        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">
+          <div class="flex-between">
+            <div>
+              <strong>' + b.ip + '</strong>
+              <div class="text-muted">Expires: ' + new Date(b.expires).toLocaleString() + '</div>
+            </div>
+            <button class="btn-success" onclick="unbanIp(\'' + b.ip + '\')">✅ Unban</button>
+          </div>
+        </div>
+      ').join('');
     }
     
     // FP Bans
     const fpList = document.getElementById('fp-bans-list');
-    if (!snap.activeFpBans || snap.activeFpBans.length === 0) {
+    if (!snap.activeFpBans?.length) {
       fpList.innerHTML = '<span class="text-muted">No device bans</span>';
     } else {
-      fpList.innerHTML = snap.activeFpBans.map(b => 
-        '<div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">' +
-          '<div class="flex-between">' +
-            '<div>' +
-              '<strong>' + b.fp.substring(0, 20) + '...</strong>' +
-              '<div class="text-muted">Expires: ' + new Date(b.expires).toLocaleString() + '</div>' +
-            '</div>' +
-            '<button class="btn-success" onclick="unbanFp(\\'' + b.fp + '\\')">✅ Unban</button>' +
-          '</div>' +
-        '</div>'
-      ).join('');
+      fpList.innerHTML = snap.activeFpBans.map(b => '
+        <div style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px;">
+          <div class="flex-between">
+            <div>
+              <strong>' + b.fp.substring(0, 20) + '...</strong>
+              <div class="text-muted">Expires: ' + new Date(b.expires).toLocaleString() + '</div>
+            </div>
+            <button class="btn-success" onclick="unbanFp(\'' + b.fp + '\')">✅ Unban</button>
+          </div>
+        </div>
+      ').join('');
     }
   }
   
@@ -981,7 +1416,7 @@ app.get("/admin/bans", adminAuth, (req, res) => {
     const res = await fetch('/unban-ip', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ ip: ip })
+      body: JSON.stringify({ ip })
     });
     const data = await res.json();
     if (data.ok) showToast('✅ IP unbanned', 'success');
@@ -991,7 +1426,7 @@ app.get("/admin/bans", adminAuth, (req, res) => {
     const res = await fetch('/unban-fingerprint', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ fp: fp })
+      body: JSON.stringify({ fp })
     });
     const data = await res.json();
     if (data.ok) showToast('✅ Device unbanned', 'success');
@@ -1003,8 +1438,11 @@ app.get("/admin/bans", adminAuth, (req, res) => {
 
 /* ================= ADMIN API ENDPOINTS ================= */
 app.get("/admin/countries-list", adminAuth, (req, res) => {
-  try { res.json({ all: Object.keys(COUNTRIES), banned: Array.from(getBannedCountries()) }); }
-  catch(e) { res.status(500).json({ error: "Internal error" }); }
+  try {
+    res.json({ all: Object.keys(COUNTRIES), banned: Array.from(getBannedCountries()) });
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/admin/block-country", adminAuth, (req, res) => {
@@ -1012,9 +1450,12 @@ app.post("/admin/block-country", adminAuth, (req, res) => {
     const code = (req.body.code || "").toUpperCase();
     if (!code || !COUNTRIES[code]) return res.status(400).json({ error: "Invalid country code" });
     db.prepare("INSERT OR REPLACE INTO banned_countries VALUES (?)").run(code);
+    showToast('🌍 Country ' + code + ' blocked', 'success');
     emitAdminUpdate();
     res.json({ ok: true, banned: Array.from(getBannedCountries()) });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/admin/unblock-country", adminAuth, (req, res) => {
@@ -1023,7 +1464,9 @@ app.post("/admin/unblock-country", adminAuth, (req, res) => {
     db.prepare("DELETE FROM banned_countries WHERE code=?").run(code);
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/admin/clear-blocked", adminAuth, (req, res) => {
@@ -1031,7 +1474,9 @@ app.post("/admin/clear-blocked", adminAuth, (req, res) => {
     db.prepare("DELETE FROM banned_countries").run();
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.get("/admin/stats-data", adminAuth, (req, res) => {
@@ -1060,15 +1505,22 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
     const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
 
     res.send({ daily, countries, recent });
-  } catch(e) { res.status(500).send({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).send({ error: "Internal error" });
+  }
 });
 
 app.post("/admin-broadcast", adminAuth, (req, res) => {
   try {
     const msg = req.body.message?.trim();
-    if (msg) io.emit("adminMessage", msg);
+    if (msg) {
+      io.emit("adminMessage", msg);
+      console.log("📢 Broadcast:", msg);
+    }
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/unban-ip", adminAuth, (req, res) => {
@@ -1078,7 +1530,9 @@ app.post("/unban-ip", adminAuth, (req, res) => {
     unbanUser(ip, null);
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/unban-fingerprint", adminAuth, (req, res) => {
@@ -1088,7 +1542,9 @@ app.post("/unban-fingerprint", adminAuth, (req, res) => {
     unbanUser(null, fp);
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/manual-ban", adminAuth, (req, res) => {
@@ -1105,7 +1561,9 @@ app.post("/manual-ban", adminAuth, (req, res) => {
     }
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 app.post("/remove-report", adminAuth, (req, res) => {
@@ -1116,7 +1574,9 @@ app.post("/remove-report", adminAuth, (req, res) => {
     db.prepare("DELETE FROM screenshots WHERE target=?").run(target);
     emitAdminUpdate();
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: "Internal error" }); }
+  } catch(e) {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 /* ================= START SERVER ================= */
