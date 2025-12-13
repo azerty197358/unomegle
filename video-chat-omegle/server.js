@@ -1,15 +1,15 @@
-// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Pages Split
+// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin
 // SQLITE PERSISTENCE — COMPLETE INTEGRATION
+// MODIFIED: IP-based admin access + 24h unique visitor counting
 
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
-const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
 
 const app = express();
-app.set("trust proxy", true);
+app.set("trust proxy", true); // Trust proxy headers for real IP
 
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
@@ -18,12 +18,40 @@ app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const ADMIN_USERS = { admin: "admin" }; // change creds as needed
-const adminAuth = basicAuth({
-  users: ADMIN_USERS,
-  challenge: true,
-  realm: "Admin Area",
-});
+/* ================= ADMIN IP AUTHENTICATION ================= */
+const ADMIN_IP = "197.205.203.158";
+
+function adminAuth(req, res, next) {
+  // Get client IP (handles X-Forwarded-For, CF-Connecting-IP, etc.)
+  const clientIp = req.ip;
+  
+  // Log for debugging
+  console.log("Admin access attempt from IP:", clientIp);
+  
+  if (clientIp === ADMIN_IP) {
+    return next(); // Allow access
+  }
+  
+  // Deny access with 403
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Access Denied</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
+        .error { color: #d9534f; }
+      </style>
+    </head>
+    <body>
+      <h1 class="error">403 Forbidden</h1>
+      <p>Admin access is restricted to IP: <strong>${ADMIN_IP}</strong></p>
+      <p>Your IP: <strong>${clientIp}</strong></p>
+    </body>
+    </html>
+  `);
+}
 
 /* ================= SQLITE PERSISTENCE ================= */
 const db = new Database("data.db");
@@ -141,9 +169,11 @@ function getBannedCountries() {
   return new Set(db.prepare("SELECT code FROM banned_countries").all().map(r => r.code));
 }
 
+// === MODIFIED: Count unique IPs in last 24 hours ===
 function loadCountryCounts() {
   const counts = {};
-  for (const r of db.prepare("SELECT country, COUNT(*) c FROM visitors GROUP BY country").all()) {
+  const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+  for (const r of db.prepare("SELECT country, COUNT(DISTINCT ip) c FROM visitors WHERE ts > ? AND country IS NOT NULL GROUP BY country").all(twentyFourHoursAgo)) {
     if (r.country) counts[r.country] = r.c;
   }
   return counts;
@@ -151,6 +181,8 @@ function loadCountryCounts() {
 
 /* ================= ADMIN SNAPSHOT ================= */
 function getAdminSnapshot() {
+  const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+  
   const activeIpBans = db.prepare("SELECT ip,expires FROM banned_ips WHERE expires>?").all(Date.now());
   const activeFpBans = db.prepare("SELECT fp,expires FROM banned_fps WHERE expires>?").all(Date.now());
 
@@ -171,19 +203,23 @@ function getAdminSnapshot() {
     });
   }
 
+  // MODIFIED: Show all recent visitors but stats are 24h unique
   const recentVisitors = db.prepare(`
     SELECT ip,fp,country,ts FROM visitors
     ORDER BY ts DESC LIMIT 500
   `).all();
 
   const countryCounts = loadCountryCounts();
+  
+  // MODIFIED: Count unique IPs in last 24 hours
+  const totalVisitors = db.prepare("SELECT COUNT(DISTINCT ip) c FROM visitors WHERE ts > ?").get(twentyFourHoursAgo).c;
 
   return {
     stats: {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      totalVisitors: db.prepare("SELECT COUNT(*) c FROM visitors").get().c,
+      totalVisitors: totalVisitors, // Now 24h unique count
       countryCounts
     },
     activeIpBans,
@@ -230,6 +266,7 @@ io.on("connection", socket => {
   }
 
   const ts = Date.now();
+  // Log every connection (for reports/forensics)
   db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
   emitAdminUpdate();
 
@@ -389,7 +426,7 @@ function adminHeader(title) {
   <a class="tab" href="/admin/stats">Stats</a>
   <a class="tab" href="/admin/reports">Reports</a>
   <a class="tab" href="/admin/bans">Bans</a>
-  <div style="margin-left:auto;color:#666">Signed in as admin</div>
+  <div style="margin-left:auto;color:#666">Admin IP: ${ADMIN_IP}</div>
 </div>
 `;
 }
@@ -397,7 +434,7 @@ function adminHeader(title) {
 function adminFooter() {
   return `
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
@@ -423,8 +460,8 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
       <div>Connected: <span id="stat-connected" class="stat">0</span></div>
       <div>Waiting: <span id="stat-waiting" class="stat">0</span></div>
       <div>Paired: <span id="stat-partnered" class="stat">0</span></div>
-      <div>Total visitors: <span id="stat-totalvisitors">0</span></div>
-      <h4>By Country</h4>
+      <div>Unique Visitors (24h): <span id="stat-totalvisitors" class="stat">0</span></div>
+      <h4>By Country (24h)</h4>
       <div id="country-list" class="small"></div>
     </div>
 
@@ -473,7 +510,7 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
     const cl = document.getElementById('country-list');
     cl.innerHTML = '';
     const entries = Object.entries(snap.stats.countryCounts);
-    if (entries.length === 0) cl.textContent = 'No data';
+    if (entries.length === 0) cl.textContent = 'No data (24h)';
     else {
       entries.sort((a,b)=>b[1]-a[1]);
       entries.forEach(([country, cnt]) => {
@@ -808,7 +845,9 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   }
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
 
-  const countries = db.prepare("SELECT country, COUNT(*) c FROM visitors WHERE country IS NOT NULL GROUP BY country ORDER BY c DESC LIMIT 50").all().map(r => ({country: r.country, count: r.c}));
+  const countries = db.prepare("SELECT country, COUNT(DISTINCT ip) c FROM visitors WHERE country IS NOT NULL AND ts > ? GROUP BY country ORDER BY c DESC LIMIT 50")
+    .all(Date.now() - (24 * 60 * 60 * 1000))
+    .map(r => ({country: r.country, count: r.c}));
 
   const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
 
