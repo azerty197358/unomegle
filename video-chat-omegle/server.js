@@ -1,6 +1,6 @@
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin
 // SQLITE PERSISTENCE — COMPLETE INTEGRATION
-// FIXED: IP format issues, ban display, unban functionality, admin updates, error handling
+// FIXED: Admin IP protection, ban management, socket persistence, and logging
 
 const express = require("express");
 const path = require("path");
@@ -8,10 +8,17 @@ const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
 
 const app = express();
-app.set("trust proxy", true); // Trust proxy headers
+app.set("trust proxy", true);
 
 const http = require("http").createServer(app);
-const io = require("socket.io")(http);
+const io = require("socket.io")(http, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
 
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
@@ -32,7 +39,11 @@ function normalizeIp(ip) {
 
 function adminAuth(req, res, next) {
   const clientIp = normalizeIp(req.ip);
-  console.log("Admin access attempt from IP:", clientIp, "Original:", req.ip);
+  console.log("=== ADMIN ACCESS CHECK ===");
+  console.log("Attempt from IP:", clientIp);
+  console.log("Expected ADMIN_IP:", ADMIN_IP);
+  console.log("Match:", clientIp === ADMIN_IP ? "YES" : "NO");
+  console.log("==========================");
   
   if (clientIp === ADMIN_IP) {
     return next();
@@ -60,7 +71,26 @@ function adminAuth(req, res, next) {
 }
 
 /* ================= SQLITE PERSISTENCE ================= */
-const db = new Database("data.db", { verbose: console.log }); // Enable verbose logging
+const db = new Database("data.db");
+
+// CRITICAL: Clear any existing bans on admin IP and protect it
+function initializeAdminProtection() {
+  try {
+    const normalizedAdminIp = normalizeIp(ADMIN_IP);
+    console.log("=== INITIALIZING ADMIN PROTECTION ===");
+    console.log("Clearing any existing bans for admin IP:", normalizedAdminIp);
+    
+    // Remove admin IP from banned_ips if it exists
+    const deleted = db.prepare("DELETE FROM banned_ips WHERE ip=?").run(normalizedAdminIp);
+    console.log("Cleared", deleted.changes, "existing admin IP bans");
+    
+    // Remove admin fingerprint if known (you can add this if needed)
+    console.log("Admin protection initialized successfully");
+    console.log("=======================================");
+  } catch(e) {
+    console.error("Error initializing admin protection:", e);
+  }
+}
 
 // Add error handling for DB
 db.pragma('journal_mode = WAL');
@@ -158,9 +188,16 @@ const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
 const adminSockets = new Set();
 
 /* ================= PERSISTENCE HELPERS ================= */
+// CRITICAL: Never ban the admin IP
 function isIpBanned(ip) {
   if (!ip) return false;
   const normalizedIp = normalizeIp(ip);
+  
+  // Admin IP is never banned
+  if (normalizedIp === normalizeIp(ADMIN_IP)) {
+    return false;
+  }
+  
   try {
     const r = db.prepare("SELECT expires FROM banned_ips WHERE ip=?").get(normalizedIp);
     if (!r) return false;
@@ -169,6 +206,7 @@ function isIpBanned(ip) {
       console.log("Auto-cleaned expired IP ban:", normalizedIp);
       return false;
     }
+    console.log("IP is banned:", normalizedIp, "expires:", new Date(r.expires).toISOString());
     return true;
   } catch(e) {
     console.error("Error in isIpBanned:", e);
@@ -193,20 +231,28 @@ function isFpBanned(fp) {
   }
 }
 
+// CRITICAL: Prevent admin IP from being banned
 function banUser(ip, fp) {
   try {
     const exp = Date.now() + BAN_DURATION;
+    
+    // Never ban admin IP
+    if (ip && normalizeIp(ip) === normalizeIp(ADMIN_IP)) {
+      console.warn("⚠️ ATTEMPT TO BAN ADMIN IP BLOCKED:", ip);
+      return;
+    }
+    
     if (ip) {
       const normalizedIp = normalizeIp(ip);
       db.prepare("INSERT OR REPLACE INTO banned_ips VALUES (?,?)").run(normalizedIp, exp);
-      console.log("Banned IP:", normalizedIp, "until:", new Date(exp).toISOString());
+      console.log("✅ Banned IP:", normalizedIp, "until:", new Date(exp).toISOString());
     }
     if (fp) {
       db.prepare("INSERT OR REPLACE INTO banned_fps VALUES (?,?)").run(fp, exp);
-      console.log("Banned fingerprint:", fp, "until:", new Date(exp).toISOString());
+      console.log("✅ Banned fingerprint:", fp, "until:", new Date(exp).toISOString());
     }
   } catch(e) {
-    console.error("Error in banUser:", e);
+    console.error("❌ Error in banUser:", e);
   }
 }
 
@@ -215,14 +261,14 @@ function unbanUser(ip, fp) {
     if (ip) {
       const normalizedIp = normalizeIp(ip);
       db.prepare("DELETE FROM banned_ips WHERE ip=?").run(normalizedIp);
-      console.log("Unbanned IP:", normalizedIp);
+      console.log("✅ Unbanned IP:", normalizedIp);
     }
     if (fp) {
       db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
-      console.log("Unbanned fingerprint:", fp);
+      console.log("✅ Unbanned fingerprint:", fp);
     }
   } catch(e) {
-    console.error("Error in unbanUser:", e);
+    console.error("❌ Error in unbanUser:", e);
   }
 }
 
@@ -256,8 +302,11 @@ function getAdminSnapshot() {
   
   // Clean expired bans before fetching
   try {
-    db.prepare("DELETE FROM banned_ips WHERE expires <= ?").run(Date.now());
-    db.prepare("DELETE FROM banned_fps WHERE expires <= ?").run(Date.now());
+    const cleanedIps = db.prepare("DELETE FROM banned_ips WHERE expires <= ?").run(Date.now());
+    const cleanedFps = db.prepare("DELETE FROM banned_fps WHERE expires <= ?").run(Date.now());
+    if (cleanedIps.changes > 0 || cleanedFps.changes > 0) {
+      console.log("Cleaned expired bans:", cleanedIps.changes, "IPs,", cleanedFps.changes, "fingerprints");
+    }
   } catch(e) {
     console.error("Error cleaning expired bans:", e);
   }
@@ -294,14 +343,15 @@ function getAdminSnapshot() {
   `).all();
 
   const countryCounts = loadCountryCounts();
-  const totalVisitors = db.prepare("SELECT COUNT(DISTINCT ip) c FROM visitors WHERE ts > ?").get(twentyFourHoursAgo).c;
+  const totalVisitorsResult = db.prepare("SELECT COUNT(DISTINCT ip) c FROM visitors WHERE ts > ?").get(twentyFourHoursAgo);
+  const totalVisitors = totalVisitorsResult ? totalVisitorsResult.c : 0;
 
   return {
     stats: {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      totalVisitors: totalVisitors || 0,
+      totalVisitors: totalVisitors,
       countryCounts
     },
     activeIpBans,
@@ -329,7 +379,7 @@ function emitAdminUpdate() {
     }
   });
   
-  console.log(`Admin update emitted to ${successCount} sockets, ${failCount} failed`);
+  console.log(`📤 Admin update emitted to ${successCount} sockets, ${failCount} failed`);
 }
 
 /* ================= SOCKET.IO ================= */
@@ -343,19 +393,24 @@ io.on("connection", socket => {
   const ip = normalizeIp(rawIp);
   userIp.set(socket.id, ip);
 
-  console.log("New connection from:", ip, "Socket ID:", socket.id);
+  console.log("🔌 New connection:", {
+    socketId: socket.id,
+    ip: ip,
+    isAdmin: ip === normalizeIp(ADMIN_IP),
+    timestamp: new Date().toISOString()
+  });
 
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
   if (headerCountry) {
     country = headerCountry.toUpperCase();
-    console.log("Country from header:", country);
+    console.log("🌍 Country from header:", country);
   } else {
     try {
       const g = geoip.lookup(ip);
       if (g && g.country) {
         country = g.country;
-        console.log("Country from geoip:", country);
+        console.log("🌍 Country from geoip:", country);
       }
     } catch(e) {
       console.error("GeoIP lookup error:", e);
@@ -365,15 +420,15 @@ io.on("connection", socket => {
 
   // Check banned countries
   if (country && getBannedCountries().has(country)) {
-    console.log("Blocking connection from banned country:", country, "IP:", ip);
+    console.log("🚫 Blocking connection from banned country:", country, "IP:", ip);
     socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
     socket.disconnect();
     return;
   }
 
-  // Check IP ban
-  if (isIpBanned(ip)) {
-    console.log("Blocking banned IP:", ip);
+  // Check IP ban (admin IP never gets banned)
+  if (ip !== normalizeIp(ADMIN_IP) && isIpBanned(ip)) {
+    console.log("🚫 Blocking banned IP:", ip);
     socket.emit("banned", { message: "IP banned" });
     socket.disconnect(true);
     return;
@@ -382,32 +437,35 @@ io.on("connection", socket => {
   const ts = Date.now();
   try {
     db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
-    console.log("Visitor logged:", ip, country);
+    console.log("✅ Visitor logged:", { ip, country, timestamp: new Date(ts).toISOString() });
   } catch(e) {
-    console.error("Error inserting visitor:", e);
+    console.error("❌ Error inserting visitor:", e);
   }
 
   // Check if this is an admin socket
-  if (ip === ADMIN_IP) {
+  if (ip === normalizeIp(ADMIN_IP)) {
     adminSockets.add(socket);
-    console.log("Admin socket added:", socket.id, "Total admin sockets:", adminSockets.size);
+    console.log("👑 ADMIN SOCKET CONNECTED:", socket.id, "Total admin sockets:", adminSockets.size);
     // Send initial snapshot
     socket.emit("adminUpdate", getAdminSnapshot());
+    
+    // Send welcome message
+    socket.emit("adminMessage", "🔐 Admin connection established successfully");
   }
 
   socket.on("identify", ({ fingerprint }) => {
     if (!fingerprint) return;
     userFingerprint.set(socket.id, fingerprint);
-    console.log("User identified:", socket.id, "Fingerprint:", fingerprint);
+    console.log("🎯 User identified:", { socketId: socket.id, fingerprint: fingerprint.substring(0, 16) + "..." });
 
     try {
       db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
     } catch(e) {
-      console.error("Error updating fingerprint:", e);
+      console.error("❌ Error updating fingerprint:", e);
     }
 
     if (isFpBanned(fingerprint)) {
-      console.log("Blocking banned fingerprint:", fingerprint);
+      console.log("🚫 Blocking banned fingerprint:", fingerprint.substring(0, 16) + "...");
       socket.emit("banned", { message: "Device banned" });
       socket.disconnect(true);
       return;
@@ -419,7 +477,7 @@ io.on("connection", socket => {
   socket.on("find-partner", () => {
     const fp = userFingerprint.get(socket.id);
     if (fp && isFpBanned(fp)) {
-      console.log("Blocking banned fingerprint on find-partner:", fp);
+      console.log("🚫 Blocking banned fingerprint on find-partner:", fp.substring(0, 16) + "...");
       socket.emit("banned", { message: "Device banned" });
       socket.disconnect(true);
       return;
@@ -427,7 +485,7 @@ io.on("connection", socket => {
 
     if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) {
       waitingQueue.push(socket.id);
-      console.log("User added to queue:", socket.id, "Queue size:", waitingQueue.length);
+      console.log("➕ User added to queue:", socket.id, "Queue size:", waitingQueue.length);
     }
     tryMatch();
     emitAdminUpdate();
@@ -441,7 +499,7 @@ io.on("connection", socket => {
       const socketA = io.sockets.sockets.get(a);
       const socketB = io.sockets.sockets.get(b);
       if (!socketA || !socketB) {
-        console.warn("Skipping invalid socket in match:", a, b);
+        console.warn("⚠️ Skipping invalid socket in match:", a, b);
         continue;
       }
       partners.set(a, b);
@@ -449,10 +507,10 @@ io.on("connection", socket => {
       socketA.emit("partner-found", { id: b, initiator: true });
       socketB.emit("partner-found", { id: a, initiator: false });
       matches++;
-      console.log("Matched users:", a, "with", b);
+      console.log("💑 Matched users:", a, "with", b);
     }
     if (matches > 0) {
-      console.log("Total matches made:", matches);
+      console.log("✅ Total matches made:", matches);
     }
   }
 
@@ -468,9 +526,9 @@ io.on("connection", socket => {
     if (!image || !partnerId) return;
     try {
       db.prepare("INSERT OR REPLACE INTO screenshots VALUES (?,?)").run(partnerId, image);
-      console.log("Screenshot saved for:", partnerId);
+      console.log("📸 Screenshot saved for:", partnerId);
     } catch(e) {
-      console.error("Error saving screenshot:", e);
+      console.error("❌ Error saving screenshot:", e);
     }
     emitAdminUpdate();
   });
@@ -481,12 +539,12 @@ io.on("connection", socket => {
       db.prepare("INSERT INTO reports VALUES (?,?)").run(partnerId, socket.id);
       const count = db.prepare("SELECT COUNT(*) c FROM reports WHERE target=?").get(partnerId).c;
 
-      console.log("Report filed. Target:", partnerId, "Reporter:", socket.id, "Count:", count);
+      console.log("🚨 Report filed. Target:", partnerId, "Reporter:", socket.id, "Count:", count);
 
       if (count >= 3) {
         const ip2 = userIp.get(partnerId);
         const fp2 = userFingerprint.get(partnerId);
-        console.log("Auto-banning user:", partnerId, "IP:", ip2, "FP:", fp2);
+        console.log("🔨 Auto-banning user:", partnerId, "IP:", ip2, "FP:", fp2 ? fp2.substring(0, 16) + "..." : null);
         banUser(ip2, fp2);
         const s = io.sockets.sockets.get(partnerId);
         if (s) {
@@ -495,7 +553,7 @@ io.on("connection", socket => {
         }
       }
     } catch(e) {
-      console.error("Error in report:", e);
+      console.error("❌ Error in report:", e);
     }
     emitAdminUpdate();
   });
@@ -506,7 +564,7 @@ io.on("connection", socket => {
       const other = io.sockets.sockets.get(p);
       if (other) {
         other.emit("partner-disconnected");
-        console.log("User skipped partner:", socket.id, "Partner:", p);
+        console.log("⏭️ User skipped partner:", socket.id, "Partner:", p);
       }
       partners.delete(p);
       partners.delete(socket.id);
@@ -519,7 +577,7 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id, "IP:", ip);
+    console.log("🔚 User disconnected:", socket.id, "IP:", ip);
     
     const i = waitingQueue.indexOf(socket.id);
     if (i !== -1) waitingQueue.splice(i, 1);
@@ -529,14 +587,18 @@ io.on("connection", socket => {
       const other = io.sockets.sockets.get(p);
       if (other) {
         other.emit("partner-disconnected");
-        console.log("Notified partner of disconnect:", p);
+        console.log("📢 Notified partner of disconnect:", p);
       }
       partners.delete(p);
     }
     partners.delete(socket.id);
     userFingerprint.delete(socket.id);
     userIp.delete(socket.id);
-    adminSockets.delete(socket);
+    
+    const wasAdmin = adminSockets.delete(socket);
+    if (wasAdmin) {
+      console.log("👑 Admin socket disconnected. Remaining:", adminSockets.size);
+    }
 
     emitAdminUpdate();
   });
@@ -544,12 +606,13 @@ io.on("connection", socket => {
   socket.on("admin-join", () => {
     // Add to admin sockets and send snapshot
     adminSockets.add(socket);
-    console.log("Admin joined manually:", socket.id, "Total admin sockets:", adminSockets.size);
+    console.log("👑 Admin joined manually:", socket.id, "Total admin sockets:", adminSockets.size);
     socket.emit("adminUpdate", getAdminSnapshot());
+    socket.emit("adminMessage", "🔐 Admin session reconnected");
   });
 
   socket.on("error", (err) => {
-    console.error("Socket error:", socket.id, err);
+    console.error("❌ Socket error:", socket.id, err);
   });
 });
 
@@ -589,7 +652,6 @@ function adminHeader(title) {
   .flex{display:flex;gap:8px;align-items:center}
   @media(max-width:900px){ .row{flex-direction:column} }
   .error-banner{background:#d9534f;color:#fff;padding:8px;border-radius:6px;margin-bottom:12px;display:none}
-  .log-console{background:#222;color:#0f0;padding:8px;font-family:monospace;font-size:11px;max-height:200px;overflow:auto;margin-top:10px}
 </style>
 </head>
 <body>
@@ -600,7 +662,7 @@ function adminHeader(title) {
   <a class="tab" href="/admin/countries">Countries</a>
   <a class="tab" href="/admin/stats">Stats</a>
   <a class="tab" href="/admin/reports">Reports</a>
-  <a class="tab" href="/admin/bans">Bans</a>
+  <a class="tab" href="/admin/bans">Bans</div</a>
   <div style="margin-left:auto;color:#666">Admin IP: ${ADMIN_IP}</div>
 </div>
 `;
@@ -611,21 +673,21 @@ function adminFooter() {
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  const socket = io();
+  const socket = io({ reconnection: true, reconnectionDelay: 1000 });
   
   // FIXED: Always join admin room on connect
   socket.on('connect', ()=> {
-    console.log('Connected to admin socket');
+    console.log('✅ Connected to admin socket, ID:', socket.id);
     socket.emit('admin-join');
   });
   
   socket.on('adminUpdate', snap => {
-    console.log('Received admin update', snap);
+    console.log('📥 Received admin update', snap);
     if (typeof handleAdminUpdate === 'function') {
       try {
         handleAdminUpdate(snap);
       } catch(e) {
-        console.error('Error in handleAdminUpdate:', e);
+        console.error('❌ Error in handleAdminUpdate:', e);
         const banner = document.getElementById('errorBanner');
         if (banner) {
           banner.textContent = 'Error updating data: ' + e.message;
@@ -636,8 +698,12 @@ function adminFooter() {
     }
   });
   
+  socket.on('adminMessage', (msg) => {
+    console.log('📢 Admin message:', msg);
+  });
+  
   socket.on('error', (err) => {
-    console.error('Socket error:', err);
+    console.error('❌ Socket error:', err);
     const banner = document.getElementById('errorBanner');
     if (banner) {
       banner.textContent = 'Connection error: ' + err;
@@ -646,7 +712,7 @@ function adminFooter() {
   });
   
   socket.on('disconnect', () => {
-    console.log('Socket disconnected');
+    console.log('🔌 Socket disconnected, will attempt reconnection...');
   });
   
   const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
@@ -930,7 +996,7 @@ app.get("/admin/countries", adminAuth, (req, res) => {
         bc.appendChild(fragment);
       }
     } catch(e) {
-      console.error('Error loading countries:', e);
+      console.error('❌ Error loading countries:', e);
       const banner = document.getElementById('errorBanner');
       if (banner) {
         banner.textContent = 'Error loading countries: ' + e.message;
@@ -1025,7 +1091,7 @@ app.get("/admin/stats", adminAuth, (req, res) => {
         list.textContent = 'No recent visitors';
       }
     } catch(e) {
-      console.error('Error loading stats:', e);
+      console.error('❌ Error loading stats:', e);
       const banner = document.getElementById('errorBanner');
       if (banner) {
         banner.textContent = 'Error loading stats: ' + e.message;
@@ -1201,7 +1267,7 @@ app.post("/admin/block-country", adminAuth, (req, res) => {
       return res.status(400).send({ error: "invalid country code" });
     }
     db.prepare("INSERT OR REPLACE INTO banned_countries VALUES (?)").run(code);
-    console.log("Country blocked:", code);
+    console.log("🌍 Country blocked:", code);
     emitAdminUpdate();
     res.send({ ok: true, banned: Array.from(getBannedCountries()) });
   } catch(e) {
@@ -1218,7 +1284,7 @@ app.post("/admin/unblock-country", adminAuth, (req, res) => {
       return res.status(400).send({ error: "invalid" });
     }
     db.prepare("DELETE FROM banned_countries WHERE code=?").run(code);
-    console.log("Country unblocked:", code);
+    console.log("🌍 Country unblocked:", code);
     emitAdminUpdate();
     res.send({ ok: true });
   } catch(e) {
@@ -1230,7 +1296,7 @@ app.post("/admin/unblock-country", adminAuth, (req, res) => {
 app.post("/admin/clear-blocked", adminAuth, (req, res) => {
   try {
     db.prepare("DELETE FROM banned_countries").run();
-    console.log("All blocked countries cleared");
+    console.log("🌍 All blocked countries cleared");
     emitAdminUpdate();
     res.send({ ok: true });
   } catch(e) {
@@ -1276,7 +1342,7 @@ app.post("/admin-broadcast", adminAuth, (req, res) => {
     const msg = req.body.message || (req.body && req.body.message);
     if (msg && msg.trim()) {
       io.emit("adminMessage", msg.trim());
-      console.log("Broadcast sent:", msg.trim());
+      console.log("📢 Broadcast sent:", msg.trim());
     }
     res.status(200).send({ ok: true });
   } catch(e) {
@@ -1292,12 +1358,21 @@ app.post("/unban-ip", adminAuth, (req, res) => {
       console.warn("Unban IP: missing IP address");
       return res.status(400).send({ error: "ip required" });
     }
-    unbanUser(ip, null);
-    console.log("IP unbanned via API:", ip);
-    emitAdminUpdate(); // FIXED: Now updates admin panel
+    
+    // Prevent unbanning admin IP if it was somehow banned
+    if (normalizeIp(ip) === normalizeIp(ADMIN_IP)) {
+      console.warn("⚠️ Attempt to unban admin IP blocked (should never be banned)");
+      // Force clear it anyway
+      unbanUser(ip, null);
+    } else {
+      unbanUser(ip, null);
+    }
+    
+    console.log("✅ IP unban request completed for:", ip);
+    emitAdminUpdate();
     res.status(200).send({ ok: true });
   } catch(e) {
-    console.error("Error unbanning IP:", e);
+    console.error("❌ Error unbanning IP:", e);
     res.status(500).send({ error: "Internal server error" });
   }
 });
@@ -1310,11 +1385,11 @@ app.post("/unban-fingerprint", adminAuth, (req, res) => {
       return res.status(400).send({ error: "fp required" });
     }
     unbanUser(null, fp);
-    console.log("Fingerprint unbanned via API:", fp);
-    emitAdminUpdate(); // FIXED: Now updates admin panel
+    console.log("✅ Fingerprint unbanned:", fp.substring(0, 16) + "...");
+    emitAdminUpdate();
     res.status(200).send({ ok: true });
   } catch(e) {
-    console.error("Error unbanning fingerprint:", e);
+    console.error("❌ Error unbanning fingerprint:", e);
     res.status(500).send({ error: "Internal server error" });
   }
 });
@@ -1330,7 +1405,7 @@ app.post("/manual-ban", adminAuth, (req, res) => {
     const ip = userIp.get(target);
     const fp = userFingerprint.get(target);
     
-    console.log("Manual ban request. Target:", target, "IP:", ip, "FP:", fp);
+    console.log("🔨 Manual ban request. Target:", target, "IP:", ip, "FP:", fp ? fp.substring(0, 16) + "..." : null);
 
     banUser(ip, fp);
 
@@ -1343,7 +1418,7 @@ app.post("/manual-ban", adminAuth, (req, res) => {
     emitAdminUpdate();
     res.send({ ok: true });
   } catch(e) {
-    console.error("Error manual banning:", e);
+    console.error("❌ Error manual banning:", e);
     res.status(500).send({ error: "Internal server error" });
   }
 });
@@ -1358,22 +1433,26 @@ app.post("/remove-report", adminAuth, (req, res) => {
 
     db.prepare("DELETE FROM reports WHERE target=?").run(target);
     db.prepare("DELETE FROM screenshots WHERE target=?").run(target);
-    console.log("Report removed for target:", target);
+    console.log("🗑️ Report removed for target:", target);
 
     emitAdminUpdate();
     res.send({ ok: true });
   } catch(e) {
-    console.error("Error removing report:", e);
+    console.error("❌ Error removing report:", e);
     res.status(500).send({ error: "Internal server error" });
   }
 });
 
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
+
+// Initialize admin protection before starting server
+initializeAdminProtection();
+
 http.listen(PORT, () => {
   console.log("===========================================");
-  console.log("Server listening on port " + PORT);
-  console.log("Admin IP:", ADMIN_IP);
-  console.log("Admin Panel: http://localhost:" + PORT + "/admin");
+  console.log("🚀 Server listening on port " + PORT);
+  console.log("👑 Admin IP:", ADMIN_IP, "(PROTECTED - Cannot be banned)");
+  console.log("📊 Admin Panel: http://localhost:" + PORT + "/admin");
   console.log("===========================================");
 });
