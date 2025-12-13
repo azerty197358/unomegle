@@ -1,11 +1,12 @@
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Pages Split
-// Minimal critical comments only.
+// SQLITE PERSISTENCE — COMPLETE INTEGRATION
 
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
+const Database = require("better-sqlite3");
 
 const app = express();
 app.set("trust proxy", true);
@@ -24,22 +25,41 @@ const adminAuth = basicAuth({
   realm: "Admin Area",
 });
 
-// --- persistence for banned countries ---
-const BANNED_COUNTRIES_FILE = path.join(__dirname, "banned_countries.json");
-let bannedCountries = new Set();
-function loadBannedCountries() {
-  try {
-    const raw = fs.readFileSync(BANNED_COUNTRIES_FILE, "utf8");
-    const arr = JSON.parse(raw);
-    bannedCountries = new Set(Array.isArray(arr) ? arr : []);
-  } catch (e) { bannedCountries = new Set(); }
-}
-function saveBannedCountries() {
-  try {
-    fs.writeFileSync(BANNED_COUNTRIES_FILE, JSON.stringify(Array.from(bannedCountries), null, 2));
-  } catch (e) { /* ignore */ }
-}
-loadBannedCountries();
+/* ================= SQLITE PERSISTENCE ================= */
+const db = new Database("data.db");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS visitors (
+  ip TEXT,
+  fp TEXT,
+  country TEXT,
+  ts INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS banned_ips (
+  ip TEXT PRIMARY KEY,
+  expires INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS banned_fps (
+  fp TEXT PRIMARY KEY,
+  expires INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+  target TEXT,
+  reporter TEXT
+);
+
+CREATE TABLE IF NOT EXISTS screenshots (
+  target TEXT PRIMARY KEY,
+  image TEXT
+);
+
+CREATE TABLE IF NOT EXISTS banned_countries (
+  code TEXT PRIMARY KEY
+);
+`);
 
 // --- static list of countries (ISO2 -> name) ---
 const COUNTRIES = {
@@ -76,84 +96,259 @@ const COUNTRIES = {
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
 
-// --- core data (existing) ---
+/* ================= CORE DATA (IN-MEMORY FOR ACTIVE SESSIONS) ================= */
 const waitingQueue = [];
 const partners = new Map(); // socket.id -> partnerId
 const userFingerprint = new Map(); // socket.id -> fingerprint
 const userIp = new Map(); // socket.id -> ip
-
-// bans/reports
-const bannedIps = new Map(); // ip -> expiry
-const bannedFingerprints = new Map(); // fp -> expiry
-const reports = new Map(); // targetId -> Set(reporterSocketId)
-const reportScreenshots = new Map(); // targetId -> Base64 image (memory)
 const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
 
-// visitors tracking (historical)
-const visitors = new Map(); // socketId -> { ip, fp, country, ts }
-const visitorsHistory = []; // [{ip, fp, country, ts}]
-const countryCounts = new Map();
+/* ================= PERSISTENCE HELPERS ================= */
+function isIpBanned(ip) {
+  if (!ip) return false;
+  const r = db.prepare("SELECT expires FROM banned_ips WHERE ip=?").get(ip);
+  if (!r) return false;
+  if (r.expires < Date.now()) {
+    db.prepare("DELETE FROM banned_ips WHERE ip=?").run(ip);
+    return false;
+  }
+  return true;
+}
 
+function isFpBanned(fp) {
+  if (!fp) return false;
+  const r = db.prepare("SELECT expires FROM banned_fps WHERE fp=?").get(fp);
+  if (!r) return false;
+  if (r.expires < Date.now()) {
+    db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
+    return false;
+  }
+  return true;
+}
+
+function banUser(ip, fp) {
+  const exp = Date.now() + BAN_DURATION;
+  if (ip) db.prepare("INSERT OR REPLACE INTO banned_ips VALUES (?,?)").run(ip, exp);
+  if (fp) db.prepare("INSERT OR REPLACE INTO banned_fps VALUES (?,?)").run(fp, exp);
+}
+
+function unbanUser(ip, fp) {
+  if (ip) db.prepare("DELETE FROM banned_ips WHERE ip=?").run(ip);
+  if (fp) db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
+}
+
+function getBannedCountries() {
+  return new Set(db.prepare("SELECT code FROM banned_countries").all().map(r => r.code));
+}
+
+function loadCountryCounts() {
+  const counts = {};
+  for (const r of db.prepare("SELECT country, COUNT(*) c FROM visitors GROUP BY country").all()) {
+    if (r.country) counts[r.country] = r.c;
+  }
+  return counts;
+}
+
+/* ================= ADMIN SNAPSHOT ================= */
 function getAdminSnapshot() {
-  const activeIpBans = [];
-  for (const [ip, exp] of bannedIps) {
-    if (exp === Infinity || exp > Date.now()) activeIpBans.push({ ip, expires: exp });
-    else bannedIps.delete(ip);
-  }
-  const activeFpBans = [];
-  for (const [fp, exp] of bannedFingerprints) {
-    if (exp === Infinity || exp > Date.now()) activeFpBans.push({ fp, expires: exp });
-    else bannedFingerprints.delete(fp);
+  const activeIpBans = db.prepare("SELECT ip,expires FROM banned_ips WHERE expires>?").all(Date.now());
+  const activeFpBans = db.prepare("SELECT fp,expires FROM banned_fps WHERE expires>?").all(Date.now());
+
+  const reportsMap = new Map();
+  for (const r of db.prepare("SELECT * FROM reports").all()) {
+    if (!reportsMap.has(r.target)) reportsMap.set(r.target, []);
+    reportsMap.get(r.target).push(r.reporter);
   }
 
-  const allTargets = new Set([...reports.keys(), ...reportScreenshots.keys()]);
   const reportedUsers = [];
-  for (const target of allTargets) {
-    const reporters = reports.get(target) || new Set();
+  for (const [target, reporters] of reportsMap) {
+    const sc = db.prepare("SELECT image FROM screenshots WHERE target=?").get(target);
     reportedUsers.push({
       target,
-      count: reporters.size,
-      reporters: Array.from(reporters),
-      screenshot: reportScreenshots.get(target) || null
+      count: reporters.length,
+      reporters,
+      screenshot: sc ? sc.image : null
     });
   }
 
-  const recentVisitors = visitorsHistory.slice(-500).map(v => ({ ip: v.ip, fp: v.fp, country: v.country, ts: v.ts }));
+  const recentVisitors = db.prepare(`
+    SELECT ip,fp,country,ts FROM visitors
+    ORDER BY ts DESC LIMIT 500
+  `).all();
+
+  const countryCounts = loadCountryCounts();
 
   return {
     stats: {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      totalVisitors: visitorsHistory.length,
-      countryCounts: Object.fromEntries(countryCounts),
+      totalVisitors: db.prepare("SELECT COUNT(*) c FROM visitors").get().c,
+      countryCounts
     },
     activeIpBans,
     activeFpBans,
     reportedUsers,
     recentVisitors,
-    bannedCountries: Array.from(bannedCountries)
+    bannedCountries: Array.from(getBannedCountries())
   };
 }
 
 function emitAdminUpdate() {
-  const snap = getAdminSnapshot();
-  io.of("/").emit("adminUpdate", snap);
+  io.emit("adminUpdate", getAdminSnapshot());
 }
 
-function banUser(ip, fp) {
-  const expiry = Date.now() + BAN_DURATION;
-  if (ip) bannedIps.set(ip, expiry);
-  if (fp) bannedFingerprints.set(fp, expiry);
-}
+/* ================= SOCKET.IO ================= */
+io.on("connection", socket => {
+  const ip =
+    socket.handshake.headers["cf-connecting-ip"] ||
+    socket.handshake.address ||
+    (socket.request && socket.request.connection && socket.request.connection.remoteAddress) ||
+    "unknown";
 
-function unbanUser(ip, fp) {
-  if (ip) bannedIps.delete(ip);
-  if (fp) bannedFingerprints.delete(fp);
+  userIp.set(socket.id, ip);
+
+  let country = null;
+  const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
+  if (headerCountry) country = headerCountry.toUpperCase();
+  else {
+    try {
+      const g = geoip.lookup(ip);
+      if (g && g.country) country = g.country;
+    } catch { country = null; }
+  }
+
+  if (country && getBannedCountries().has(country)) {
+    socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
+    return;
+  }
+
+  if (isIpBanned(ip)) {
+    socket.emit("banned", { message: "IP banned" });
+    socket.disconnect(true);
+    return;
+  }
+
+  const ts = Date.now();
+  db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
   emitAdminUpdate();
-}
 
-// helper: header/footer templates reused by each admin page
+  socket.on("identify", ({ fingerprint }) => {
+    if (!fingerprint) return;
+    userFingerprint.set(socket.id, fingerprint);
+
+    db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
+
+    if (isFpBanned(fingerprint)) {
+      socket.emit("banned", { message: "Device banned" });
+      socket.disconnect(true);
+    }
+
+    emitAdminUpdate();
+  });
+
+  socket.on("find-partner", () => {
+    const fp = userFingerprint.get(socket.id);
+    if (fp && isFpBanned(fp)) {
+      socket.emit("banned", { message: "Device banned" });
+      socket.disconnect(true);
+      return;
+    }
+
+    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) {
+      waitingQueue.push(socket.id);
+    }
+    tryMatch();
+    emitAdminUpdate();
+  });
+
+  function tryMatch() {
+    while (waitingQueue.length >= 2) {
+      const a = waitingQueue.shift();
+      const b = waitingQueue.shift();
+      if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
+      partners.set(a, b);
+      partners.set(b, a);
+      io.to(a).emit("partner-found", { id: b, initiator: true });
+      io.to(b).emit("partner-found", { id: a, initiator: false });
+    }
+  }
+
+  socket.on("signal", ({ to, data }) => {
+    io.to(to).emit("signal", { from: socket.id, data });
+  });
+
+  socket.on("chat-message", ({ to, message }) => {
+    io.to(to).emit("chat-message", { message });
+  });
+
+  socket.on("admin-screenshot", ({ image, partnerId }) => {
+    if (!image || !partnerId) return;
+    db.prepare("INSERT OR REPLACE INTO screenshots VALUES (?,?)").run(partnerId, image);
+    emitAdminUpdate();
+  });
+
+  socket.on("report", ({ partnerId }) => {
+    if (!partnerId) return;
+    db.prepare("INSERT INTO reports VALUES (?,?)").run(partnerId, socket.id);
+
+    const count = db.prepare("SELECT COUNT(*) c FROM reports WHERE target=?").get(partnerId).c;
+
+    if (count >= 3) {
+      const ip2 = userIp.get(partnerId);
+      const fp2 = userFingerprint.get(partnerId);
+      banUser(ip2, fp2);
+      const s = io.sockets.sockets.get(partnerId);
+      if (s) {
+        s.emit("banned", { message: "Banned by reports" });
+        s.disconnect(true);
+      }
+    }
+
+    emitAdminUpdate();
+  });
+
+  socket.on("skip", () => {
+    const p = partners.get(socket.id);
+    if (p) {
+      const other = io.sockets.sockets.get(p);
+      if (other) other.emit("partner-disconnected");
+      partners.delete(p);
+      partners.delete(socket.id);
+    }
+    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
+    tryMatch();
+    emitAdminUpdate();
+  });
+
+  socket.on("disconnect", () => {
+    const i = waitingQueue.indexOf(socket.id);
+    if (i !== -1) waitingQueue.splice(i, 1);
+
+    const p = partners.get(socket.id);
+    if (p) {
+      const other = io.sockets.sockets.get(p);
+      if (other) other.emit("partner-disconnected");
+      partners.delete(p);
+    }
+    partners.delete(socket.id);
+
+    userFingerprint.delete(socket.id);
+    userIp.delete(socket.id);
+
+    emitAdminUpdate();
+  });
+
+  socket.on("admin-join", () => {
+    socket.emit("adminUpdate", getAdminSnapshot());
+  });
+});
+
+/* ================= ADMIN ROUTES ================= */
+app.get("/admin", adminAuth, (req, res) => {
+  res.redirect("/admin/dashboard");
+});
+
 function adminHeader(title) {
   return `<!doctype html>
 <html>
@@ -202,16 +397,14 @@ function adminHeader(title) {
 function adminFooter() {
   return `
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
   socket.on('connect', ()=> socket.emit('admin-join'));
   socket.on('adminUpdate', snap => {
-    // pages can implement handleAdminUpdate if they want specifics
     if (typeof handleAdminUpdate === 'function') handleAdminUpdate(snap);
   });
-  // helper: country name map
   const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
   function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
 </script>
@@ -220,12 +413,7 @@ function adminFooter() {
 `;
 }
 
-// --- admin routes per-tab (protected) ---
-app.get("/admin", adminAuth, (req, res) => {
-  res.redirect("/admin/dashboard");
-});
-
-// Dashboard: overview
+// Dashboard
 app.get("/admin/dashboard", adminAuth, (req, res) => {
   const html = adminHeader("Dashboard") + `
 <div class="panel">
@@ -268,7 +456,6 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   </div>
 </div>
 <script>
-  // broadcast
   document.getElementById('broadcastForm').onsubmit = e => {
     e.preventDefault();
     const msg = document.getElementById('broadcastMsg').value.trim();
@@ -318,7 +505,6 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
       div.appendChild(btn); fpb.appendChild(div);
     });
 
-    // reports
     const rep = document.getElementById('reported-list'); rep.innerHTML='';
     if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
     else snap.reportedUsers.forEach(r => {
@@ -327,7 +513,6 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
       rep.appendChild(div);
     });
 
-    // visitors list
     const vis = document.getElementById('visitors-list'); vis.innerHTML='';
     if (snap.recentVisitors.length === 0) vis.textContent = 'No visitors yet';
     else snap.recentVisitors.forEach(v => {
@@ -338,7 +523,6 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   }
 
   function handleAdminUpdate(snap){ renderSnapshot(snap); }
-  // initial request handled by socket 'admin-join'
 </script>
 ` + adminFooter();
   res.send(html);
@@ -365,11 +549,7 @@ app.get("/admin/countries", adminAuth, (req, res) => {
     ملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة واظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
   </div>
 </div>
-
 <script>
-  const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
-  function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
-
   async function loadCountries() {
     const res = await fetch('/admin/countries-list');
     const data = await res.json();
@@ -420,7 +600,7 @@ app.get("/admin/countries", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// Stats page (contains the requested B-1: Daily Visitors Line Chart)
+// Stats page
 app.get("/admin/stats", adminAuth, (req, res) => {
   const html = adminHeader("Stats") + `
 <div class="panel">
@@ -443,7 +623,6 @@ app.get("/admin/stats", adminAuth, (req, res) => {
   <h4 style="margin-top:14px">Recent Visitors (last 500)</h4>
   <div id="stat-visitors-list" style="max-height:240px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px"></div>
 </div>
-
 <script>
   let visitorsChart = null, countryChart = null;
 
@@ -456,7 +635,6 @@ app.get("/admin/stats", adminAuth, (req, res) => {
     const res = await fetch('/admin/stats-data?' + params.toString());
     const data = await res.json();
 
-    // visitors line (Daily Visitors Line Chart - B-1)
     const ctx = document.getElementById('visitorsChart').getContext('2d');
     const labels = data.daily.map(d=>d.date);
     const values = data.daily.map(d=>d.count);
@@ -477,7 +655,6 @@ app.get("/admin/stats", adminAuth, (req, res) => {
       options: { responsive:true, scales:{ x:{ display:true }, y:{ beginAtZero:true } } }
     });
 
-    // countries bar
     const ctx2 = document.getElementById('countryChart').getContext('2d');
     const cLabels = data.countries.map(c=>c.country);
     const cVals = data.countries.map(c=>c.count);
@@ -488,16 +665,15 @@ app.get("/admin/stats", adminAuth, (req, res) => {
       options:{ responsive:true, scales:{ y:{ beginAtZero:true } } }
     });
 
-    // visitors list
     const list = document.getElementById('stat-visitors-list'); list.innerHTML='';
     data.recent.forEach(v => {
-      const d = document.createElement('div'); d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country||'Unknown') + ' — ' + v.ip + (v.fp?(' — '+v.fp.slice(0,8)):'');
+      const d = document.createElement('div');
+      d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country||'Unknown') + ' — ' + v.ip + (v.fp?(' — '+v.fp.slice(0,8)):'');
       list.appendChild(d);
     });
   }
 
   document.getElementById('refreshStats').onclick = loadStats;
-  // initial
   loadStats();
 </script>
 ` + adminFooter();
@@ -591,59 +767,54 @@ app.get("/admin/bans", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// --- admin endpoints for countries + stats (unchanged) ---
+/* ================= ADMIN API ENDPOINTS ================= */
 app.get("/admin/countries-list", adminAuth, (req, res) => {
-  res.send({ all: Object.keys(COUNTRIES), banned: Array.from(bannedCountries) });
+  res.send({ all: Object.keys(COUNTRIES), banned: Array.from(getBannedCountries()) });
 });
 
 app.post("/admin/block-country", adminAuth, (req, res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
-  bannedCountries.add(code);
-  saveBannedCountries();
+  db.prepare("INSERT OR REPLACE INTO banned_countries VALUES (?)").run(code);
   emitAdminUpdate();
-  res.send({ ok: true, banned: Array.from(bannedCountries) });
+  res.send({ ok: true, banned: Array.from(getBannedCountries()) });
 });
 
 app.post("/admin/unblock-country", adminAuth, (req, res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code) return res.status(400).send({ error: "invalid" });
-  bannedCountries.delete(code);
-  saveBannedCountries();
+  db.prepare("DELETE FROM banned_countries WHERE code=?").run(code);
   emitAdminUpdate();
-  res.send({ ok: true, banned: Array.from(bannedCountries) });
+  res.send({ ok: true, banned: Array.from(getBannedCountries()) });
 });
 
 app.post("/admin/clear-blocked", adminAuth, (req, res) => {
-  bannedCountries = new Set();
-  saveBannedCountries();
+  db.prepare("DELETE FROM banned_countries").run();
   emitAdminUpdate();
   res.send({ ok: true });
 });
 
-// stats data: aggregate visitorsHistory
 app.get("/admin/stats-data", adminAuth, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
-  // aggregate by date (YYYY-MM-DD)
+  
   const dailyMap = new Map();
-  for (const v of visitorsHistory) {
+  for (const v of db.prepare("SELECT * FROM visitors").all()) {
     const t = new Date(v.ts);
     if (from && t < from) continue;
     if (to && t > new Date(to.getTime() + 24*3600*1000 -1)) continue;
     const key = t.toISOString().slice(0,10);
     dailyMap.set(key, (dailyMap.get(key)||0) + 1);
   }
-  // ensure dates are continuous (optional): not necessary but we return sorted days present
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
 
-  const countries = Array.from(countryCounts.entries()).map(([country,count])=>({country,count})).sort((a,b)=>b.count - a.count).slice(0,50);
-  const recent = visitorsHistory.slice(-500).map(v=>({ ip:v.ip, fp:v.fp, country:v.country, ts:v.ts }));
+  const countries = db.prepare("SELECT country, COUNT(*) c FROM visitors WHERE country IS NOT NULL GROUP BY country ORDER BY c DESC LIMIT 50").all().map(r => ({country: r.country, count: r.c}));
+
+  const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
 
   res.send({ daily, countries, recent });
 });
 
-// admin actions (unchanged)
 app.post("/admin-broadcast", adminAuth, (req, res) => {
   const msg = req.body.message || (req.body && req.body.message);
   if (msg && msg.trim()) {
@@ -687,182 +858,13 @@ app.post("/remove-report", adminAuth, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
 
-  reports.delete(target);
-  reportScreenshots.delete(target);
+  db.prepare("DELETE FROM reports WHERE target=?").run(target);
+  db.prepare("DELETE FROM screenshots WHERE target=?").run(target);
 
   emitAdminUpdate();
   res.send({ ok: true });
 });
 
-// socket logic (unchanged, enhanced with country blocking)
-io.on("connection", (socket) => {
-  const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
-  userIp.set(socket.id, ip);
-
-  let country = null;
-  const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
-  if (headerCountry) country = headerCountry.toUpperCase();
-  else {
-    try {
-      const g = geoip.lookup(ip);
-      if (g && g.country) country = g.country;
-    } catch (e) { country = null; }
-  }
-
-  const ts = Date.now();
-  visitors.set(socket.id, { ip, fp: null, country, ts });
-  visitorsHistory.push({ ip, fp: null, country, ts });
-  if (country) countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
-
-  // check IP/device bans
-  const ipBan = bannedIps.get(ip);
-  if (ipBan && ipBan > Date.now()) {
-    socket.emit("banned", { message: "You are banned (IP)." });
-    socket.disconnect(true);
-    emitAdminUpdate();
-    return;
-  }
-
-  // check country block
-  if (country && bannedCountries.has(country)) {
-    socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
-    emitAdminUpdate();
-    return;
-  }
-
-  emitAdminUpdate();
-
-  socket.on("identify", ({ fingerprint }) => {
-    if (fingerprint) {
-      userFingerprint.set(socket.id, fingerprint);
-      const v = visitors.get(socket.id);
-      if (v) { v.fp = fingerprint; visitorsHistory[visitorsHistory.length -1].fp = fingerprint; }
-      const fpBan = bannedFingerprints.get(fingerprint);
-      if (fpBan && fpBan > Date.now()) {
-        socket.emit("banned", { message: "Device banned." });
-        socket.disconnect(true);
-        emitAdminUpdate();
-        return;
-      }
-    }
-    emitAdminUpdate();
-  });
-
-  socket.on("find-partner", () => {
-    const fp = userFingerprint.get(socket.id);
-    if (fp) {
-      const fExp = bannedFingerprints.get(fp);
-      if (fExp && fExp > Date.now()) {
-        socket.emit("banned", { message: "You are banned (device)." });
-        socket.disconnect(true);
-        emitAdminUpdate();
-        return;
-      }
-    }
-
-    if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
-    emitAdminUpdate();
-  });
-
-  function tryMatch() {
-    while (waitingQueue.length >= 2) {
-      const a = waitingQueue.shift();
-      const b = waitingQueue.shift();
-      if (!a || !b) break;
-      if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
-      partners.set(a, b);
-      partners.set(b, a);
-      io.to(a).emit("partner-found", { id: b, initiator: true });
-      io.to(b).emit("partner-found", { id: a, initiator: false });
-    }
-  }
-
-  socket.on("admin-screenshot", ({ image, partnerId }) => {
-    if (!image) return;
-    const target = partnerId || partners.get(socket.id);
-    if (!target) return;
-    reportScreenshots.set(target, image);
-    emitAdminUpdate();
-  });
-
-  socket.on("signal", ({ to, data }) => {
-    const t = io.sockets.sockets.get(to);
-    if (t) t.emit("signal", { from: socket.id, data });
-  });
-
-  socket.on("chat-message", ({ to, message }) => {
-    const t = io.sockets.sockets.get(to);
-    if (t) t.emit("chat-message", { message });
-  });
-
-  socket.on("report", ({ partnerId }) => {
-    if (!partnerId) return;
-    if (!reports.has(partnerId)) reports.set(partnerId, new Set());
-    const set = reports.get(partnerId);
-    set.add(socket.id);
-    emitAdminUpdate();
-
-    if (set.size >= 3) {
-      const targetSocket = io.sockets.sockets.get(partnerId);
-      const targetIp = userIp.get(partnerId);
-      const targetFp = userFingerprint.get(partnerId);
-      banUser(targetIp, targetFp);
-      if (targetSocket) {
-        targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
-        targetSocket.disconnect(true);
-      }
-      emitAdminUpdate();
-    }
-  });
-
-  socket.on("skip", () => {
-    const p = partners.get(socket.id);
-    if (p) {
-      const other = io.sockets.sockets.get(p);
-      if (other) other.emit("partner-disconnected");
-      partners.delete(p);
-      partners.delete(socket.id);
-    }
-    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
-    tryMatch();
-    emitAdminUpdate();
-  });
-
-  socket.on("disconnect", () => {
-    const idx = waitingQueue.indexOf(socket.id);
-    if (idx !== -1) waitingQueue.splice(idx, 1);
-
-    const p = partners.get(socket.id);
-    if (p) {
-      const other = io.sockets.sockets.get(p);
-      if (other) other.emit("partner-disconnected");
-      partners.delete(p);
-    }
-    partners.delete(socket.id);
-
-    const v = visitors.get(socket.id);
-    if (v) {
-      if (v.country && countryCounts.has(v.country)) {
-        const c = countryCounts.get(v.country) - 1;
-        if (c <= 0) countryCounts.delete(v.country);
-        else countryCounts.set(v.country, c);
-      }
-    }
-    visitors.delete(socket.id);
-    userFingerprint.delete(socket.id);
-    userIp.delete(socket.id);
-
-    emitAdminUpdate();
-  });
-
-  socket.on("admin-join", () => {
-    socket.emit("adminUpdate", getAdminSnapshot());
-  });
-
-  emitAdminUpdate();
-});
-
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
-
