@@ -1,5 +1,6 @@
-// file: public/js/webrtc-stable-client.js   
-// TL;DR: WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, and reconnect backoff.
+// file: public/js/webrtc-stable-client.js
+// WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, reconnect backoff,
+// typing indicators, fingerprinting, and full compatibility with server.js
 
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
@@ -44,31 +45,88 @@ window.addEventListener('DOMContentLoaded', () => {
   const reportedIds = new Set();
   const reportCounts = new Map();
 
-  // NEW: reconnection/backoff state
+  // Reconnection/backoff state
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 6;
-  const BASE_BACKOFF_MS = 800; // used in exponential backoff
+  const BASE_BACKOFF_MS = 800;
 
-  // NEW: candidate buffering (remote candidates arriving before pc is ready)
+  // Candidate buffering
   const bufferedRemoteCandidates = [];
 
-  // NEW: negotiation guard
+  // Negotiation guard
   let makingOffer = false;
-  let ignoreOffer = false; // if glare resolved
+  let ignoreOffer = false;
 
-  // NEW: datachannel for keepalive
+  // Datachannel for keepalive
   let keepAliveChannel = null;
   let lastPong = Date.now();
   const PING_INTERVAL = 4000;
   const PONG_TIMEOUT = 11000;
 
-  // NEW: stats monitor
+  // Stats monitor
   let statsInterval = null;
   const STATS_POLL_MS = 3000;
-  // bitrate targets (bps)
+  
+  // Bitrate targets (bps)
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
+
+  // ---------------------- FINGERPRINT GENERATION ----------------------
+  async function generateFingerprint() {
+    try {
+      const components = [
+        navigator.userAgent,
+        navigator.language,
+        screen.colorDepth,
+        screen.width,
+        screen.height,
+        navigator.hardwareConcurrency || 0,
+        new Date().getTimezoneOffset(),
+        Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+      ];
+
+      // Canvas fingerprint
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#f60';
+      ctx.fillRect(125, 1, 62, 20);
+      ctx.fillStyle = '#069';
+      ctx.fillText('fingerprint', 2, 15);
+      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+      ctx.fillText('fingerprint', 4, 17);
+      components.push(canvas.toDataURL());
+
+      // Audio fingerprint
+      const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(10000, audioCtx.currentTime);
+      oscillator.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop();
+      components.push('audio-supported');
+
+      // Hash function
+      const hashCode = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          const char = str.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        return hash.toString(16);
+      };
+
+      return hashCode(components.join('||'));
+    } catch (e) {
+      console.error('Fingerprint generation failed:', e);
+      return 'default-fp-' + Math.random().toString(36).substr(2, 9);
+    }
+  }
 
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
@@ -77,7 +135,6 @@ window.addEventListener('DOMContentLoaded', () => {
     d.textContent = msg;
 
     const typing = document.querySelector('.msg.system[style*="italic"]');
-
     if (typing && typing.parentNode === chatMessages) {
       chatMessages.insertBefore(d, typing);
     } else {
@@ -105,12 +162,12 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // exponential backoff (ms)
+  // Exponential backoff (ms)
   function backoffDelay(attempt) {
     return Math.min(30000, Math.pow(2, attempt) * BASE_BACKOFF_MS + Math.floor(Math.random() * 500));
   }
 
-  // store remote candidates until pc created
+  // Store remote candidates until pc created
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
@@ -124,7 +181,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // set max bitrate for outbound video sender
+  // Set max bitrate for outbound video sender
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -133,12 +190,10 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!sender.track || sender.track.kind !== 'video') continue;
         const params = sender.getParameters();
         if (!params.encodings) params.encodings = [{}];
-        // apply single encoding maxBitrate
         params.encodings = params.encodings.map(enc => ({ ...enc, maxBitrate: targetBps }));
         await sender.setParameters(params);
       }
     } catch (e) {
-      // some browsers don't support setParameters; ignore gracefully
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
@@ -148,8 +203,7 @@ window.addEventListener('DOMContentLoaded', () => {
     e.stopPropagation();
     if (notifyDot) notifyDot.style.display = 'none';
     notifyBell.classList.remove('shake');
-    notifyMenu.style.display =
-      notifyMenu.style.display === 'block' ? 'none' : 'block';
+    notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
   };
 
   document.onclick = () => { notifyMenu.style.display = 'none'; };
@@ -426,10 +480,9 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('signal', async ({ from, data }) => {
-    // handle incoming signal (offer/answer/candidate)
     if (!peerConnection) createPeerConnection();
 
-    // candidates may come before pc is ready: buffer them
+    // Buffer candidates that arrive before remote description is set
     if (data && data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
@@ -439,10 +492,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (data.type === 'offer') {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
-        if (ignoreOffer) {
-          // let the other side continue or resolve glare
-          return;
-        }
+        if (ignoreOffer) return;
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -459,7 +509,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
-    // cleanup old if any
     if (peerConnection) {
       try { peerConnection.close(); } catch (e) {}
       peerConnection = null;
@@ -469,12 +518,12 @@ window.addEventListener('DOMContentLoaded', () => {
     makingOffer = false;
     ignoreOffer = false;
 
-    // add local tracks
+    // Add local tracks
     if (localStream) {
       localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
     }
 
-    // create datachannel when initiator
+    // Create datachannel when initiator
     if (isInitiator) {
       try {
         keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -492,11 +541,8 @@ window.addEventListener('DOMContentLoaded', () => {
       enableChat();
       addMessage('Connected with a stranger!', 'system');
       showRemoteSpinnerOnly(false);
-      // flush any buffered candidates now that remoteDescription likely set
       flushBufferedCandidates();
-      // reset reconnect attempts
       reconnectAttempts = 0;
-      // start stats monitor
       startStatsMonitor();
     };
 
@@ -521,7 +567,6 @@ window.addEventListener('DOMContentLoaded', () => {
           try { peerConnection.close(); } catch (e) {}
           peerConnection = null;
         }
-        // try ICE restart first, else rematch
         if (autoReconnect) attemptRecovery();
       }
     };
@@ -530,7 +575,6 @@ window.addEventListener('DOMContentLoaded', () => {
       const s = peerConnection.iceConnectionState;
       console.debug('iceConnectionState', s);
       if (s === 'failed') {
-        // try ICE restart
         await attemptIceRestartWithBackoff();
       }
     };
@@ -550,10 +594,9 @@ window.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // attempt recovery: try ICE-restart a few times, otherwise rematch
+  // Attempt recovery: try ICE-restart a few times, otherwise rematch
   async function attemptRecovery() {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      // give up and rematch
       partnerId = null;
       clearInterval(statsInterval);
       clearTimeout(searchTimer);
@@ -568,7 +611,6 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(async () => {
       try {
         if (!peerConnection) {
-          // try to recreate with same local tracks and new PC, then ICE restart
           createPeerConnection();
           if (isInitiator) {
             makingOffer = true;
@@ -576,7 +618,6 @@ window.addEventListener('DOMContentLoaded', () => {
             await peerConnection.setLocalDescription(offer);
             socket.emit('signal', { to: partnerId, data: offer });
           } else {
-            // Non-initiator waits for remote to restart, but proactively try negotiation if allowed:
             try { await performIceRestartIfPossible(); } catch (_) {}
           }
         } else {
@@ -588,7 +629,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }, delay);
   }
 
-  // iceRestart wrapper with backoff guard
   let lastIceRestartAt = 0;
   const ICE_RESTART_MIN_INTERVAL = 5000;
   async function attemptIceRestartWithBackoff() {
@@ -602,7 +642,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // perform iceRestart: createOffer({iceRestart:true}) and send
   async function performIceRestart() {
     if (!peerConnection || !partnerId) return;
     try {
@@ -615,7 +654,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // another helper to attempt ice restart only if signalling state allows
   async function performIceRestartIfPossible() {
     if (!peerConnection || peerConnection.signalingState !== 'stable') return;
     try {
@@ -630,7 +668,6 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!dc) return;
     dc.onopen = () => {
       lastPong = Date.now();
-      // start periodic ping
       startPingLoop();
     };
     dc.onmessage = (ev) => {
@@ -638,7 +675,6 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'ping') {
-          // reply with pong
           dc.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         } else if (msg.type === 'pong') {
           lastPong = Date.now();
@@ -646,7 +682,6 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     };
     dc.onclose = () => {
-      // closed -> treat as potential issue
       console.debug('keepAlive channel closed');
     };
     dc.onerror = (err) => {
@@ -658,15 +693,10 @@ window.addEventListener('DOMContentLoaded', () => {
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
-      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
-        // channel not available => can't rely on it
-        return;
-      }
-      // send ping
+      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') return;
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {}
-      // if no pong within timeout -> try recovery
       if (Date.now() - lastPong > PONG_TIMEOUT) {
         console.warn('PONG timeout -> triggering recovery');
         attemptRecovery();
@@ -683,7 +713,8 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         const stats = await peerConnection.getStats(null);
         let outboundVideoReport = null;
-        let remoteInboundRtp = null; // sometimes available as remote-inbound-rtp
+        let remoteInboundRtp = null;
+
         stats.forEach(report => {
           if (report.type === 'outbound-rtp' && report.kind === 'video') {
             outboundVideoReport = report;
@@ -693,11 +724,8 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         });
 
-        // compute packet loss ratio if possible
         let lossRatio = 0;
         if (outboundVideoReport && typeof outboundVideoReport.packetsSent === 'number') {
-          // try to get remotes if available
-          // fallback: use remoteInboundRtp for packetsLost
           if (remoteInboundRtp && typeof remoteInboundRtp.packetsLost === 'number') {
             const lost = remoteInboundRtp.packetsLost;
             const sent = remoteInboundRtp.packetsReceived + lost || 1;
@@ -707,13 +735,10 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // RTT / jitter checks
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
 
-        // Decide bitrate level based on metrics
         if (lossRatio > 0.08 || rtt > 0.5) {
-          // high loss or high rtt -> low bitrate
           await setSenderMaxBitrate(BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
           await setSenderMaxBitrate(BITRATE_MEDIUM);
@@ -748,22 +773,22 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------- AUTO START ----------------------
-  ensureNotifyEmpty();
-  updateMicButton();
-  startSearch();
+  async function initialize() {
+    ensureNotifyEmpty();
+    updateMicButton();
+    
+    // Generate and send fingerprint for device ban system
+    const fingerprint = await generateFingerprint();
+    socket.emit('identify', { fingerprint });
+    
+    startSearch();
+  }
+
+  initialize();
 
   window.onbeforeunload = () => {
     try { socket.emit('stop'); } catch (e) {}
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     try { if (peerConnection) peerConnection.close(); } catch (e) {}
   };
-
-  // ---------------------- UTILITY: Start/Stop Ping & Stats on PC close ----------------------
-  const origPCClose = () => {
-    stopPingLoop();
-    stopStatsMonitor();
-  };
-  // ensure we stop timers when peerConnection closed explicitly elsewhere
-  // (we already stop in the onconnectionstatechange handlers above)
-
 });
