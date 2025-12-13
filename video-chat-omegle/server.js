@@ -30,9 +30,9 @@ const ADMIN_IP = "197.205.203.158"; // ⚠️ CHANGE THIS TO YOUR IP
 // Helper function to normalize IP addresses
 function normalizeIp(ip) {
   if (!ip) return ip;
-  if (ip.startsWith('::ffff:')) {
-    return ip.substring(7);
-  }
+  // إذا كان هناك عدة عناوين (بروكسي) خذ الأول
+  if (ip.includes(',')) ip = ip.split(',')[0].trim();
+  if (ip.startsWith('::ffff:')) ip = ip.substring(7);
   return ip;
 }
 
@@ -1538,7 +1538,7 @@ app.post("/unban-ip", adminAuth, (req, res) => {
 app.post("/unban-fingerprint", adminAuth, (req, res) => {
   try {
     const fp = req.body.fp;
-    if (!fp) return res.status(400).json({ error: "Fingerprint required" });
+    if (!fp) return res.status(500).json({ error: "Fingerprint required" });
     unbanUser(null, fp);
     emitAdminUpdate();
     res.json({ ok: true });
