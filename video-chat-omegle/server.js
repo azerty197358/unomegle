@@ -1,5 +1,3 @@
-// Minimal critical comments only.
-
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -864,5 +862,3 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
-
-
