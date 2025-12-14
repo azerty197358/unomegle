@@ -31,15 +31,15 @@
   --bg:#121212;
   --text:#e0e0e0;
 
-  /* 🌙 ألوان رسائل جذابة - ليل */
-  --msgYou:#1e88e5;
-  --msgStranger:#ff6f00;
+  /* 🌙 ألوان رسائل مذهلة - ليل (تصحيح) */
+  --msgYou:#0d47a1; /* أزرق داكن جذاب */
+  --msgStranger:#bf360c; /* برتقالي داكن جذاب */
   --msgSystem:#424242;
 
   --border:#444;
 
-  --msgYouBorder:#64b5f6;
-  --msgStrangerBorder:#ffab40;
+  --msgYouBorder:#42a5f5; /* حدود زرقاء ساطعة */
+  --msgStrangerBorder:#ff6f00; /* حدود برتقالية ساطعة */
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -118,7 +118,6 @@ html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:
 
 video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
-/* 🏷️ تسميات الفيديو - تكيف تام مع الوضع الليلي */
 .video-label{
   position:absolute;top:8px;left:8px;
   padding:4px 12px;border-radius:20px;z-index:6;
@@ -177,33 +176,36 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   display:flex;flex-direction:column;gap:8px;
 }
 
-/* 💬 رسائل مع ألوان جذابة وواضحة */
+/* 💬 رسائل مع ألوان جذابة وتباين عالي */
 .msg{
-  padding:10px 14px;max-width:75%;border-radius:10px;font-size:14px;
+  padding:12px 16px;max-width:75%;border-radius:12px;font-size:14px;
   font-weight:500;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  line-height:1.5;
 }
 
 .msg.you{
   background:var(--msgYou);
   border:2px solid var(--msgYouBorder);
-  color:#0d47a1; /* أزرق داكن للتباين */
+  color:#0d47a1;
   align-self:flex-end;
 }
 
+/* 🔥 تصحيح ألوان الوضع الليلي - نص أبيض لأقصى وضوح */
 .dark .msg.you{
-  color:#e3f2fd; /* أزرق فاتح جداً للوضوح */
+  color:#ffffff !important; /* أبيض نقي */
 }
 
 .msg.stranger{
   background:var(--msgStranger);
   border:2px solid var(--msgStrangerBorder);
-  color:#e65100; /* برتقالي داكن للتباين */
+  color:#e65100;
   align-self:flex-start;
 }
 
+/* 🔥 تصحيح ألوان الوضع الليلي - نص أبيض لأقصى وضوح */
 .dark .msg.stranger{
-  color:#fff3e0; /* برتقالي فاتح جداً للوضوح */
+  color:#ffffff !important; /* أبيض نقي */
 }
 
 .msg.system{
@@ -211,17 +213,15 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   align-self:center;
   border:1px solid var(--border);
   color:var(--text);
+  font-size:13px;
+  padding:8px 16px;
 }
 
 .chat-input-row{
   display:flex;flex-direction:column;gap:8px;padding:10px;
-  background:#fafafa;border-top:1px solid #ddd;
+  background:var(--bg); /* تكيف مع الوضع الليلي */
+  border-top:1px solid var(--border);
   position:sticky;bottom:0;left:0;right:0;z-index:50;
-}
-
-#status{
-  padding:6px 10px;background:#fafafa;
-  border-radius:6px;border:1px solid #ddd;text-align:center;
 }
 
 .typing-indicator {
@@ -258,7 +258,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 }
 
 .dark .typing-indicator {
-  border-color: #444;
+  border-color: var(--border);
 }
 
 .input-container{display:flex;gap:8px;}
@@ -403,7 +403,7 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
     </div>
 
     <div class="chat-input-row">
-      <div id="status">Loading...</div>
+      <!-- ❌ تم إزالة شريط الحالة تماماً -->
       
       <div class="typing-indicator" id="typingIndicator">
         <span class="typing-dot"></span>
