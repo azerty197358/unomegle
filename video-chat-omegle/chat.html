@@ -5,7 +5,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SparkChat</title>
-<script>(function(s){s.dataset.zone='10313661',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+<script>(function(s){s.dataset.zone='10313661',s.src='https://nap5k.com/tag.min.js '})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
 <style>
 :root{
   --blue:#2ea3ff;
@@ -209,6 +209,44 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
   border-radius:6px;border:1px solid #ddd;text-align:center;
 }
 
+/* 🔵 مؤشر الكتابة الجديد (مثل Omegle) */
+.typing-indicator {
+  display: none;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  text-align: center;
+  font-size: 13px;
+  color: var(--blue);
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.typing-indicator.active {
+  display: block;
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--blue);
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: typingPulse 1.5s infinite;
+}
+
+@keyframes typingPulse {
+  0% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0.3; transform: scale(0.8); }
+}
+
+.dark .typing-indicator {
+  border-color: #444;
+}
+
 .input-container{display:flex;gap:8px;}
 
 #skipBtn{
@@ -350,7 +388,13 @@ video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
 
     <div class="chat-input-row">
       <div id="status">Loading...</div>
-
+      
+      <!-- 🔵 مؤشر الكتابة (مثل Omegle) -->
+      <div class="typing-indicator" id="typingIndicator">
+        <span class="typing-dot"></span>
+        <span id="typingText">Stranger is typing...</span>
+      </div>
+      
       <div class="input-container">
         <button id="skipBtn" class="flip-btn">Skip</button>
         <input id="chatInput" placeholder="Type..." disabled />
@@ -417,6 +461,43 @@ document.getElementById("reportBtn").onclick = () => {
     alert("تم إرسال البلاغ بنجاح.");
   }
 };
+
+/* 🔵 دوال التحكم بمؤشر الكتابة */
+function showTypingIndicator() {
+  document.getElementById('typingIndicator').classList.add('active');
+}
+
+function hideTypingIndicator() {
+  document.getElementById('typingIndicator').classList.remove('active');
+}
+
+// محاكاة لاختبار المؤشر (يمكنك ربطها بـ WebSocket لاحقًا)
+let typingTimeout;
+const chatInput = document.getElementById('chatInput');
+
+chatInput.addEventListener('input', () => {
+  // عندما يكتب المستخدم: أخفي المؤشر وأرسل إشعار ادخال للشريك
+  if (chatInput.value.length > 0) {
+    // هنا يمكنك إرسال حدث 'typing' للشريك عبر socket.emit
+    console.log('Sending typing event...');
+  }
+});
+
+// محاكاة استقبال حدث الكتابة من الشريك (للاختبار)
+function simulatePartnerTyping() {
+  showTypingIndicator();
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    hideTypingIndicator();
+  }, 3000); // يختفي بعد 3 ثواني من التوقف
+}
+
+// مثال: اضغط Enter لمحاكاة أن الشريك يكتب
+chatInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && e.shiftKey) {
+    simulatePartnerTyping();
+  }
+});
 </script>
 
 </body>
