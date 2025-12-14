@@ -1,6 +1,6 @@
 // ==================== RENDER FREE TIER OPTIMIZATIONS ====================
-// 1. Lightweight health endpoint for uptime monitoring (UptimeRobot, etc.)
-// 2. Auto-cleanup of old data every 12 hours (reduced from 6h)
+// 1. Lightweight health endpoint for uptime monitoring
+// 2. Auto-cleanup of old data every 12 hours
 // 3. Socket.io optimized for low resource usage
 // 4. Rate limiting to prevent abuse
 // 5. Compression enabled
@@ -15,6 +15,8 @@ const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
 
 const app = express();
 app.set("trust proxy", 1); // Trust Render's proxy
@@ -22,67 +24,48 @@ app.set("trust proxy", 1); // Trust Render's proxy
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
   // Optimize Socket.io for free tier
-  transports: ["websocket"], // Use only websocket (faster, lower overhead)
-  pingTimeout: 60000, // 60s timeout
-  pingInterval: 25000, // 25s interval
-  maxHttpBufferSize: 1e6, // Limit message size to 1MB
+  transports: ["websocket"],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6,
 });
 
 // ==================== MIDDLEWARE ====================
-app.use(compression()); // Compress all responses
-app.use(express.static(__dirname, { maxAge: "1d" })); // Cache static files for 1 day
+app.use(compression());
+app.use(express.static(__dirname, { maxAge: "1d" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(express.json({ limit: "10kb" }));
 
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: false, // Set to true if using HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  },
+  name: 'adminSessionId' // Custom session cookie name
+}));
+
 // Rate limiting - prevent abuse
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use("/admin/", limiter); // Apply rate limiting to admin routes
-
-// ==================== ADMIN IP AUTHENTICATION ====================
-const ADMIN_IP = process.env.ADMIN_IP || "197.205.203.158";
-
-function adminAuth(req, res, next) {
-  const clientIp = req.ip;
-  console.log("Admin access attempt from IP:", clientIp);
-  
-  if (clientIp === ADMIN_IP) {
-    return next();
-  }
-  
-  return res.status(403).send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Access Denied</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
-        .error { color: #d9534f; }
-      </style>
-    </head>
-    <body>
-      <h1 class="error">403 Forbidden</h1>
-      <p>Admin access is restricted to IP: <strong>${ADMIN_IP}</strong></p>
-      <p>Your IP: <strong>${clientIp}</strong></p>
-    </body>
-    </html>
-  `);
-}
+app.use("/admin/", limiter);
 
 // ==================== SQLITE PERSISTENCE ====================
 const db = new Database("data.db", { 
-  // Optimize SQLite for better performance
   fileMustExist: false,
-  timeout: 15000, // Increased from 5000ms to handle Render free tier limitations
+  timeout: 15000,
   verbose: null
 });
 
-// Create tables with indexes for performance
+// Create all tables with indexes
 db.exec(`
 CREATE TABLE IF NOT EXISTS visitors (
   ip TEXT,
@@ -115,6 +98,13 @@ CREATE TABLE IF NOT EXISTS banned_countries (
   code TEXT PRIMARY KEY
 );
 
+CREATE TABLE IF NOT EXISTS admin_users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 -- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip);
 CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
@@ -123,6 +113,110 @@ CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires);
 CREATE INDEX IF NOT EXISTS idx_banned_fps_expires ON banned_fps(expires);
 CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target);
 `);
+
+// Create default admin user if not exists
+const defaultUsername = 'admin';
+const defaultPassword = 'changeme123'; // CHANGE THIS AFTER FIRST LOGIN!
+const hashedDefaultPassword = bcrypt.hashSync(defaultPassword, 10);
+
+db.prepare(`
+  INSERT OR IGNORE INTO admin_users (username, password_hash, created_at) 
+  VALUES (?, ?, ?)
+`).run(defaultUsername, hashedDefaultPassword, Date.now());
+
+console.log(`[Admin] Default user created: username="${defaultUsername}", password="${defaultPassword}"`);
+
+// ==================== AUTHENTICATION MIDDLEWARES ====================
+
+// Middleware to check if user is authenticated
+function requireAuth(req, res, next) {
+  if (req.session && req.session.userId) {
+    return next();
+  }
+  res.redirect('/admin/login');
+}
+
+// Middleware for already logged-in users (prevent accessing login page)
+function redirectIfAuth(req, res, next) {
+  if (req.session && req.session.userId) {
+    return res.redirect('/admin/dashboard');
+  }
+  next();
+}
+
+// ==================== ADMIN AUTH ROUTES ====================
+
+// Login page
+app.get("/admin/login", redirectIfAuth, (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Admin Login</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <style>
+        body { font-family: Arial, sans-serif; background: #f7f7f7; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .login-box h2 { margin: 0 0 20px 0; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .btn-login { width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-login:hover { background: #0056b3; }
+        .error { color: #d9534f; margin-top: 10px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="login-box">
+        <h2>Admin Login</h2>
+        <form method="POST" action="/admin/login">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+          </div>
+          <button type="submit" class="btn-login">Login</button>
+          ${req.query.error ? '<div class="error">Invalid username or password</div>' : ''}
+        </form>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+// Login handler
+app.post("/admin/login", redirectIfAuth, (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.redirect('/admin/login?error=1');
+  }
+
+  const user = db.prepare("SELECT id, password_hash FROM admin_users WHERE username = ?").get(username);
+  
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    console.log(`[Admin] Failed login attempt for username: "${username}"`);
+    return res.redirect('/admin/login?error=1');
+  }
+
+  // Successful login
+  req.session.userId = user.id;
+  req.session.username = username;
+  console.log(`[Admin] Successful login for username: "${username}"`);
+  res.redirect('/admin/dashboard');
+});
+
+// Logout handler
+app.get("/admin/logout", requireAuth, (req, res) => {
+  req.session.destroy((err) => {
+    if (err) console.error("[Admin] Logout error:", err);
+    res.redirect('/admin/login');
+  });
+});
 
 // ==================== COUNTRY LIST (UNCHANGED) ====================
 const COUNTRIES = {
@@ -269,7 +363,7 @@ function getAdminSnapshot() {
       reportedUsers: [],
       recentVisitors: [],
       bannedCountries: [],
-      error: error.message // إضافة حقل خطأ للتحقق
+      error: error.message
     };
   }
 }
@@ -429,21 +523,13 @@ io.on("connection", socket => {
 });
 
 // ==================== ADMIN ROUTES ====================
-app.get("/admin", adminAuth, (req, res) => {
+
+// Main admin redirect
+app.get("/admin", requireAuth, (req, res) => {
   res.redirect("/admin/dashboard");
 });
 
-// IP Debug Endpoint (temporary, remove after testing)
-app.get("/admin/debug-ip", (req, res) => {
-  res.json({
-    clientIp: req.ip,
-    headers: req.headers,
-    adminIp: ADMIN_IP,
-    match: req.ip === ADMIN_IP
-  });
-});
-
-function adminHeader(title) {
+function adminHeader(title, username) {
   return `<!doctype html>
 <html>
 <head>
@@ -473,6 +559,8 @@ function adminHeader(title) {
   .country-item{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2}
   .flex{display:flex;gap:8px;align-items:center}
   .error-alert{padding:10px;background:#d9534f;color:white;border-radius:6px;margin-bottom:12px}
+  .user-info{margin-left:auto;color:#666;display:flex;align-items:center;gap:12px}
+  .logout-btn{padding:6px 12px;background:#6c757d;color:white;border-radius:4px;text-decoration:none}
   @media(max-width:900px){ .row{flex-direction:column} }
 </style>
 </head>
@@ -484,7 +572,10 @@ function adminHeader(title) {
   <a class="tab" href="/admin/stats">Stats</a>
   <a class="tab" href="/admin/reports">Reports</a>
   <a class="tab" href="/admin/bans">Bans</a>
-  <div style="margin-left:auto;color:#666">Admin IP: ${ADMIN_IP}</div>
+  <div class="user-info">
+    <span>👤 ${username}</span>
+    <a href="/admin/logout" class="logout-btn">Logout</a>
+  </div>
 </div>
 `;
 }
@@ -524,20 +615,15 @@ app.get("/health", (req, res) => {
 });
 
 // ==================== RENDER: PERIODIC CLEANUP ====================
-// Clean old visitor data (older than 30 days) every 12 hours (reduced from 6h)
-// This keeps database small and fast
 function cleanupOldData() {
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const deleted = db.prepare("DELETE FROM visitors WHERE ts < ?").run(thirtyDaysAgo);
   console.log(`[Cleanup] Deleted ${deleted.changes} old visitor records`);
   
-  // Also clean expired bans
   db.prepare("DELETE FROM banned_ips WHERE expires < ?").run(Date.now());
   db.prepare("DELETE FROM banned_fps WHERE expires < ?").run(Date.now());
 }
-// Run cleanup every 12 hours (reduced frequency)
 setInterval(cleanupOldData, 12 * 60 * 60 * 1000);
-// Run once on startup
 cleanupOldData();
 
 // ==================== RENDER: MEMORY MONITORING ====================
@@ -545,12 +631,11 @@ function logMemoryUsage() {
   const usage = process.memoryUsage();
   console.log(`[Memory] RSS: ${(usage.rss / 1024 / 1024).toFixed(2)}MB | Heap: ${(usage.heapUsed / 1024 / 1024).toFixed(2)}MB`);
 }
-// Log every 5 minutes
 setInterval(logMemoryUsage, 5 * 60 * 1000);
 
-// ==================== ADMIN ROUTES ====================
-app.get("/admin/dashboard", adminAuth, (req, res) => {
-  const html = adminHeader("Dashboard") + `
+// ==================== ADMIN PAGES ====================
+app.get("/admin/dashboard", requireAuth, (req, res) => {
+  const html = adminHeader("Dashboard", req.session.username) + `
 <div class="panel">
   <div class="row">
     <div class="card" style="max-width:320px">
@@ -663,8 +748,8 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   res.send(html);
 });
 
-app.get("/admin/countries", adminAuth, (req, res) => {
-  const html = adminHeader("Countries") + `
+app.get("/admin/countries", requireAuth, (req, res) => {
+  const html = adminHeader("Countries", req.session.username) + `
 <div class="panel">
   <h3>Block/Unblock Countries</h3>
   <div class="country-list" id="country-list"></div>
@@ -703,8 +788,8 @@ app.get("/admin/countries", adminAuth, (req, res) => {
   res.send(html);
 });
 
-app.get("/admin/stats", adminAuth, (req, res) => {
-  const html = adminHeader("Stats") + `
+app.get("/admin/stats", requireAuth, (req, res) => {
+  const html = adminHeader("Stats", req.session.username) + `
 <div class="panel">
   <h3>Visitor Stats (Last 24h)</h3>
   <canvas id="countryChart" height="100"></canvas>
@@ -727,8 +812,8 @@ app.get("/admin/stats", adminAuth, (req, res) => {
   res.send(html);
 });
 
-app.get("/admin/reports", adminAuth, (req, res) => {
-  const html = adminHeader("Reports") + `
+app.get("/admin/reports", requireAuth, (req, res) => {
+  const html = adminHeader("Reports", req.session.username) + `
 <div class="panel">
   <h3>All Reports</h3>
   <div id="reports-list"></div>
@@ -756,8 +841,8 @@ app.get("/admin/reports", adminAuth, (req, res) => {
   res.send(html);
 });
 
-app.get("/admin/bans", adminAuth, (req, res) => {
-  const html = adminHeader("Bans") + `
+app.get("/admin/bans", requireAuth, (req, res) => {
+  const html = adminHeader("Bans", req.session.username) + `
 <div class="panel">
   <h3>Manually Ban User</h3>
   <form id="banForm">
@@ -787,84 +872,84 @@ app.get("/admin/bans", adminAuth, (req, res) => {
 });
 
 // ==================== ADMIN API ENDPOINTS ====================
-app.post("/admin-broadcast", adminAuth, (req, res) => {
+app.post("/admin-broadcast", requireAuth, (req, res) => {
   const msg = req.body.message;
   if (!msg) return res.sendStatus(400);
   io.emit("broadcast", { message: msg });
-  console.log("Broadcast sent:", msg);
+  console.log("[Admin] Broadcast sent by", req.session.username, ":", msg);
   res.sendStatus(200);
 });
 
-app.post("/unban-ip", adminAuth, (req, res) => {
+app.post("/unban-ip", requireAuth, (req, res) => {
   const ip = req.body.ip;
   if (ip) {
     db.prepare("DELETE FROM banned_ips WHERE ip=?").run(ip);
-    console.log("Unbanned IP:", ip);
+    console.log(`[Admin] ${req.session.username} unbanned IP:`, ip);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-app.post("/unban-fingerprint", adminAuth, (req, res) => {
+app.post("/unban-fingerprint", requireAuth, (req, res) => {
   const fp = req.body.fp;
   if (fp) {
     db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
-    console.log("Unbanned fingerprint:", fp);
+    console.log(`[Admin] ${req.session.username} unbanned fingerprint:`, fp);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-app.post("/admin-update-countries", adminAuth, (req, res) => {
+app.post("/admin-update-countries", requireAuth, (req, res) => {
   const banned = req.body.bannedCountries || [];
   db.prepare("DELETE FROM banned_countries").run();
   for (const code of banned) {
     db.prepare("INSERT INTO banned_countries VALUES (?)").run(code);
   }
-  console.log("Updated banned countries:", banned.length);
+  console.log(`[Admin] ${req.session.username} updated banned countries:`, banned.length);
   emitAdminUpdate();
   res.sendStatus(200);
 });
 
-app.post("/ban-ip", adminAuth, (req, res) => {
+app.post("/ban-ip", requireAuth, (req, res) => {
   const ip = req.body.ip;
   if (ip) {
     banUser(ip, null);
-    console.log("Manually banned IP:", ip);
+    console.log(`[Admin] ${req.session.username} manually banned IP:`, ip);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-app.post("/ban-fingerprint", adminAuth, (req, res) => {
+app.post("/ban-fingerprint", requireAuth, (req, res) => {
   const fp = req.body.fp;
   if (fp) {
     banUser(null, fp);
-    console.log("Manually banned fingerprint:", fp);
+    console.log(`[Admin] ${req.session.username} manually banned fingerprint:`, fp);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-app.post("/ban-id", adminAuth, (req, res) => {
+app.post("/ban-id", requireAuth, (req, res) => {
   const id = req.body.id;
   const ip = userIp.get(id);
   const fp = userFingerprint.get(id);
   if (ip || fp) {
     banUser(ip, fp);
-    console.log("Manually banned user ID:", id);
+    console.log(`[Admin] ${req.session.username} banned user ID:`, id);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-app.post("/unban-id", adminAuth, (req, res) => {
+app.post("/unban-id", requireAuth, (req, res) => {
   const id = req.body.id;
   const ip = userIp.get(id);
   const fp = userFingerprint.get(id);
   if (ip || fp) {
     unbanUser(ip, fp);
-    console.log("Manually unbanned user ID:", id);
+    console.log(`[Admin] ${req.session.username} unbanned user ID:`, id);
     emitAdminUpdate();
   }
   res.sendStatus(200);
@@ -889,5 +974,7 @@ http.listen(PORT, () => {
   console.log(`Health endpoint: http://localhost:${PORT}/health`);
   console.log(`Admin panel: http://localhost:${PORT}/admin`);
   console.log("=====================================");
+  console.log(`[Admin] Default login - Username: admin, Password: changeme123`);
+  console.log("⚠️  IMPORTANT: Change the default password after first login!");
   logMemoryUsage();
 });
