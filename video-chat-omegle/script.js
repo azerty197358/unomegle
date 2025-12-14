@@ -1,6 +1,13 @@
 // file: public/js/webrtc-stable-client.js
 // WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, reconnect backoff,
 // typing indicators, fingerprinting, and full compatibility with server.js
+// 
+// CSS مقترح لتجميل الرسائل (أضف هذا إلى ملف CSS الخاص بك):
+// .msg { padding: 10px; margin: 5px 0; border-radius: 10px; max-width: 80%; word-wrap: break-word; }
+// .msg.system { background: #e0e0e0; color: #555; font-size: 0.9em; }
+// .msg.you { background: #007bff; color: white; margin-left: auto; }
+// .msg.them { background: #f1f1f1; color: #333; margin-right: auto; }
+// .msg.status { background: #fff3cd; color: #856404; font-weight: bold; text-align: center; border: 1px solid #ffeaa7; }
 
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
@@ -24,7 +31,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
-  const statusText = document.getElementById('status');
+
+  // تم إزالة statusText لأننا نستخدم updateStatusMessage الآن
+  // const statusText = document.getElementById('status');
 
   const exitBtn = document.getElementById('exitBtn');
 
@@ -141,6 +150,33 @@ window.addEventListener('DOMContentLoaded', () => {
       chatMessages.appendChild(d);
     }
 
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // دالة جديدة لتحديث رسالة الحالة (تستبدل القديمة بالجديدة)
+  function updateStatusMessage(msg) {
+    // ابحث عن عنصر رسالة الحالة الحالية
+    let statusMsg = document.getElementById('statusMessage');
+    
+    if (statusMsg) {
+      // إذا وجدت، فقط حدّث النص
+      statusMsg.textContent = msg;
+    } else {
+      // إذا لم تجد، أنشئ عنصرًا جديدًا
+      statusMsg = document.createElement('div');
+      statusMsg.id = 'statusMessage';
+      statusMsg.className = 'msg status';
+      statusMsg.textContent = msg;
+      
+      // أضفها قبل typing indicator أو في النهاية
+      const typing = document.querySelector('.msg.system[style*="italic"]');
+      if (typing && typing.parentNode === chatMessages) {
+        chatMessages.insertBefore(statusMsg, typing);
+      } else {
+        chatMessages.appendChild(statusMsg);
+      }
+    }
+    
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
@@ -320,7 +356,7 @@ window.addEventListener('DOMContentLoaded', () => {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = async () => {
       if (!partnerId) {
-        addMessage("No user to report.", "system");
+        updateStatusMessage("No user to report.");
         return;
       }
       const prev = reportCounts.get(partnerId) || 0;
@@ -348,7 +384,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       partnerId = null;
       disableChat();
-      statusText.textContent = 'You reported the user — skipping...';
+      updateStatusMessage('You reported the user — skipping...');
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
       searchTimer = setTimeout(startSearchLoop, 300);
@@ -369,14 +405,14 @@ window.addEventListener('DOMContentLoaded', () => {
   function startSearchLoop() {
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
-    statusText.textContent = 'Searching...';
+    updateStatusMessage('Searching...');
     socket.emit('find-partner');
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       if (!partnerId) {
         try { socket.emit('stop'); } catch (e) {}
         showRemoteSpinnerOnly(false);
-        statusText.textContent = 'Pausing...';
+        updateStatusMessage('Pausing...');
         clearTimeout(pauseTimer);
         pauseTimer = setTimeout(startSearchLoop, 1800);
       }
@@ -396,7 +432,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   skipBtn.onclick = () => {
     try { socket.emit('skip'); } catch (e) {}
-    statusText.textContent = 'You skipped.';
+    updateStatusMessage('You skipped.');
     disableChat();
     if (peerConnection) {
       peerConnection.close();
@@ -409,7 +445,7 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
   // ---------------------- SOCKET EVENTS ----------------------
-  socket.on('waiting', msg => { statusText.textContent = msg; });
+  socket.on('waiting', msg => { updateStatusMessage(msg); });
 
   socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
 
@@ -430,11 +466,11 @@ window.addEventListener('DOMContentLoaded', () => {
   socket.on('banned', ({ message }) => {
     addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
-    statusText.textContent = 'Blocked.';
+    updateStatusMessage('Blocked.');
   });
 
   socket.on('partner-disconnected', () => {
-    statusText.textContent = 'Partner disconnected.';
+    updateStatusMessage('Partner disconnected.');
     disableChat();
     partnerId = null;
     if (peerConnection) {
@@ -451,7 +487,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const foundId = data.id || data.partnerId;
     if (foundId && reportedIds.has(foundId)) {
       try { socket.emit('skip'); } catch (e) {}
-      statusText.textContent = 'Found reported user — skipping...';
+      updateStatusMessage('Found reported user — skipping...');
       partnerId = null;
       clearTimeout(searchTimer);
       clearTimeout(pauseTimer);
@@ -461,7 +497,7 @@ window.addEventListener('DOMContentLoaded', () => {
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
-    statusText.textContent = 'Connecting...';
+    updateStatusMessage('Connecting...');
     createPeerConnection();
 
     // initiator starts offer
@@ -558,10 +594,10 @@ window.addEventListener('DOMContentLoaded', () => {
       const s = peerConnection.connectionState;
       console.debug('connectionState', s);
       if (s === 'connected') {
-        statusText.textContent = 'Connected';
+        updateStatusMessage('Connected');
         reconnectAttempts = 0;
       } else if (['disconnected', 'failed', 'closed'].includes(s)) {
-        statusText.textContent = 'Connection lost.';
+        updateStatusMessage('Connection lost.');
         disableChat();
         if (peerConnection) {
           try { peerConnection.close(); } catch (e) {}
@@ -607,7 +643,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     reconnectAttempts++;
     const delay = backoffDelay(reconnectAttempts);
-    statusText.textContent = `Reconnecting... attempt ${reconnectAttempts}`;
+    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}`);
     setTimeout(async () => {
       try {
         if (!peerConnection) {
@@ -765,7 +801,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return true;
     } catch (e) {
       console.error(e);
-      statusText.textContent = 'Camera/Mic denied.';
+      updateStatusMessage('Camera/Mic denied.');
       localStream = null;
       updateMicButton();
       return false;
