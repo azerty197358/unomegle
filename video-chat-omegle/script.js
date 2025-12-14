@@ -1,13 +1,5 @@
 // file: public/js/webrtc-stable-client.js
-// WebRTC client with adaptive bitrate, ICE-restart, keepalive, candidate buffering, reconnect backoff,
-// typing indicators, fingerprinting, and full compatibility with server.js
-// 
-// CSS مقترح لتجميل الرسائل (أضف هذا إلى ملف CSS الخاص بك):
-// .msg { padding: 10px; margin: 5px 0; border-radius: 10px; max-width: 80%; word-wrap: break-word; }
-// .msg.system { background: #e0e0e0; color: #555; font-size: 0.9em; }
-// .msg.you { background: #007bff; color: white; margin-left: auto; }
-// .msg.them { background: #f1f1f1; color: #333; margin-right: auto; }
-// .msg.status { background: #fff3cd; color: #856404; font-weight: bold; text-align: center; border: 1px solid #ffeaa7; }
+// WebRTC client with enhanced connection management, error handling, and status-only updates
 
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
@@ -31,10 +23,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
-
-  // تم إزالة statusText لأننا نستخدم updateStatusMessage الآن
-  // const statusText = document.getElementById('status');
-
   const exitBtn = document.getElementById('exitBtn');
 
   // ---------------------- GLOBAL STATE ----------------------
@@ -46,6 +34,8 @@ window.addEventListener('DOMContentLoaded', () => {
   let micEnabled = true;
   let autoReconnect = true;
 
+  // Timer management
+  const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
 
@@ -137,6 +127,45 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ---------------------- TIMER MANAGEMENT ----------------------
+  function setSafeTimer(callback, delay) {
+    const timerId = setTimeout(() => {
+      activeTimers.delete(timerId);
+      callback();
+    }, delay);
+    activeTimers.add(timerId);
+    return timerId;
+  }
+
+  function clearSafeTimer(timerId) {
+    if (timerId) {
+      clearTimeout(timerId);
+      activeTimers.delete(timerId);
+    }
+  }
+
+  function clearAllTimers() {
+    activeTimers.forEach(timerId => clearTimeout(timerId));
+    activeTimers.clear();
+    if (statsInterval) clearInterval(statsInterval);
+    if (pingTimer) clearInterval(pingTimer);
+  }
+
+  // ---------------------- SAFE EMIT ----------------------
+  function safeEmit(event, data) {
+    try {
+      if (socket.connected) {
+        socket.emit(event, data);
+        return true;
+      }
+      console.warn(`Socket not connected, cannot emit ${event}`);
+      return false;
+    } catch (e) {
+      console.error(`Error emitting ${event}:`, e);
+      return false;
+    }
+  }
+
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -153,22 +182,18 @@ window.addEventListener('DOMContentLoaded', () => {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  // دالة جديدة لتحديث رسالة الحالة (تستبدل القديمة بالجديدة)
+  // Status message handler - replaces old messages instead of adding new ones
   function updateStatusMessage(msg) {
-    // ابحث عن عنصر رسالة الحالة الحالية
     let statusMsg = document.getElementById('statusMessage');
     
     if (statusMsg) {
-      // إذا وجدت، فقط حدّث النص
       statusMsg.textContent = msg;
     } else {
-      // إذا لم تجد، أنشئ عنصرًا جديدًا
       statusMsg = document.createElement('div');
       statusMsg.id = 'statusMessage';
       statusMsg.className = 'msg status';
       statusMsg.textContent = msg;
       
-      // أضفها قبل typing indicator أو في النهاية
       const typing = document.querySelector('.msg.system[style*="italic"]');
       if (typing && typing.parentNode === chatMessages) {
         chatMessages.insertBefore(statusMsg, typing);
@@ -234,6 +259,42 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ---------------------- CONNECTION CLEANUP ----------------------
+  function cleanupConnection() {
+    console.log('Cleaning up connection...');
+    
+    // Clear all timers
+    clearAllTimers();
+    
+    // Close peer connection
+    if (peerConnection) {
+      try {
+        if (keepAliveChannel) {
+          keepAliveChannel.close();
+          keepAliveChannel = null;
+        }
+        peerConnection.close();
+      } catch (e) {
+        console.error('Error closing peer connection:', e);
+      }
+      peerConnection = null;
+    }
+    
+    // Clear remote video
+    if (remoteVideo) {
+      remoteVideo.srcObject = null;
+    }
+    
+    // Clear buffers
+    bufferedRemoteCandidates.length = 0;
+    
+    // Reset state
+    partnerId = null;
+    isInitiator = false;
+    makingOffer = false;
+    ignoreOffer = false;
+  }
+
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -261,12 +322,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!partnerId) return;
     if (!typing) {
       typing = true;
-      socket.emit('typing', { to: partnerId });
+      safeEmit('typing', { to: partnerId });
     }
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => {
+    clearSafeTimer(typingTimer);
+    typingTimer = setSafeTimer(() => {
       typing = false;
-      socket.emit('stop-typing', { to: partnerId });
+      safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
 
@@ -279,10 +340,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
     addMessage(msg, 'you');
-    socket.emit('chat-message', { to: partnerId, message: msg });
+    safeEmit('chat-message', { to: partnerId, message: msg });
     chatInput.value = '';
     typing = false;
-    socket.emit('stop-typing', { to: partnerId });
+    safeEmit('stop-typing', { to: partnerId });
   }
 
   sendBtn.onclick = sendMessage;
@@ -363,14 +424,15 @@ window.addEventListener('DOMContentLoaded', () => {
       const now = prev + 1;
       reportCounts.set(partnerId, now);
       reportedIds.add(partnerId);
-      try { socket.emit("report", { partnerId }); } catch (e) { /* ignore */ }
-      try { socket.emit("skip"); } catch (e) { /* ignore */ }
+      
+      safeEmit("report", { partnerId });
+      safeEmit("skip");
 
       if (now === 1) {
         try {
           addMessage("Capturing screenshot for admin review...", "system");
           const image = await captureRemoteVideoFrame();
-          socket.emit("admin-screenshot", { image, partnerId });
+          safeEmit("admin-screenshot", { image, partnerId });
           addMessage("Screenshot sent to admin.", "system");
         } catch (err) {
           console.error('Screenshot capture failed', err);
@@ -378,20 +440,16 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-      partnerId = null;
+      cleanupConnection();
       disableChat();
       updateStatusMessage('You reported the user — skipping...');
-      clearTimeout(searchTimer);
-      clearTimeout(pauseTimer);
-      searchTimer = setTimeout(startSearchLoop, 300);
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      searchTimer = setSafeTimer(startSearchLoop, 300);
     };
   }
 
-  // ---------------------- UI ----------------------
+  // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = false;
     sendBtn.disabled = false;
@@ -406,23 +464,28 @@ window.addEventListener('DOMContentLoaded', () => {
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
-    socket.emit('find-partner');
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
+    safeEmit('find-partner');
+    
+    clearSafeTimer(searchTimer);
+    searchTimer = setSafeTimer(() => {
       if (!partnerId) {
-        try { socket.emit('stop'); } catch (e) {}
+        safeEmit('stop');
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
-        clearTimeout(pauseTimer);
-        pauseTimer = setTimeout(startSearchLoop, 1800);
+        clearSafeTimer(pauseTimer);
+        pauseTimer = setSafeTimer(startSearchLoop, 1800);
       }
     }, 3500);
   }
 
   async function startSearch() {
-    if (!(await initMedia())) return;
-    partnerId = null;
-    isInitiator = false;
+    const mediaReady = await initMedia();
+    if (!mediaReady) {
+      updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
+      return;
+    }
+    
+    cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
     showRemoteSpinnerOnly(true);
@@ -431,16 +494,12 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   skipBtn.onclick = () => {
-    try { socket.emit('skip'); } catch (e) {}
+    safeEmit('skip');
     updateStatusMessage('You skipped.');
     disableChat();
-    if (peerConnection) {
-      peerConnection.close();
-      peerConnection = null;
-    }
-    partnerId = null;
-    clearTimeout(searchTimer);
-    clearTimeout(pauseTimer);
+    cleanupConnection();
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
     startSearchLoop();
   };
 
@@ -467,59 +526,82 @@ window.addEventListener('DOMContentLoaded', () => {
     addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Blocked.');
+    cleanupConnection();
   });
 
   socket.on('partner-disconnected', () => {
     updateStatusMessage('Partner disconnected.');
     disableChat();
-    partnerId = null;
-    if (peerConnection) {
-      peerConnection.close();
-      peerConnection = null;
-    }
-    clearTimeout(searchTimer);
-    clearTimeout(pauseTimer);
+    cleanupConnection();
     reconnectAttempts = 0;
-    startSearchLoop();
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
+    setSafeTimer(startSearchLoop, 500);
   });
 
   socket.on('partner-found', async data => {
-    const foundId = data.id || data.partnerId;
-    if (foundId && reportedIds.has(foundId)) {
-      try { socket.emit('skip'); } catch (e) {}
-      updateStatusMessage('Found reported user — skipping...');
-      partnerId = null;
-      clearTimeout(searchTimer);
-      clearTimeout(pauseTimer);
-      setTimeout(startSearchLoop, 200);
+    const foundId = data?.id || data?.partnerId;
+    if (!foundId) {
+      console.error('Invalid partner data received:', data);
+      updateStatusMessage('Invalid partner data. Retrying...');
+      setSafeTimer(startSearchLoop, 1000);
       return;
     }
+
+    if (reportedIds.has(foundId)) {
+      safeEmit('skip');
+      updateStatusMessage('Found reported user — skipping...');
+      cleanupConnection();
+      setSafeTimer(startSearchLoop, 200);
+      return;
+    }
+    
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
-    createPeerConnection();
-
-    // initiator starts offer
-    if (isInitiator) {
-      try {
+    
+    try {
+      createPeerConnection();
+      
+      if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        socket.emit('signal', { to: partnerId, data: offer });
-      } catch (e) {
-        console.error('Offer failed', e);
-      } finally {
-        makingOffer = false;
+        safeEmit('signal', { to: partnerId, data: offer });
       }
+    } catch (e) {
+      console.error('Failed to create peer connection or offer:', e);
+      updateStatusMessage('Connection setup failed. Retrying...');
+      cleanupConnection();
+      setSafeTimer(startSearchLoop, 1000);
+    } finally {
+      makingOffer = false;
     }
   });
 
   socket.on('signal', async ({ from, data }) => {
-    if (!peerConnection) createPeerConnection();
+    if (!from || !data) {
+      console.error('Invalid signal data:', { from, data });
+      return;
+    }
+
+    if (partnerId && partnerId !== from) {
+      console.warn('Signal from unexpected partner:', from, 'expected:', partnerId);
+      return;
+    }
+
+    if (!peerConnection) {
+      try {
+        createPeerConnection();
+      } catch (e) {
+        console.error('Failed to create peer connection for signal:', e);
+        return;
+      }
+    }
 
     // Buffer candidates that arrive before remote description is set
-    if (data && data.candidate && !peerConnection.remoteDescription) {
+    if (data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
     }
@@ -529,17 +611,19 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
+        
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        socket.emit('signal', { to: from, data: answer });
+        safeEmit('signal', { to: from, data: answer });
       } else if (data.type === 'answer') {
         await peerConnection.setRemoteDescription(data);
       } else if (data.candidate) {
         await peerConnection.addIceCandidate(data.candidate);
       }
     } catch (e) {
-      console.error('Signal handling error', e);
+      console.error('Signal handling error:', e);
+      updateStatusMessage('Signal processing failed.');
     }
   });
 
@@ -550,117 +634,135 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = null;
     }
 
-    peerConnection = new RTCPeerConnection(servers);
-    makingOffer = false;
-    ignoreOffer = false;
+    try {
+      peerConnection = new RTCPeerConnection(servers);
+      makingOffer = false;
+      ignoreOffer = false;
 
-    // Add local tracks
-    if (localStream) {
-      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
-    }
+      // Add local tracks
+      if (localStream) {
+        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      }
 
-    // Create datachannel when initiator
-    if (isInitiator) {
-      try {
-        keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
-        setupKeepAliveChannel(keepAliveChannel);
-      } catch (e) { keepAliveChannel = null; }
-    } else {
-      peerConnection.ondatachannel = (ev) => {
-        keepAliveChannel = ev.channel;
-        setupKeepAliveChannel(keepAliveChannel);
-      };
-    }
-
-    peerConnection.ontrack = e => {
-      remoteVideo.srcObject = e.streams[0];
-      enableChat();
-      addMessage('Connected with a stranger!', 'system');
-      showRemoteSpinnerOnly(false);
-      flushBufferedCandidates();
-      reconnectAttempts = 0;
-      startStatsMonitor();
-    };
-
-    peerConnection.onicecandidate = e => {
-      if (e.candidate) {
+      // Create datachannel when initiator
+      if (isInitiator) {
         try {
-          socket.emit('signal', { to: partnerId, data: { candidate: e.candidate } });
-        } catch (err) { /* ignore */ }
-      }
-    };
-
-    peerConnection.onconnectionstatechange = () => {
-      const s = peerConnection.connectionState;
-      console.debug('connectionState', s);
-      if (s === 'connected') {
-        updateStatusMessage('Connected');
-        reconnectAttempts = 0;
-      } else if (['disconnected', 'failed', 'closed'].includes(s)) {
-        updateStatusMessage('Connection lost.');
-        disableChat();
-        if (peerConnection) {
-          try { peerConnection.close(); } catch (e) {}
-          peerConnection = null;
+          keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
+          setupKeepAliveChannel(keepAliveChannel);
+        } catch (e) { 
+          console.error('Failed to create data channel:', e);
+          keepAliveChannel = null; 
         }
-        if (autoReconnect) attemptRecovery();
+      } else {
+        peerConnection.ondatachannel = (ev) => {
+          keepAliveChannel = ev.channel;
+          setupKeepAliveChannel(keepAliveChannel);
+        };
       }
-    };
 
-    peerConnection.oniceconnectionstatechange = async () => {
-      const s = peerConnection.iceConnectionState;
-      console.debug('iceConnectionState', s);
-      if (s === 'failed') {
-        await attemptIceRestartWithBackoff();
-      }
-    };
+      peerConnection.ontrack = e => {
+        if (!e.streams || e.streams.length === 0) {
+          console.error('No streams in ontrack event');
+          return;
+        }
+        
+        remoteVideo.srcObject = e.streams[0];
+        enableChat();
+        // تم حذف رسالة "Connected with a stranger!" هنا
+        updateStatusMessage('Connected');
+        showRemoteSpinnerOnly(false);
+        flushBufferedCandidates();
+        reconnectAttempts = 0;
+        startStatsMonitor();
+      };
 
-    peerConnection.onnegotiationneeded = async () => {
-      if (makingOffer) return;
-      try {
-        makingOffer = true;
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit('signal', { to: partnerId, data: offer });
-      } catch (e) {
-        console.error('Negotiation error', e);
-      } finally {
-        makingOffer = false;
-      }
-    };
+      peerConnection.onicecandidate = e => {
+        if (e.candidate && partnerId) {
+          safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        if (!peerConnection) return;
+        
+        const s = peerConnection.connectionState;
+        console.debug('connectionState:', s);
+        
+        if (s === 'connected') {
+          updateStatusMessage('Connected');
+          reconnectAttempts = 0;
+        } else if (['disconnected', 'failed', 'closed'].includes(s)) {
+          updateStatusMessage('Connection lost.');
+          disableChat();
+          if (autoReconnect) {
+            cleanupConnection();
+            attemptRecovery();
+          }
+        }
+      };
+
+      peerConnection.oniceconnectionstatechange = async () => {
+        if (!peerConnection) return;
+        
+        const s = peerConnection.iceConnectionState;
+        console.debug('iceConnectionState:', s);
+        
+        if (s === 'failed') {
+          await attemptIceRestartWithBackoff();
+        }
+      };
+
+      peerConnection.onnegotiationneeded = async () => {
+        if (!peerConnection || makingOffer || !partnerId) return;
+        
+        try {
+          makingOffer = true;
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          safeEmit('signal', { to: partnerId, data: offer });
+        } catch (e) {
+          console.error('Negotiation error:', e);
+        } finally {
+          makingOffer = false;
+        }
+      };
+    } catch (e) {
+      console.error('Failed to create peer connection:', e);
+      throw e;
+    }
   }
 
   // Attempt recovery: try ICE-restart a few times, otherwise rematch
   async function attemptRecovery() {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      partnerId = null;
-      clearInterval(statsInterval);
-      clearTimeout(searchTimer);
-      clearTimeout(pauseTimer);
-      startSearchLoop();
-      reconnectAttempts = 0;
+      updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
+      cleanupConnection();
+      setSafeTimer(startSearchLoop, 1000);
       return;
     }
+    
     reconnectAttempts++;
     const delay = backoffDelay(reconnectAttempts);
-    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}`);
-    setTimeout(async () => {
+    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+    
+    setSafeTimer(async () => {
       try {
         if (!peerConnection) {
           createPeerConnection();
-          if (isInitiator) {
+          if (isInitiator && partnerId) {
             makingOffer = true;
             const offer = await peerConnection.createOffer({ iceRestart: true });
             await peerConnection.setLocalDescription(offer);
-            socket.emit('signal', { to: partnerId, data: offer });
-          } else {
-            try { await performIceRestartIfPossible(); } catch (_) {}
+            safeEmit('signal', { to: partnerId, data: offer });
           }
         } else {
           await attemptIceRestartWithBackoff();
         }
       } catch (e) {
-        console.error('attemptRecovery error', e);
+        console.error('Recovery attempt failed:', e);
+        attemptRecovery();
+      } finally {
+        makingOffer = false;
       }
     }, delay);
   }
@@ -670,42 +772,45 @@ window.addEventListener('DOMContentLoaded', () => {
   async function attemptIceRestartWithBackoff() {
     const now = Date.now();
     if (now - lastIceRestartAt < ICE_RESTART_MIN_INTERVAL) return;
+    
     lastIceRestartAt = now;
     try {
       await performIceRestart();
     } catch (e) {
-      console.error('ICE restart failed', e);
+      console.error('ICE restart failed:', e);
+      if (autoReconnect) attemptRecovery();
     }
   }
 
   async function performIceRestart() {
-    if (!peerConnection || !partnerId) return;
+    if (!peerConnection || !partnerId || peerConnection.signalingState !== 'stable') {
+      throw new Error('Cannot perform ICE restart: invalid state');
+    }
+    
     try {
       makingOffer = true;
       const offer = await peerConnection.createOffer({ iceRestart: true });
       await peerConnection.setLocalDescription(offer);
-      socket.emit('signal', { to: partnerId, data: offer });
+      safeEmit('signal', { to: partnerId, data: offer });
+    } catch (e) {
+      console.error('ICE restart error:', e);
+      throw e;
     } finally {
       makingOffer = false;
     }
   }
 
-  async function performIceRestartIfPossible() {
-    if (!peerConnection || peerConnection.signalingState !== 'stable') return;
-    try {
-      const offer = await peerConnection.createOffer({ iceRestart: true });
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('signal', { to: partnerId, data: offer });
-    } catch (e) { console.error(e); }
-  }
-
   // ---------------------- KEEPALIVE (datachannel) ----------------------
+  let pingTimer = null;
+
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
+    
     dc.onopen = () => {
       lastPong = Date.now();
       startPingLoop();
     };
+
     dc.onmessage = (ev) => {
       if (!ev.data) return;
       try {
@@ -715,37 +820,60 @@ window.addEventListener('DOMContentLoaded', () => {
         } else if (msg.type === 'pong') {
           lastPong = Date.now();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('KeepAlive message parse error:', e);
+      }
     };
+
     dc.onclose = () => {
       console.debug('keepAlive channel closed');
+      stopPingLoop();
     };
+
     dc.onerror = (err) => {
-      console.debug('keepAlive channel error', err);
+      console.error('keepAlive channel error:', err);
     };
   }
 
-  let pingTimer = null;
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
-      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') return;
+      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
+        stopPingLoop();
+        return;
+      }
+      
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
-      } catch (e) {}
+      } catch (e) {
+        console.error('Ping send error:', e);
+        stopPingLoop();
+      }
+      
       if (Date.now() - lastPong > PONG_TIMEOUT) {
         console.warn('PONG timeout -> triggering recovery');
-        attemptRecovery();
+        stopPingLoop();
+        if (autoReconnect) attemptRecovery();
       }
     }, PING_INTERVAL);
   }
-  function stopPingLoop() { if (pingTimer) clearInterval(pingTimer); pingTimer = null; }
+
+  function stopPingLoop() {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+  }
 
   // ---------------------- STATS MONITOR (adaptive bitrate) ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
     statsInterval = setInterval(async () => {
-      if (!peerConnection) return;
+      if (!peerConnection || peerConnection.connectionState !== 'connected') {
+        stopStatsMonitor();
+        return;
+      }
+
       try {
         const stats = await peerConnection.getStats(null);
         let outboundVideoReport = null;
@@ -761,12 +889,12 @@ window.addEventListener('DOMContentLoaded', () => {
         });
 
         let lossRatio = 0;
-        if (outboundVideoReport && typeof outboundVideoReport.packetsSent === 'number') {
-          if (remoteInboundRtp && typeof remoteInboundRtp.packetsLost === 'number') {
+        if (outboundVideoReport?.packetsSent > 0) {
+          if (remoteInboundRtp?.packetsLost >= 0) {
             const lost = remoteInboundRtp.packetsLost;
-            const sent = remoteInboundRtp.packetsReceived + lost || 1;
-            lossRatio = lost / sent;
-          } else if ('packetsLost' in outboundVideoReport) {
+            const sent = (remoteInboundRtp.packetsReceived || 0) + lost;
+            lossRatio = sent > 0 ? lost / sent : 0;
+          } else if (outboundVideoReport.packetsLost >= 0) {
             lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
           }
         }
@@ -782,26 +910,42 @@ window.addEventListener('DOMContentLoaded', () => {
           await setSenderMaxBitrate(BITRATE_HIGH);
         }
       } catch (e) {
-        console.debug('stats monitor error', e);
+        console.debug('Stats monitor error:', e);
       }
     }, STATS_POLL_MS);
   }
-  function stopStatsMonitor() { if (statsInterval) { clearInterval(statsInterval); statsInterval = null; } }
+
+  function stopStatsMonitor() {
+    if (statsInterval) {
+      clearInterval(statsInterval);
+      statsInterval = null;
+    }
+  }
 
   // ---------------------- EXIT ----------------------
-  exitBtn.onclick = () => { location.href = 'index.html'; };
+  exitBtn.onclick = () => {
+    cleanupConnection();
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
+    location.href = 'index.html';
+  };
 
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (localStream) return true;
+    
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
       localVideo.srcObject = localStream;
       updateMicButton();
       return true;
     } catch (e) {
-      console.error(e);
-      updateStatusMessage('Camera/Mic denied.');
+      console.error('Media initialization error:', e);
+      updateStatusMessage('Camera/Mic access denied. Please check permissions.');
       localStream = null;
       updateMicButton();
       return false;
@@ -814,17 +958,38 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
     
     // Generate and send fingerprint for device ban system
-    const fingerprint = await generateFingerprint();
-    socket.emit('identify', { fingerprint });
+    try {
+      const fingerprint = await generateFingerprint();
+      safeEmit('identify', { fingerprint });
+    } catch (e) {
+      console.error('Failed to send fingerprint:', e);
+    }
     
     startSearch();
   }
 
   initialize();
 
+  // ---------------------- GLOBAL ERROR HANDLERS ----------------------
+  window.addEventListener('error', (e) => {
+    console.error('Global error:', e.error);
+    updateStatusMessage('An unexpected error occurred. Refreshing...');
+    setSafeTimer(() => location.reload(), 3000);
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
+    updateStatusMessage('Connection error detected. Recovering...');
+    if (autoReconnect && !partnerId) {
+      setSafeTimer(startSearchLoop, 1000);
+    }
+  });
+
   window.onbeforeunload = () => {
-    try { socket.emit('stop'); } catch (e) {}
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
-    try { if (peerConnection) peerConnection.close(); } catch (e) {}
+    safeEmit('stop');
+    cleanupConnection();
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
   };
 });
