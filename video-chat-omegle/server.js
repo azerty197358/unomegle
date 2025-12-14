@@ -44,7 +44,7 @@ const limiter = rateLimit({
 app.use("/admin/", limiter); // Apply rate limiting to admin routes
 
 // ==================== ADMIN IP AUTHENTICATION ====================
-const ADMIN_IP = process.env.ADMIN_IP || "197.205.203.158";
+const ADMIN_IP = process.env.ADMIN_IP || "10.19.131.8";
 
 function adminAuth(req, res, next) {
   const clientIp = req.ip;
@@ -655,3 +655,4 @@ http.listen(PORT, () => {
   console.log("=====================================");
   logMemoryUsage();
 });
+
