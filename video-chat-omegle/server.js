@@ -1,15 +1,16 @@
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin
 // SQLITE PERSISTENCE — COMPLETE INTEGRATION
-// MODIFIED: IP-based admin access + 24h unique visitor counting
+// MODIFIED: Password-based admin access + Render keep-alive
 
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
+const cookieParser = require("cookie-parser"); // جديد: للتعامل مع cookies
 
 const app = express();
-app.set("trust proxy", true); // Trust proxy headers for real IP
+app.set("trust proxy", true);
 
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
@@ -17,40 +18,27 @@ const io = require("socket.io")(http);
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser()); // جديد: middleware للـ cookies
 
-/* ================= ADMIN IP AUTHENTICATION ================= */
-const ADMIN_IP = "197.205.203.158";
+/* ================= ADMIN AUTHENTICATION (PASSWORD) ================= */
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // غيّرها في إعدادات Render
+const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_SECRET || "admin_secret_token_2024";
 
 function adminAuth(req, res, next) {
-  // Get client IP (handles X-Forwarded-For, CF-Connecting-IP, etc.)
-  const clientIp = req.ip;
+  const token = req.cookies["admin_session"];
   
-  // Log for debugging
-  console.log("Admin access attempt from IP:", clientIp);
-  
-  if (clientIp === ADMIN_IP) {
-    return next(); // Allow access
+  // إذا كان المستخدم لديه cookie صالح
+  if (token === ADMIN_SESSION_TOKEN) {
+    return next();
   }
   
-  // Deny access with 403
-  return res.status(403).send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Access Denied</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 50px; text-align: center; }
-        .error { color: #d9534f; }
-      </style>
-    </head>
-    <body>
-      <h1 class="error">403 Forbidden</h1>
-      <p>Admin access is restricted to IP: <strong>${ADMIN_IP}</strong></p>
-      <p>Your IP: <strong>${clientIp}</strong></p>
-    </body>
-    </html>
-  `);
+  // إذا كان يحاول الدخول إلى صفحة تسجيل الدخول
+  if (req.path === "/admin/login") {
+    return next();
+  }
+  
+  // إعادة توجيه لصفحة تسجيل الدخول
+  res.redirect("/admin/login");
 }
 
 /* ================= SQLITE PERSISTENCE ================= */
@@ -169,7 +157,7 @@ function getBannedCountries() {
   return new Set(db.prepare("SELECT code FROM banned_countries").all().map(r => r.code));
 }
 
-// === MODIFIED: Count unique IPs in last 24 hours ===
+// === Count unique IPs in last 24 hours ===
 function loadCountryCounts() {
   const counts = {};
   const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
@@ -203,15 +191,12 @@ function getAdminSnapshot() {
     });
   }
 
-  // MODIFIED: Show all recent visitors but stats are 24h unique
   const recentVisitors = db.prepare(`
     SELECT ip,fp,country,ts FROM visitors
     ORDER BY ts DESC LIMIT 500
   `).all();
 
   const countryCounts = loadCountryCounts();
-  
-  // MODIFIED: Count unique IPs in last 24 hours
   const totalVisitors = db.prepare("SELECT COUNT(DISTINCT ip) c FROM visitors WHERE ts > ?").get(twentyFourHoursAgo).c;
 
   return {
@@ -219,7 +204,7 @@ function getAdminSnapshot() {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      totalVisitors: totalVisitors, // Now 24h unique count
+      totalVisitors: totalVisitors,
       countryCounts
     },
     activeIpBans,
@@ -266,14 +251,12 @@ io.on("connection", socket => {
   }
 
   const ts = Date.now();
-  // Log every connection (for reports/forensics)
   db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
   emitAdminUpdate();
 
   socket.on("identify", ({ fingerprint }) => {
     if (!fingerprint) return;
     userFingerprint.set(socket.id, fingerprint);
-
     db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
 
     if (isFpBanned(fingerprint)) {
@@ -381,6 +364,73 @@ io.on("connection", socket => {
   });
 });
 
+/* ================= ADMIN LOGIN PAGE ================= */
+app.get("/admin/login", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Admin Login</title>
+      <style>
+        body { font-family: Arial; padding: 50px; background: #f7f7f7; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { margin-top: 0; color: #333; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        .error { color: #d9534f; margin-top: 10px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="login-box">
+        <h2>🔐 Admin Login</h2>
+        <form id="loginForm">
+          <input type="password" id="password" placeholder="Enter admin password" required>
+          <button type="submit">Login</button>
+          <div class="error" id="error"></div>
+        </form>
+      </div>
+      <script>
+        document.getElementById('loginForm').onsubmit = async (e) => {
+          e.preventDefault();
+          const password = document.getElementById('password').value;
+          const res = await fetch('/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+          });
+          if (res.ok) {
+            window.location = '/admin/dashboard';
+          } else {
+            document.getElementById('error').textContent = 'Invalid password';
+          }
+        };
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+app.post("/admin/login", (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    res.cookie("admin_session", ADMIN_SESSION_TOKEN, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
+    res.send({ success: true });
+  } else {
+    res.status(401).send({ error: "Invalid password" });
+  }
+});
+
+/* ================= RENDER KEEP-ALIVE ENDPOINTS ================= */
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "alive", timestamp: Date.now() });
+});
+
+app.get("/ping", (req, res) => {
+  res.send("pong");
+});
+
 /* ================= ADMIN ROUTES ================= */
 app.get("/admin", adminAuth, (req, res) => {
   res.redirect("/admin/dashboard");
@@ -426,7 +476,9 @@ function adminHeader(title) {
   <a class="tab" href="/admin/stats">Stats</a>
   <a class="tab" href="/admin/reports">Reports</a>
   <a class="tab" href="/admin/bans">Bans</a>
-  <div style="margin-left:auto;color:#666">Admin IP: ${ADMIN_IP}</div>
+  <div style="margin-left:auto;color:#666">
+    <button onclick="logout()" style="background:#dc3545;padding:6px 12px;color:#fff;border-radius:6px;border:none;cursor:pointer">Logout</button>
+  </div>
 </div>
 `;
 }
@@ -434,7 +486,7 @@ function adminHeader(title) {
 function adminFooter() {
   return `
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
@@ -444,6 +496,11 @@ function adminFooter() {
   });
   const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
   function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
+  
+  function logout() {
+    document.cookie = "admin_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    window.location = "/admin/login";
+  }
 </script>
 </body>
 </html>
