@@ -1,59 +1,38 @@
-// ==================== RENDER FREE TIER OPTIMIZATIONS ====================
-// 1. Lightweight health endpoint for uptime monitoring (UptimeRobot, etc.)
-// 2. Auto-cleanup of old data every 6 hours
-// 3. Socket.io optimized for low resource usage
-// 4. Rate limiting to prevent abuse
-// 5. Compression enabled
-// 6. Graceful shutdown handling
-// 7. Memory usage monitoring
-// =======================================================================
+// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin
+// SQLITE PERSISTENCE — COMPLETE INTEGRATION
+// MODIFIED: IP-based admin access + 24h unique visitor counting
 
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
-const compression = require("compression");
-const rateLimit = require("express-rate-limit");
 
 const app = express();
-app.set("trust proxy", 1); // Trust Render's proxy
+app.set("trust proxy", true); // Trust proxy headers for real IP
 
 const http = require("http").createServer(app);
-const io = require("socket.io")(http, {
-  // Optimize Socket.io for free tier
-  transports: ["websocket"], // Use only websocket (faster, lower overhead)
-  pingTimeout: 60000, // 60s timeout
-  pingInterval: 25000, // 25s interval
-  maxHttpBufferSize: 1e6, // Limit message size to 1MB
-});
+const io = require("socket.io")(http);
 
-// ==================== MIDDLEWARE ====================
-app.use(compression()); // Compress all responses
-app.use(express.static(__dirname, { maxAge: "1d" })); // Cache static files for 1 day
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
-app.use(express.json({ limit: "10kb" }));
+app.use(express.static(__dirname));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// Rate limiting - prevent abuse
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/admin/", limiter); // Apply rate limiting to admin routes
-
-// ==================== ADMIN IP AUTHENTICATION ====================
-const ADMIN_IP = process.env.ADMIN_IP || "10.19.131.8";
+/* ================= ADMIN IP AUTHENTICATION ================= */
+const ADMIN_IP = "197.205.203.158";
 
 function adminAuth(req, res, next) {
+  // Get client IP (handles X-Forwarded-For, CF-Connecting-IP, etc.)
   const clientIp = req.ip;
+  
+  // Log for debugging
   console.log("Admin access attempt from IP:", clientIp);
   
   if (clientIp === ADMIN_IP) {
-    return next();
+    return next(); // Allow access
   }
   
+  // Deny access with 403
   return res.status(403).send(`
     <!DOCTYPE html>
     <html>
@@ -74,15 +53,9 @@ function adminAuth(req, res, next) {
   `);
 }
 
-// ==================== SQLITE PERSISTENCE ====================
-const db = new Database("data.db", { 
-  // Optimize SQLite for better performance
-  fileMustExist: false,
-  timeout: 5000,
-  verbose: null
-});
+/* ================= SQLITE PERSISTENCE ================= */
+const db = new Database("data.db");
 
-// Create tables with indexes for performance
 db.exec(`
 CREATE TABLE IF NOT EXISTS visitors (
   ip TEXT,
@@ -114,17 +87,9 @@ CREATE TABLE IF NOT EXISTS screenshots (
 CREATE TABLE IF NOT EXISTS banned_countries (
   code TEXT PRIMARY KEY
 );
-
--- Performance indexes
-CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip);
-CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
-CREATE INDEX IF NOT EXISTS idx_visitors_country ON visitors(country);
-CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires);
-CREATE INDEX IF NOT EXISTS idx_banned_fps_expires ON banned_fps(expires);
-CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target);
 `);
 
-// ==================== COUNTRY LIST (UNCHANGED) ====================
+// --- static list of countries (ISO2 -> name) ---
 const COUNTRIES = {
   "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
   "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
@@ -159,14 +124,14 @@ const COUNTRIES = {
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
 
-// ==================== CORE DATA (IN-MEMORY) ====================
+/* ================= CORE DATA (IN-MEMORY FOR ACTIVE SESSIONS) ================= */
 const waitingQueue = [];
-const partners = new Map();
-const userFingerprint = new Map();
-const userIp = new Map();
+const partners = new Map(); // socket.id -> partnerId
+const userFingerprint = new Map(); // socket.id -> fingerprint
+const userIp = new Map(); // socket.id -> ip
 const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
 
-// ==================== PERSISTENCE HELPERS ====================
+/* ================= PERSISTENCE HELPERS ================= */
 function isIpBanned(ip) {
   if (!ip) return false;
   const r = db.prepare("SELECT expires FROM banned_ips WHERE ip=?").get(ip);
@@ -204,6 +169,7 @@ function getBannedCountries() {
   return new Set(db.prepare("SELECT code FROM banned_countries").all().map(r => r.code));
 }
 
+// === MODIFIED: Count unique IPs in last 24 hours ===
 function loadCountryCounts() {
   const counts = {};
   const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
@@ -213,7 +179,7 @@ function loadCountryCounts() {
   return counts;
 }
 
-// ==================== ADMIN SNAPSHOT ====================
+/* ================= ADMIN SNAPSHOT ================= */
 function getAdminSnapshot() {
   const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
   
@@ -237,12 +203,15 @@ function getAdminSnapshot() {
     });
   }
 
+  // MODIFIED: Show all recent visitors but stats are 24h unique
   const recentVisitors = db.prepare(`
     SELECT ip,fp,country,ts FROM visitors
     ORDER BY ts DESC LIMIT 500
   `).all();
 
   const countryCounts = loadCountryCounts();
+  
+  // MODIFIED: Count unique IPs in last 24 hours
   const totalVisitors = db.prepare("SELECT COUNT(DISTINCT ip) c FROM visitors WHERE ts > ?").get(twentyFourHoursAgo).c;
 
   return {
@@ -250,7 +219,7 @@ function getAdminSnapshot() {
       connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      totalVisitors,
+      totalVisitors: totalVisitors, // Now 24h unique count
       countryCounts
     },
     activeIpBans,
@@ -265,11 +234,10 @@ function emitAdminUpdate() {
   io.emit("adminUpdate", getAdminSnapshot());
 }
 
-// ==================== SOCKET.IO ====================
+/* ================= SOCKET.IO ================= */
 io.on("connection", socket => {
   const ip =
     socket.handshake.headers["cf-connecting-ip"] ||
-    socket.handshake.headers["x-forwarded-for"] ||
     socket.handshake.address ||
     (socket.request && socket.request.connection && socket.request.connection.remoteAddress) ||
     "unknown";
@@ -298,12 +266,14 @@ io.on("connection", socket => {
   }
 
   const ts = Date.now();
+  // Log every connection (for reports/forensics)
   db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
   emitAdminUpdate();
 
   socket.on("identify", ({ fingerprint }) => {
     if (!fingerprint) return;
     userFingerprint.set(socket.id, fingerprint);
+
     db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
 
     if (isFpBanned(fingerprint)) {
@@ -337,7 +307,7 @@ io.on("connection", socket => {
       partners.set(a, b);
       partners.set(b, a);
       io.to(a).emit("partner-found", { id: b, initiator: true });
-      io.to(b).emit("partner-found", { id: b, initiator: false });
+      io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   }
 
@@ -411,7 +381,7 @@ io.on("connection", socket => {
   });
 });
 
-// ==================== ADMIN ROUTES (UNCHANGED) ====================
+/* ================= ADMIN ROUTES ================= */
 app.get("/admin", adminAuth, (req, res) => {
   res.redirect("/admin/dashboard");
 });
@@ -464,7 +434,7 @@ function adminHeader(title) {
 function adminFooter() {
   return `
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
@@ -480,43 +450,7 @@ function adminFooter() {
 `;
 }
 
-// ==================== RENDER: HEALTH CHECK ENDPOINT ====================
-// This endpoint is very lightweight and perfect for uptime monitoring
-app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "ok", 
-    timestamp: Date.now(),
-    connections: io.of("/").sockets.size,
-    memory: process.memoryUsage()
-  });
-});
-
-// ==================== RENDER: PERIODIC CLEANUP ====================
-// Clean old visitor data (older than 30 days) every 6 hours
-// This keeps database small and fast
-function cleanupOldData() {
-  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  const deleted = db.prepare("DELETE FROM visitors WHERE ts < ?").run(thirtyDaysAgo);
-  console.log(`[Cleanup] Deleted ${deleted.changes} old visitor records`);
-  
-  // Also clean expired bans
-  db.prepare("DELETE FROM banned_ips WHERE expires < ?").run(Date.now());
-  db.prepare("DELETE FROM banned_fps WHERE expires < ?").run(Date.now());
-}
-// Run cleanup every 6 hours
-setInterval(cleanupOldData, 6 * 60 * 60 * 1000);
-// Run once on startup
-cleanupOldData();
-
-// ==================== RENDER: MEMORY MONITORING ====================
-function logMemoryUsage() {
-  const usage = process.memoryUsage();
-  console.log(`[Memory] RSS: ${(usage.rss / 1024 / 1024).toFixed(2)}MB | Heap: ${(usage.heapUsed / 1024 / 1024).toFixed(2)}MB`);
-}
-// Log every 5 minutes
-setInterval(logMemoryUsage, 5 * 60 * 1000);
-
-// ==================== ADMIN ROUTES (UNCHANGED) ====================
+// Dashboard
 app.get("/admin/dashboard", adminAuth, (req, res) => {
   const html = adminHeader("Dashboard") + `
 <div class="panel">
@@ -631,28 +565,345 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
   res.send(html);
 });
 
-// ... (keep all other admin routes exactly as they were) ...
-// [Full admin routes code from original - truncated for brevity]
+// Countries page
+app.get("/admin/countries", adminAuth, (req, res) => {
+  const html = adminHeader("Countries") + `
+<div class="panel">
+  <h3>Countries — Block / Unblock</h3>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1">
+      <div class="country-list" id="all-countries"></div>
+    </div>
+    <div style="width:320px">
+      <h4>Blocked Countries</h4>
+      <div id="blocked-countries" style="min-height:120px;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+      <div style="margin-top:12px">
+        <button id="clear-blocks" style="background:#d9534f;padding:8px 10px;color:#fff;border-radius:6px">Clear All Blocks</button>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:12px;color:#666;font-size:13px">
+    ملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة واظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
+  </div>
+</div>
+<script>
+  async function loadCountries() {
+    const res = await fetch('/admin/countries-list');
+    const data = await res.json();
+    const banned = new Set(data.banned || []);
+    const container = document.getElementById('all-countries');
+    container.innerHTML = '';
+    const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
+    codes.forEach(code => {
+      const div = document.createElement('div'); div.className='country-item';
+      const left = document.createElement('div'); left.className='flex';
+      const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked = banned.has(code);
+      checkbox.dataset.code = code;
+      const label = document.createElement('div'); label.textContent = code + ' — ' + ALL_COUNTRIES[code];
+      left.appendChild(checkbox); left.appendChild(label);
+      const action = document.createElement('div');
+      const btn = document.createElement('button'); btn.textContent = checkbox.checked ? 'Unblock' : 'Block';
+      btn.style.background = checkbox.checked ? '#28a745' : '#d9534f'; btn.style.color='#fff';
+      btn.onclick = async () => {
+        if (checkbox.checked) {
+          await fetch('/admin/unblock-country', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ code })});
+        } else {
+          await fetch('/admin/block-country', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ code })});
+        }
+        loadCountries();
+      };
+      action.appendChild(btn);
+      div.appendChild(left); div.appendChild(action);
+      container.appendChild(div);
+    });
 
-// ==================== RENDER: GRACEFUL SHUTDOWN ====================
-process.on('SIGTERM', () => {
-  console.log('[Shutdown] SIGTERM received, shutting down gracefully...');
-  http.close(() => {
-    console.log('[Shutdown] HTTP server closed');
-    db.close();
-    console.log('[Shutdown] Database closed');
-    process.exit(0);
-  });
+    document.getElementById('clear-blocks').onclick = async () => {
+      if (!confirm('Clear all blocked countries?')) return;
+      await fetch('/admin/clear-blocked', {method:'POST'});
+      loadCountries();
+    };
+
+    const bc = document.getElementById('blocked-countries');
+    bc.innerHTML = '';
+    if (data.banned.length === 0) bc.textContent = 'No blocked countries';
+    else data.banned.forEach(c => {
+      const d = document.createElement('div'); d.textContent = c + ' — ' + COUNTRY_NAME(c); bc.appendChild(d);
+    });
+  }
+
+  loadCountries();
+</script>
+` + adminFooter();
+  res.send(html);
 });
 
-// ==================== START SERVER ====================
+// Stats page
+app.get("/admin/stats", adminAuth, (req, res) => {
+  const html = adminHeader("Stats") + `
+<div class="panel">
+  <h3>Visitors Analytics</h3>
+  <div style="display:flex;gap:12px;align-items:flex-start">
+    <div style="flex:1">
+      <canvas id="visitorsChart" height="160"></canvas>
+    </div>
+    <div style="width:360px">
+      <h4>By Country</h4>
+      <canvas id="countryChart" height="200"></canvas>
+      <h4 style="margin-top:12px">Controls</h4>
+      <div>
+        <label>From: <input type="date" id="fromDate"></label><br><br>
+        <label>To: <input type="date" id="toDate"></label><br><br>
+        <button id="refreshStats" style="background:#007bff;color:#fff;padding:8px 10px;border-radius:6px">Refresh</button>
+      </div>
+    </div>
+  </div>
+  <h4 style="margin-top:14px">Recent Visitors (last 500)</h4>
+  <div id="stat-visitors-list" style="max-height:240px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+</div>
+<script>
+  let visitorsChart = null, countryChart = null;
+
+  async function loadStats() {
+    const from = document.getElementById('fromDate').value;
+    const to = document.getElementById('toDate').value;
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const res = await fetch('/admin/stats-data?' + params.toString());
+    const data = await res.json();
+
+    const ctx = document.getElementById('visitorsChart').getContext('2d');
+    const labels = data.daily.map(d=>d.date);
+    const values = data.daily.map(d=>d.count);
+    if (visitorsChart) visitorsChart.destroy();
+    visitorsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Daily Visitors',
+          data: values,
+          fill: false,
+          tension: 0.2,
+          pointRadius: 3,
+          borderWidth: 2
+        }]
+      },
+      options: { responsive:true, scales:{ x:{ display:true }, y:{ beginAtZero:true } } }
+    });
+
+    const ctx2 = document.getElementById('countryChart').getContext('2d');
+    const cLabels = data.countries.map(c=>c.country);
+    const cVals = data.countries.map(c=>c.count);
+    if (countryChart) countryChart.destroy();
+    countryChart = new Chart(ctx2, {
+      type: 'bar',
+      data: { labels:cLabels, datasets:[{ label:'By Country', data:cVals, borderWidth:1 }] },
+      options:{ responsive:true, scales:{ y:{ beginAtZero:true } } }
+    });
+
+    const list = document.getElementById('stat-visitors-list'); list.innerHTML='';
+    data.recent.forEach(v => {
+      const d = document.createElement('div');
+      d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country||'Unknown') + ' — ' + v.ip + (v.fp?(' — '+v.fp.slice(0,8)):'');
+      list.appendChild(d);
+    });
+  }
+
+  document.getElementById('refreshStats').onclick = loadStats;
+  loadStats();
+</script>
+` + adminFooter();
+  res.send(html);
+});
+
+// Reports page
+app.get("/admin/reports", adminAuth, (req, res) => {
+  const html = adminHeader("Reports") + `
+<div class="panel">
+  <h3>Reports</h3>
+  <div id="reports-panel"></div>
+</div>
+<script>
+  function renderReportsPanel(snap) {
+    const container = document.getElementById('reports-panel');
+    container.innerHTML = '';
+    if (!snap.reportedUsers || snap.reportedUsers.length === 0) return container.textContent = 'No reports';
+    snap.reportedUsers.forEach(r => {
+      const div = document.createElement('div'); div.className='rep-card';
+      const left = document.createElement('div'); left.style.display='inline-block'; left.style.verticalAlign='top'; left.style.width='160px';
+      const right = document.createElement('div'); right.style.display='inline-block'; right.style.verticalAlign='top'; right.style.marginLeft='12px'; right.style.width='calc(100% - 180px)';
+      if (r.screenshot) {
+        const img = document.createElement('img'); img.src = r.screenshot; img.className='screenshot-thumb'; left.appendChild(img);
+        const showBtn = document.createElement('button'); showBtn.textContent='Show Screenshot'; showBtn.style.background='#007bff'; showBtn.style.marginTop='6px';
+        showBtn.onclick = ()=>{ const w = window.open("","_blank"); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+r.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">')};
+        left.appendChild(showBtn);
+      } else left.innerHTML = '<div style="color:#777;font-size:13px">No screenshot</div>';
+      right.innerHTML = '<b>Target:</b> ' + r.target + '<br><b>Reports:</b> ' + r.count;
+      const small = document.createElement('div'); small.style.fontSize='12px'; small.style.color='#666'; small.style.marginTop='8px';
+      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+      right.appendChild(small);
+
+      const btnWrap = document.createElement('div'); btnWrap.style.marginTop='8px';
+      const banBtn = document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban'; banBtn.style.marginRight='8px';
+      banBtn.onclick = ()=> {
+        if (!confirm('Ban user ' + r.target + ' ?')) return;
+        fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
+      };
+      const removeBtn = document.createElement('button'); removeBtn.textContent='Remove Report'; removeBtn.style.background='#6c757d'; removeBtn.style.marginRight='8px';
+      removeBtn.onclick = ()=> {
+        if (!confirm('Remove report for user ' + r.target + ' ?')) return;
+        fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
+      };
+      btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); right.appendChild(btnWrap);
+      div.appendChild(left); div.appendChild(right); container.appendChild(div);
+    });
+  }
+
+  function handleAdminUpdate(snap){ renderReportsPanel(snap); }
+</script>
+` + adminFooter();
+  res.send(html);
+});
+
+// Bans page
+app.get("/admin/bans", adminAuth, (req, res) => {
+  const html = adminHeader("Bans") + `
+<div class="panel">
+  <h3>Manage Bans</h3>
+  <div id="bans-panel"></div>
+</div>
+<script>
+  function renderBansPanel(snap) {
+    const container = document.getElementById('bans-panel'); container.innerHTML = '';
+    const iph = document.createElement('div'); iph.innerHTML = '<h4>IP Bans</h4>'; container.appendChild(iph);
+    if (snap.activeIpBans.length === 0) iph.appendChild(document.createTextNode('No IP bans'));
+    else snap.activeIpBans.forEach(b => {
+      const div = document.createElement('div'); div.style.marginBottom='8px';
+      const dt = new Date(b.expires).toLocaleString();
+      div.innerHTML = '<b>'+b.ip+'</b> — expires: '+dt + ' ';
+      const btn = document.createElement('button'); btn.textContent='Unban'; btn.className='unban';
+      btn.onclick = ()=> fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})});
+      div.appendChild(btn); container.appendChild(div);
+    });
+
+    const dph = document.createElement('div'); dph.innerHTML = '<h4 style="margin-top:12px">Device Bans</h4>'; container.appendChild(dph);
+    if (snap.activeFpBans.length === 0) dph.appendChild(document.createTextNode('No device bans'));
+    else snap.activeFpBans.forEach(b => {
+      const div = document.createElement('div'); div.style.marginBottom='8px';
+      const dt = new Date(b.expires).toLocaleString();
+      div.innerHTML = '<b>'+b.fp+'</b> — expires: '+dt + ' ';
+      const btn = document.createElement('button'); btn.textContent='Unban'; btn.className='unban';
+      btn.onclick = ()=> fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})});
+      div.appendChild(btn); container.appendChild(div);
+    });
+  }
+  function handleAdminUpdate(snap){ renderBansPanel(snap); }
+</script>
+` + adminFooter();
+  res.send(html);
+});
+
+/* ================= ADMIN API ENDPOINTS ================= */
+app.get("/admin/countries-list", adminAuth, (req, res) => {
+  res.send({ all: Object.keys(COUNTRIES), banned: Array.from(getBannedCountries()) });
+});
+
+app.post("/admin/block-country", adminAuth, (req, res) => {
+  const code = (req.body.code || "").toUpperCase();
+  if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
+  db.prepare("INSERT OR REPLACE INTO banned_countries VALUES (?)").run(code);
+  emitAdminUpdate();
+  res.send({ ok: true, banned: Array.from(getBannedCountries()) });
+});
+
+app.post("/admin/unblock-country", adminAuth, (req, res) => {
+  const code = (req.body.code || "").toUpperCase();
+  if (!code) return res.status(400).send({ error: "invalid" });
+  db.prepare("DELETE FROM banned_countries WHERE code=?").run(code);
+  emitAdminUpdate();
+  res.send({ ok: true, banned: Array.from(getBannedCountries()) });
+});
+
+app.post("/admin/clear-blocked", adminAuth, (req, res) => {
+  db.prepare("DELETE FROM banned_countries").run();
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
+app.get("/admin/stats-data", adminAuth, (req, res) => {
+  const from = req.query.from ? new Date(req.query.from) : null;
+  const to = req.query.to ? new Date(req.query.to) : null;
+  
+  const dailyMap = new Map();
+  for (const v of db.prepare("SELECT * FROM visitors").all()) {
+    const t = new Date(v.ts);
+    if (from && t < from) continue;
+    if (to && t > new Date(to.getTime() + 24*3600*1000 -1)) continue;
+    const key = t.toISOString().slice(0,10);
+    dailyMap.set(key, (dailyMap.get(key)||0) + 1);
+  }
+  const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
+
+  const countries = db.prepare("SELECT country, COUNT(DISTINCT ip) c FROM visitors WHERE country IS NOT NULL AND ts > ? GROUP BY country ORDER BY c DESC LIMIT 50")
+    .all(Date.now() - (24 * 60 * 60 * 1000))
+    .map(r => ({country: r.country, count: r.c}));
+
+  const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
+
+  res.send({ daily, countries, recent });
+});
+
+app.post("/admin-broadcast", adminAuth, (req, res) => {
+  const msg = req.body.message || (req.body && req.body.message);
+  if (msg && msg.trim()) {
+    io.emit("adminMessage", msg.trim());
+  }
+  res.status(200).send({ ok: true });
+});
+
+app.post("/unban-ip", adminAuth, (req, res) => {
+  const ip = req.body.ip || (req.body && req.body.ip);
+  unbanUser(ip, null);
+  res.status(200).send({ ok: true });
+});
+
+app.post("/unban-fingerprint", adminAuth, (req, res) => {
+  const fp = req.body.fp || (req.body && req.body.fp);
+  unbanUser(null, fp);
+  res.status(200).send({ ok: true });
+});
+
+app.post("/manual-ban", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+
+  const ip = userIp.get(target);
+  const fp = userFingerprint.get(target);
+
+  banUser(ip, fp);
+
+  const s = io.sockets.sockets.get(target);
+  if (s) {
+    s.emit("banned", { message: "You were banned by admin." });
+    s.disconnect(true);
+  }
+
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
+app.post("/remove-report", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+
+  db.prepare("DELETE FROM reports WHERE target=?").run(target);
+  db.prepare("DELETE FROM screenshots WHERE target=?").run(target);
+
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-  console.log("=====================================");
-  console.log(`Server listening on port ${PORT}`);
-  console.log(`Health endpoint: http://localhost:${PORT}/health`);
-  console.log(`Admin panel: http://localhost:${PORT}/admin`);
-  console.log("=====================================");
-  logMemoryUsage();
-});
-
+http.listen(PORT, () => console.log("Server listening on port " + PORT));
