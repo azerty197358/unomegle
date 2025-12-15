@@ -1,4 +1,4 @@
-// ==================== RENDER FREE TIER OPTIMIZATIONS ====================
+ // ==================== RENDER FREE TIER OPTIMIZATIONS ====================
 // 1. Lightweight health endpoint for uptime monitoring
 // 2. Auto-cleanup of old data every 12 hours
 // 3. Socket.io optimized for low resource usage
@@ -6,10 +6,7 @@
 // 5. Compression enabled
 // 6. Graceful shutdown handling
 // 7. Memory usage monitoring
-// ======================================================================= وإصلاح مشكلة الحظر/فك الحظر
-//
-// المشكلة كانت: الحظر يعتمد على الذاكرة (userIp, userFingerprint) التي تفقد عند إعادة الاتصال
-// الحل: جميع عمليات الحظر تمر عبر قاعدة البيانات فقط مع تخزين socket_id
+// =======================================================================
 
 const express = require("express");
 const path = require("path");
@@ -22,10 +19,11 @@ const bcrypt = require('bcryptjs');
 const session = require('express-session');
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", 1); // Trust Render's proxy
 
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
+  // Optimize Socket.io for free tier
   transports: ["websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -38,18 +36,20 @@ app.use(express.static(__dirname, { maxAge: "1d" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(express.json({ limit: "10kb" }));
 
+// Session middleware
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
+    secure: false, // Set to true if using HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   },
-  name: 'adminSessionId'
+  name: 'adminSessionId' // Custom session cookie name
 }));
 
+// Rate limiting - prevent abuse
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -65,12 +65,11 @@ const db = new Database("data.db", {
   verbose: null
 });
 
-// إنشاء الجداول مع الحقل الجديد socket_id
+// Create all tables with indexes
 db.exec(`
 CREATE TABLE IF NOT EXISTS visitors (
   ip TEXT,
   fp TEXT,
-  socket_id TEXT,
   country TEXT,
   ts INTEGER
 );
@@ -108,8 +107,6 @@ CREATE TABLE IF NOT EXISTS admin_users (
 
 -- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip);
-CREATE INDEX IF NOT EXISTS idx_visitors_fp ON visitors(fp);
-CREATE INDEX IF NOT EXISTS idx_visitors_socket ON visitors(socket_id);
 CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
 CREATE INDEX IF NOT EXISTS idx_visitors_country ON visitors(country);
 CREATE INDEX IF NOT EXISTS idx_banned_ips_expires ON banned_ips(expires);
@@ -117,9 +114,9 @@ CREATE INDEX IF NOT EXISTS idx_banned_fps_expires ON banned_fps(expires);
 CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target);
 `);
 
-// Create default admin user
+// Create default admin user if not exists
 const defaultUsername = 'admin';
-const defaultPassword = 'changeme123';
+const defaultPassword = 'changeme123'; // CHANGE THIS AFTER FIRST LOGIN!
 const hashedDefaultPassword = bcrypt.hashSync(defaultPassword, 10);
 
 db.prepare(`
@@ -130,6 +127,8 @@ db.prepare(`
 console.log(`[Admin] Default user created: username="${defaultUsername}", password="${defaultPassword}"`);
 
 // ==================== AUTHENTICATION MIDDLEWARES ====================
+
+// Middleware to check if user is authenticated
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
@@ -137,6 +136,7 @@ function requireAuth(req, res, next) {
   res.redirect('/admin/login');
 }
 
+// Middleware for already logged-in users (prevent accessing login page)
 function redirectIfAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return res.redirect('/admin/dashboard');
@@ -144,10 +144,121 @@ function redirectIfAuth(req, res, next) {
   next();
 }
 
-// ==================== IN-MEMORY DATA (للحالة المؤقتة فقط) ====================
+// ==================== ADMIN AUTH ROUTES ====================
+
+// Login page
+app.get("/admin/login", redirectIfAuth, (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Admin Login</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <style>
+        body { font-family: Arial, sans-serif; background: #f7f7f7; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .login-box h2 { margin: 0 0 20px 0; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .btn-login { width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-login:hover { background: #0056b3; }
+        .error { color: #d9534f; margin-top: 10px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="login-box">
+        <h2>Admin Login</h2>
+        <form method="POST" action="/admin/login">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+          </div>
+          <button type="submit" class="btn-login">Login</button>
+          ${req.query.error ? '<div class="error">Invalid username or password</div>' : ''}
+        </form>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+// Login handler
+app.post("/admin/login", redirectIfAuth, (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.redirect('/admin/login?error=1');
+  }
+
+  const user = db.prepare("SELECT id, password_hash FROM admin_users WHERE username = ?").get(username);
+  
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    console.log(`[Admin] Failed login attempt for username: "${username}"`);
+    return res.redirect('/admin/login?error=1');
+  }
+
+  // Successful login
+  req.session.userId = user.id;
+  req.session.username = username;
+  console.log(`[Admin] Successful login for username: "${username}"`);
+  res.redirect('/admin/dashboard');
+});
+
+// Logout handler
+app.get("/admin/logout", requireAuth, (req, res) => {
+  req.session.destroy((err) => {
+    if (err) console.error("[Admin] Logout error:", err);
+    res.redirect('/admin/login');
+  });
+});
+
+// ==================== COUNTRY LIST (UNCHANGED) ====================
+const COUNTRIES = {
+  "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
+  "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
+  "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
+  "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
+  "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
+  "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
+  "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
+  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
+  "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
+  "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
+  "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
+  "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
+  "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
+  "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
+  "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
+  "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
+  "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
+  "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
+  "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
+  "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
+  "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
+  "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
+  "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
+  "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
+  "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
+  "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
+  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
+  "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
+  "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
+  "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
+  "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
+};
+
+// ==================== CORE DATA (IN-MEMORY) ====================
 const waitingQueue = [];
 const partners = new Map();
-const BAN_DURATION = 24 * 60 * 60 * 1000;
+const userFingerprint = new Map();
+const userIp = new Map();
+const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
 
 // ==================== PERSISTENCE HELPERS ====================
 function isIpBanned(ip) {
@@ -178,7 +289,6 @@ function banUser(ip, fp) {
   if (fp) db.prepare("INSERT OR REPLACE INTO banned_fps VALUES (?,?)").run(fp, exp);
 }
 
-// الحل: فك الحظر عبر قاعدة البيانات فقط
 function unbanUser(ip, fp) {
   if (ip) db.prepare("DELETE FROM banned_ips WHERE ip=?").run(ip);
   if (fp) db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
@@ -223,7 +333,7 @@ function getAdminSnapshot() {
     }
 
     const recentVisitors = db.prepare(`
-      SELECT ip,fp,socket_id,country,ts FROM visitors
+      SELECT ip,fp,country,ts FROM visitors
       ORDER BY ts DESC LIMIT 500
     `).all();
 
@@ -271,6 +381,8 @@ io.on("connection", socket => {
     (socket.request && socket.request.connection && socket.request.connection.remoteAddress) ||
     "unknown";
 
+  userIp.set(socket.id, ip);
+
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
   if (headerCountry) country = headerCountry.toUpperCase();
@@ -292,14 +404,14 @@ io.on("connection", socket => {
     return;
   }
 
-  // تخزين socket_id في DB لربط دائم
   const ts = Date.now();
-  db.prepare("INSERT INTO visitors VALUES (?,?,?,?,?)").run(ip, null, socket.id, country, ts);
+  db.prepare("INSERT INTO visitors VALUES (?,?,?,?)").run(ip, null, country, ts);
   emitAdminUpdate();
 
   socket.on("identify", ({ fingerprint }) => {
     if (!fingerprint) return;
-    db.prepare(`UPDATE visitors SET fp=? WHERE socket_id=? AND ts=?`).run(fingerprint, socket.id, ts);
+    userFingerprint.set(socket.id, fingerprint);
+    db.prepare(`UPDATE visitors SET fp=? WHERE ip=? AND ts=?`).run(fingerprint, ip, ts);
 
     if (isFpBanned(fingerprint)) {
       socket.emit("banned", { message: "Device banned" });
@@ -310,9 +422,7 @@ io.on("connection", socket => {
   });
 
   socket.on("find-partner", () => {
-    const visitor = db.prepare("SELECT fp FROM visitors WHERE socket_id=? ORDER BY ts DESC LIMIT 1").get(socket.id);
-    const fp = visitor ? visitor.fp : null;
-    
+    const fp = userFingerprint.get(socket.id);
     if (fp && isFpBanned(fp)) {
       socket.emit("banned", { message: "Device banned" });
       socket.disconnect(true);
@@ -359,14 +469,13 @@ io.on("connection", socket => {
     const count = db.prepare("SELECT COUNT(*) c FROM reports WHERE target=?").get(partnerId).c;
 
     if (count >= 3) {
-      const partner = db.prepare("SELECT ip, fp FROM visitors WHERE socket_id=? ORDER BY ts DESC LIMIT 1").get(partnerId);
-      if (partner) {
-        banUser(partner.ip, partner.fp);
-        const s = io.sockets.sockets.get(partnerId);
-        if (s) {
-          s.emit("banned", { message: "Banned by reports" });
-          s.disconnect(true);
-        }
+      const ip2 = userIp.get(partnerId);
+      const fp2 = userFingerprint.get(partnerId);
+      banUser(ip2, fp2);
+      const s = io.sockets.sockets.get(partnerId);
+      if (s) {
+        s.emit("banned", { message: "Banned by reports" });
+        s.disconnect(true);
       }
     }
 
@@ -398,6 +507,9 @@ io.on("connection", socket => {
     }
     partners.delete(socket.id);
 
+    userFingerprint.delete(socket.id);
+    userIp.delete(socket.id);
+
     emitAdminUpdate();
   });
 
@@ -410,109 +522,12 @@ io.on("connection", socket => {
   });
 });
 
-// ==================== ADMIN AUTH ROUTES ====================
-app.get("/admin/login", redirectIfAuth, (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Admin Login</title>
-      <meta name="viewport" content="width=device-width,initial-scale=1">
-      <style>
-        body { font-family: Arial, sans-serif; background: #f7f7f7; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .login-box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        .login-box h2 { margin: 0 0 20px 0; text-align: center; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        .btn-login { width: 100%; padding: 10px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        .btn-login:hover { background: #0056b3; }
-        .error { color: #d9534f; margin-top: 10px; text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="login-box">
-        <h2>Admin Login</h2>
-        <form method="POST" action="/admin/login">
-          <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" required>
-          </div>
-          <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
-          </div>
-          <button type="submit" class="btn-login">Login</button>
-          ${req.query.error ? '<div class="error">Invalid username or password</div>' : ''}
-        </form>
-      </div>
-    </body>
-    </html>
-  `);
+// ==================== ADMIN ROUTES ====================
+
+// Main admin redirect
+app.get("/admin", requireAuth, (req, res) => {
+  res.redirect("/admin/dashboard");
 });
-
-app.post("/admin/login", redirectIfAuth, (req, res) => {
-  const { username, password } = req.body;
-  
-  if (!username || !password) {
-    return res.redirect('/admin/login?error=1');
-  }
-
-  const user = db.prepare("SELECT id, password_hash FROM admin_users WHERE username = ?").get(username);
-  
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    console.log(`[Admin] Failed login attempt for username: "${username}"`);
-    return res.redirect('/admin/login?error=1');
-  }
-
-  req.session.userId = user.id;
-  req.session.username = username;
-  console.log(`[Admin] Successful login for username: "${username}"`);
-  res.redirect('/admin/dashboard');
-});
-
-app.get("/admin/logout", requireAuth, (req, res) => {
-  req.session.destroy((err) => {
-    if (err) console.error("[Admin] Logout error:", err);
-    res.redirect('/admin/login');
-  });
-});
-
-// ==================== COUNTRIES LIST ====================
-const COUNTRIES = {
-  "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
-  "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
-  "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
-  "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
-  "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
-  "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
-  "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
-  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
-  "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
-  "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
-  "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
-  "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
-  "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
-  "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
-  "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
-  "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
-  "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
-  "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
-  "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
-  "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
-  "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
-  "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
-  "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
-  "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
-  "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
-  "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
-  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
-  "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
-  "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
-  "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
-  "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
-};
 
 function adminHeader(title, username) {
   return `<!doctype html>
@@ -568,7 +583,7 @@ function adminHeader(title, username) {
 function adminFooter() {
   return `
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
@@ -619,10 +634,6 @@ function logMemoryUsage() {
 setInterval(logMemoryUsage, 5 * 60 * 1000);
 
 // ==================== ADMIN PAGES ====================
-app.get("/admin", requireAuth, (req, res) => {
-  res.redirect("/admin/dashboard");
-});
-
 app.get("/admin/dashboard", requireAuth, (req, res) => {
   const html = adminHeader("Dashboard", req.session.username) + `
 <div class="panel">
@@ -872,7 +883,7 @@ app.post("/admin-broadcast", requireAuth, (req, res) => {
 app.post("/unban-ip", requireAuth, (req, res) => {
   const ip = req.body.ip;
   if (ip) {
-    unbanUser(ip, null);
+    db.prepare("DELETE FROM banned_ips WHERE ip=?").run(ip);
     console.log(`[Admin] ${req.session.username} unbanned IP:`, ip);
     emitAdminUpdate();
   }
@@ -882,7 +893,7 @@ app.post("/unban-ip", requireAuth, (req, res) => {
 app.post("/unban-fingerprint", requireAuth, (req, res) => {
   const fp = req.body.fp;
   if (fp) {
-    unbanUser(null, fp);
+    db.prepare("DELETE FROM banned_fps WHERE fp=?").run(fp);
     console.log(`[Admin] ${req.session.username} unbanned fingerprint:`, fp);
     emitAdminUpdate();
   }
@@ -920,50 +931,25 @@ app.post("/ban-fingerprint", requireAuth, (req, res) => {
   res.sendStatus(200);
 });
 
-// الحل: تعديل /ban-id للبحث في DB بدلاً من الذاكرة
 app.post("/ban-id", requireAuth, (req, res) => {
   const id = req.body.id;
-  
-  // البحث عن آخر IP + FP مسجلين لهذا socket_id
-  const visitor = db.prepare(`
-    SELECT ip, fp 
-    FROM visitors 
-    WHERE socket_id = ? 
-    ORDER BY ts DESC 
-    LIMIT 1
-  `).get(id);
-  
-  if (visitor && (visitor.ip || visitor.fp)) {
-    banUser(visitor.ip, visitor.fp);
-    
-    // طرد المستخدم إذا كان متصلاً
-    const socket = io.sockets.sockets.get(id);
-    if (socket) {
-      socket.emit("banned", { message: "Banned by admin" });
-      socket.disconnect(true);
-    }
-    
-    console.log(`[Admin] ${req.session.username} banned user ID: ${id}`);
+  const ip = userIp.get(id);
+  const fp = userFingerprint.get(id);
+  if (ip || fp) {
+    banUser(ip, fp);
+    console.log(`[Admin] ${req.session.username} banned user ID:`, id);
     emitAdminUpdate();
   }
   res.sendStatus(200);
 });
 
-// الحل: تعديل /unban-id للبحث في DB بدلاً من الذاكرة
 app.post("/unban-id", requireAuth, (req, res) => {
   const id = req.body.id;
-  
-  const visitor = db.prepare(`
-    SELECT ip, fp 
-    FROM visitors 
-    WHERE socket_id = ? 
-    ORDER BY ts DESC 
-    LIMIT 1
-  `).get(id);
-  
-  if (visitor) {
-    unbanUser(visitor.ip, visitor.fp);
-    console.log(`[Admin] ${req.session.username} unbanned user ID: ${id}`);
+  const ip = userIp.get(id);
+  const fp = userFingerprint.get(id);
+  if (ip || fp) {
+    unbanUser(ip, fp);
+    console.log(`[Admin] ${req.session.username} unbanned user ID:`, id);
     emitAdminUpdate();
   }
   res.sendStatus(200);
