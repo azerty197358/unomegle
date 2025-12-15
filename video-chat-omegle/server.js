@@ -1,5 +1,6 @@
-// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Pages Split
+// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Tabs
 // Minimal critical comments only.
+
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -152,15 +153,14 @@ function unbanUser(ip, fp) {
   emitAdminUpdate();
 }
 
-// helper: header/footer templates reused by each admin page
-function adminHeader(title) {
-  return `<!doctype html>
+// admin page with tabs
+app.get("/admin", adminAuth, (req, res) => {
+  res.send(`
+<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Admin — ${title}</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="icon" href="data:;base64,iVBORw0KGgo=">
+<title>Admin Panel — Live (Tabs)</title>
 <style>
   body{font-family:Arial;padding:16px;background:#f7f7f7}
   .topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -182,99 +182,138 @@ function adminHeader(title) {
   .country-list{max-height:420px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px}
   .country-item{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2}
   .flex{display:flex;gap:8px;align-items:center}
-  @media(max-width:900px){ .row{flex-direction:column} }
 </style>
 </head>
 <body>
-<h1>Admin — ${title}</h1>
+<h1>Admin — Live Dashboard (Tabs)</h1>
+
 <div class="topbar" id="tabs">
-  <a class="tab" href="/admin/dashboard">Dashboard</a>
-  <a class="tab" href="/admin/countries">Countries</a>
-  <a class="tab" href="/admin/stats">Stats</a>
-  <a class="tab" href="/admin/reports">Reports</a>
-  <a class="tab" href="/admin/bans">Bans</a>
+  <div class="tab active" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="countries">Countries</div>
+  <div class="tab" data-tab="stats">Stats</div>
+  <div class="tab" data-tab="reports">Reports</div>
+  <div class="tab" data-tab="bans">Bans</div>
   <div style="margin-left:auto;color:#666">Signed in as admin</div>
 </div>
-`;
-}
 
-function adminFooter() {
-  return `
+<div id="content">
+  <!-- Dashboard -->
+  <div class="panel" id="panel-dashboard">
+    <div class="row">
+      <div class="card" style="max-width:320px">
+        <h3>Live Stats</h3>
+        <div>Connected: <span id="stat-connected" class="stat">0</span></div>
+        <div>Waiting: <span id="stat-waiting" class="stat">0</span></div>
+        <div>Paired: <span id="stat-partnered" class="stat">0</span></div>
+        <div>Total visitors: <span id="stat-totalvisitors">0</span></div>
+        <h4>By Country</h4>
+        <div id="country-list" class="small"></div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <h3>Broadcast</h3>
+        <form id="broadcastForm">
+          <textarea id="broadcastMsg" rows="3" style="width:100%"></textarea><br><br>
+          <button class="broadcast">Send</button>
+        </form>
+
+        <h3 style="margin-top:12px">Active IP Bans</h3>
+        <div id="ip-bans" class="small"></div>
+
+        <h3>Active Device Bans</h3>
+        <div id="fp-bans" class="small"></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <div class="card">
+        <h3>Reported Users</h3>
+        <div id="reported-list" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h3>Recent Visitors</h3>
+        <div id="visitors-list" class="small" style="max-height:360px;overflow:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Countries Panel -->
+  <div class="panel" id="panel-countries" style="display:none">
+    <h3>Countries — Block / Unblock</h3>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div class="country-list" id="all-countries"></div>
+      </div>
+      <div style="width:320px">
+        <h4>Blocked Countries</h4>
+        <div id="blocked-countries" style="min-height:120px;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+        <div style="margin-top:12px">
+          <button id="clear-blocks" style="background:#d9534f;padding:8px 10px;color:#fff;border-radius:6px">Clear All Blocks</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;color:#666;font-size:13px">
+      ملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة واظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
+    </div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div class="panel" id="panel-stats" style="display:none">
+    <h3>Visitors Analytics</h3>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1">
+        <canvas id="visitorsChart" height="160"></canvas>
+      </div>
+      <div style="width:360px">
+        <h4>By Country</h4>
+        <canvas id="countryChart" height="200"></canvas>
+        <h4 style="margin-top:12px">Controls</h4>
+        <div>
+          <label>From: <input type="date" id="fromDate"></label><br><br>
+          <label>To: <input type="date" id="toDate"></label><br><br>
+          <button id="refreshStats" style="background:#007bff;color:#fff;padding:8px 10px;border-radius:6px">Refresh</button>
+        </div>
+      </div>
+    </div>
+    <h4 style="margin-top:14px">Recent Visitors (last 500)</h4>
+    <div id="stat-visitors-list" style="max-height:240px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+  </div>
+
+  <!-- Reports Panel -->
+  <div class="panel" id="panel-reports" style="display:none">
+    <h3>Reports</h3>
+    <div id="reports-panel"></div>
+  </div>
+
+  <!-- Bans Panel -->
+  <div class="panel" id="panel-bans" style="display:none">
+    <h3>Manage Bans</h3>
+    <div id="bans-panel"></div>
+  </div>
+
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
-  socket.on('connect', ()=> socket.emit('admin-join'));
-  socket.on('adminUpdate', snap => {
-    // pages can implement handleAdminUpdate if they want specifics
-    if (typeof handleAdminUpdate === 'function') handleAdminUpdate(snap);
+
+  // tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const tab = t.dataset.tab;
+      document.querySelectorAll('[id^=panel-]').forEach(p=>p.style.display='none');
+      document.getElementById('panel-' + tab).style.display = 'block';
+      if (tab === 'countries') loadCountries();
+      if (tab === 'stats') loadStats();
+      if (tab === 'reports') renderReports();
+      if (tab === 'bans') renderBans();
+    };
   });
-  // helper: country name map
-  const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
-  function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
-</script>
-</body>
-</html>
-`;
-}
-
-// --- admin routes per-tab (protected) ---
-app.get("/admin", adminAuth, (req, res) => {
-  res.redirect("/admin/dashboard");
-});
-
-// Dashboard: overview
-app.get("/admin/dashboard", adminAuth, (req, res) => {
-  const html = adminHeader("Dashboard") + `
-<div class="panel">
-  <div class="row">
-    <div class="card" style="max-width:320px">
-      <h3>Live Stats</h3>
-      <div>Connected: <span id="stat-connected" class="stat">0</span></div>
-      <div>Waiting: <span id="stat-waiting" class="stat">0</span></div>
-      <div>Paired: <span id="stat-partnered" class="stat">0</span></div>
-      <div>Total visitors: <span id="stat-totalvisitors">0</span></div>
-      <h4>By Country</h4>
-      <div id="country-list" class="small"></div>
-    </div>
-
-    <div class="card" style="flex:1">
-      <h3>Broadcast</h3>
-      <form id="broadcastForm">
-        <textarea id="broadcastMsg" rows="3" style="width:100%"></textarea><br><br>
-        <button class="broadcast">Send</button>
-      </form>
-
-      <h3 style="margin-top:12px">Active IP Bans</h3>
-      <div id="ip-bans" class="small"></div>
-
-      <h3>Active Device Bans</h3>
-      <div id="fp-bans" class="small"></div>
-    </div>
-  </div>
-
-  <div class="row" style="margin-top:12px">
-    <div class="card">
-      <h3>Reported Users (summary)</h3>
-      <div id="reported-list" class="small"></div>
-    </div>
-
-    <div class="card">
-      <h3>Recent Visitors</h3>
-      <div id="visitors-list" class="small" style="max-height:360px;overflow:auto"></div>
-    </div>
-  </div>
-</div>
-<script>
-  // broadcast
-  document.getElementById('broadcastForm').onsubmit = e => {
-    e.preventDefault();
-    const msg = document.getElementById('broadcastMsg').value.trim();
-    if (!msg) return;
-    fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})});
-    document.getElementById('broadcastMsg').value = '';
-  };
 
   function renderSnapshot(snap) {
     document.getElementById('stat-connected').textContent = snap.stats.connected;
@@ -290,82 +329,117 @@ app.get("/admin/dashboard", adminAuth, (req, res) => {
       entries.sort((a,b)=>b[1]-a[1]);
       entries.forEach(([country, cnt]) => {
         const d = document.createElement('div');
-        d.textContent = (COUNTRY_NAME(country) || country) + ': ' + cnt;
+        d.textContent = country + ': ' + cnt;
         cl.appendChild(d);
       });
     }
 
-    const ipb = document.getElementById('ip-bans'); ipb.innerHTML='';
+    // bans
+    const ipb = document.getElementById('ip-bans');
+    ipb.innerHTML = '';
     if (snap.activeIpBans.length === 0) ipb.textContent = 'No active IP bans';
     else snap.activeIpBans.forEach(b => {
       const div = document.createElement('div');
       const dt = new Date(b.expires).toLocaleString();
       div.innerHTML = '<b>'+b.ip+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button'); btn.textContent = 'Unban'; btn.className='unban';
-      btn.onclick = () => fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})});
-      div.appendChild(btn); ipb.appendChild(div);
+      const btn = document.createElement('button');
+      btn.textContent = 'Unban';
+      btn.className = 'unban';
+      btn.onclick = () => {
+        fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})}).then(()=>{});
+      };
+      div.appendChild(btn);
+      ipb.appendChild(div);
     });
 
-    const fpb = document.getElementById('fp-bans'); fpb.innerHTML='';
+    const fpb = document.getElementById('fp-bans');
+    fpb.innerHTML = '';
     if (snap.activeFpBans.length === 0) fpb.textContent = 'No active device bans';
     else snap.activeFpBans.forEach(b => {
       const div = document.createElement('div');
       const dt = new Date(b.expires).toLocaleString();
       div.innerHTML = '<b>'+b.fp+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button'); btn.textContent = 'Unban'; btn.className='unban';
-      btn.onclick = () => fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})});
-      div.appendChild(btn); fpb.appendChild(div);
+      const btn = document.createElement('button');
+      btn.textContent = 'Unban';
+      btn.className = 'unban';
+      btn.onclick = () => {
+        fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})}).then(()=>{});
+      };
+      div.appendChild(btn);
+      fpb.appendChild(div);
     });
 
     // reports
-    const rep = document.getElementById('reported-list'); rep.innerHTML='';
+    const rep = document.getElementById('reported-list');
+    rep.innerHTML = '';
     if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
     else snap.reportedUsers.forEach(r => {
-      const div = document.createElement('div'); div.className='rep-card';
-      div.innerHTML = '<b>Target:</b> ' + r.target + ' — <b>Reports:</b> ' + r.count;
-      rep.appendChild(div);
+      const div = document.createElement('div');
+      div.className = 'rep-card';
+      const left = document.createElement('div');
+      left.style.display='inline-block'; left.style.verticalAlign='top'; left.style.width='160px';
+      const right = document.createElement('div'); right.style.display='inline-block'; right.style.verticalAlign='top'; right.style.marginLeft='12px'; right.style.width='calc(100% - 180px)';
+      if (r.screenshot) {
+        const img = document.createElement('img'); img.src = r.screenshot; img.className='screenshot-thumb'; left.appendChild(img);
+        const showBtn = document.createElement('button'); showBtn.textContent='Show Screenshot'; showBtn.style.background='#007bff'; showBtn.style.marginTop='6px';
+        showBtn.onclick = ()=>{ const w = window.open("","_blank"); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+r.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">')};
+        left.appendChild(showBtn);
+      } else left.innerHTML = '<div style="color:#777;font-size:13px">No screenshot</div>';
+      right.innerHTML = '<b>Target:</b> ' + r.target + '<br><b>Reports:</b> ' + r.count;
+      const small = document.createElement('div'); small.style.fontSize='12px'; small.style.color='#666'; small.style.marginTop='8px';
+      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+      right.appendChild(small);
+
+      const btnWrap = document.createElement('div'); btnWrap.style.marginTop='8px';
+      const banBtn = document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban'; banBtn.style.marginRight='8px';
+      banBtn.onclick = ()=> {
+        if (!confirm('Ban user ' + r.target + ' ?')) return;
+        fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
+      };
+      const removeBtn = document.createElement('button'); removeBtn.textContent='Remove Report'; removeBtn.style.background='#6c757d'; removeBtn.style.marginRight='8px';
+      removeBtn.onclick = ()=> {
+        if (!confirm('Remove report for user ' + r.target + ' ?')) return;
+        fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
+      };
+      btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); right.appendChild(btnWrap);
+      div.appendChild(left); div.appendChild(right); rep.appendChild(div);
     });
 
     // visitors list
-    const vis = document.getElementById('visitors-list'); vis.innerHTML='';
+    const vis = document.getElementById('visitors-list');
+    vis.innerHTML = '';
     if (snap.recentVisitors.length === 0) vis.textContent = 'No visitors yet';
     else snap.recentVisitors.forEach(v => {
       const d = document.createElement('div');
       d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country || 'Unknown') + ' — ' + v.ip + (v.fp ? ' — ' + v.fp.slice(0,8) : '');
       vis.appendChild(d);
     });
+
+    // blocked countries (summary)
+    const bc = document.getElementById('blocked-countries');
+    bc.innerHTML = '';
+    if (snap.bannedCountries.length === 0) bc.textContent = 'No blocked countries';
+    else snap.bannedCountries.forEach(c => {
+      const div = document.createElement('div'); div.textContent = (c + ' — ' + (COUNTRY_NAME(c) || c)); bc.appendChild(div);
+    });
   }
 
-  function handleAdminUpdate(snap){ renderSnapshot(snap); }
-  // initial request handled by socket 'admin-join'
-</script>
-` + adminFooter();
-  res.send(html);
-});
+  socket.on('connect', () => {
+    socket.emit('admin-join');
+  });
+  socket.on('adminUpdate', (snap) => {
+    renderSnapshot(snap);
+  });
 
-// Countries page
-app.get("/admin/countries", adminAuth, (req, res) => {
-  const html = adminHeader("Countries") + `
-<div class="panel">
-  <h3>Countries — Block / Unblock</h3>
-  <div style="display:flex;gap:12px">
-    <div style="flex:1">
-      <div class="country-list" id="all-countries"></div>
-    </div>
-    <div style="width:320px">
-      <h4>Blocked Countries</h4>
-      <div id="blocked-countries" style="min-height:120px;border:1px solid #eee;padding:8px;border-radius:6px"></div>
-      <div style="margin-top:12px">
-        <button id="clear-blocks" style="background:#d9534f;padding:8px 10px;color:#fff;border-radius:6px">Clear All Blocks</button>
-      </div>
-    </div>
-  </div>
-  <div style="margin-top:12px;color:#666;font-size:13px">
-    ملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة واظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
-  </div>
-</div>
+  document.getElementById('broadcastForm').onsubmit = e => {
+    e.preventDefault();
+    const msg = document.getElementById('broadcastMsg').value.trim();
+    if (!msg) return;
+    fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})});
+    document.getElementById('broadcastMsg').value = '';
+  };
 
-<script>
+  // --- Countries tab logic ---
   const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
   function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
 
@@ -399,12 +473,14 @@ app.get("/admin/countries", adminAuth, (req, res) => {
       container.appendChild(div);
     });
 
+    // clear all
     document.getElementById('clear-blocks').onclick = async () => {
       if (!confirm('Clear all blocked countries?')) return;
       await fetch('/admin/clear-blocked', {method:'POST'});
       loadCountries();
     };
 
+    // update blocked-countries list
     const bc = document.getElementById('blocked-countries');
     bc.innerHTML = '';
     if (data.banned.length === 0) bc.textContent = 'No blocked countries';
@@ -413,39 +489,8 @@ app.get("/admin/countries", adminAuth, (req, res) => {
     });
   }
 
-  loadCountries();
-</script>
-` + adminFooter();
-  res.send(html);
-});
-
-// Stats page (contains the requested B-1: Daily Visitors Line Chart)
-app.get("/admin/stats", adminAuth, (req, res) => {
-  const html = adminHeader("Stats") + `
-<div class="panel">
-  <h3>Visitors Analytics</h3>
-  <div style="display:flex;gap:12px;align-items:flex-start">
-    <div style="flex:1">
-      <canvas id="visitorsChart" height="160"></canvas>
-    </div>
-    <div style="width:360px">
-      <h4>By Country</h4>
-      <canvas id="countryChart" height="200"></canvas>
-      <h4 style="margin-top:12px">Controls</h4>
-      <div>
-        <label>From: <input type="date" id="fromDate"></label><br><br>
-        <label>To: <input type="date" id="toDate"></label><br><br>
-        <button id="refreshStats" style="background:#007bff;color:#fff;padding:8px 10px;border-radius:6px">Refresh</button>
-      </div>
-    </div>
-  </div>
-  <h4 style="margin-top:14px">Recent Visitors (last 500)</h4>
-  <div id="stat-visitors-list" style="max-height:240px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px"></div>
-</div>
-
-<script>
+  // --- Stats tab logic ---
   let visitorsChart = null, countryChart = null;
-
   async function loadStats() {
     const from = document.getElementById('fromDate').value;
     const to = document.getElementById('toDate').value;
@@ -455,37 +500,19 @@ app.get("/admin/stats", adminAuth, (req, res) => {
     const res = await fetch('/admin/stats-data?' + params.toString());
     const data = await res.json();
 
-    // visitors line (Daily Visitors Line Chart - B-1)
+    // visitors line
     const ctx = document.getElementById('visitorsChart').getContext('2d');
     const labels = data.daily.map(d=>d.date);
     const values = data.daily.map(d=>d.count);
     if (visitorsChart) visitorsChart.destroy();
-    visitorsChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Daily Visitors',
-          data: values,
-          fill: false,
-          tension: 0.2,
-          pointRadius: 3,
-          borderWidth: 2
-        }]
-      },
-      options: { responsive:true, scales:{ x:{ display:true }, y:{ beginAtZero:true } } }
-    });
+    visitorsChart = new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:'Visitors', data:values, fill:false, tension:0.2 }] }, options:{ responsive:true } });
 
     // countries bar
     const ctx2 = document.getElementById('countryChart').getContext('2d');
     const cLabels = data.countries.map(c=>c.country);
     const cVals = data.countries.map(c=>c.count);
     if (countryChart) countryChart.destroy();
-    countryChart = new Chart(ctx2, {
-      type: 'bar',
-      data: { labels:cLabels, datasets:[{ label:'By Country', data:cVals, borderWidth:1 }] },
-      options:{ responsive:true, scales:{ y:{ beginAtZero:true } } }
-    });
+    countryChart = new Chart(ctx2, { type:'bar', data:{ labels:cLabels, datasets:[{ label:'By Country', data:cVals }] }, options:{ responsive:true } });
 
     // visitors list
     const list = document.getElementById('stat-visitors-list'); list.innerHTML='';
@@ -496,101 +523,29 @@ app.get("/admin/stats", adminAuth, (req, res) => {
   }
 
   document.getElementById('refreshStats').onclick = loadStats;
-  // initial
+
+  // --- Reports/Bans renderers reuse adminUpdate snapshot ---
+  function renderReports(){
+    // snapshot will populate reports via adminUpdate
+  }
+  function renderBans(){
+    // snapshot will populate bans via adminUpdate
+  }
+
+  // helper to render reports/bans will be handled by adminUpdate snapshot updates
+
+  // initial load
+  socket.on('adminUpdate', snap => { renderSnapshot(snap); });
+  // manual call to load countries for initial
+  loadCountries();
   loadStats();
 </script>
-` + adminFooter();
-  res.send(html);
+</body>
+</html>
+  `);
 });
 
-// Reports page
-app.get("/admin/reports", adminAuth, (req, res) => {
-  const html = adminHeader("Reports") + `
-<div class="panel">
-  <h3>Reports</h3>
-  <div id="reports-panel"></div>
-</div>
-<script>
-  function renderReportsPanel(snap) {
-    const container = document.getElementById('reports-panel');
-    container.innerHTML = '';
-    if (!snap.reportedUsers || snap.reportedUsers.length === 0) return container.textContent = 'No reports';
-    snap.reportedUsers.forEach(r => {
-      const div = document.createElement('div'); div.className='rep-card';
-      const left = document.createElement('div'); left.style.display='inline-block'; left.style.verticalAlign='top'; left.style.width='160px';
-      const right = document.createElement('div'); right.style.display='inline-block'; right.style.verticalAlign='top'; right.style.marginLeft='12px'; right.style.width='calc(100% - 180px)';
-      if (r.screenshot) {
-        const img = document.createElement('img'); img.src = r.screenshot; img.className='screenshot-thumb'; left.appendChild(img);
-        const showBtn = document.createElement('button'); showBtn.textContent='Show Screenshot'; showBtn.style.background='#007bff'; showBtn.style.marginTop='6px';
-        showBtn.onclick = ()=>{ const w = window.open("","_blank"); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+r.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">')};
-        left.appendChild(showBtn);
-      } else left.innerHTML = '<div style="color:#777;font-size:13px">No screenshot</div>';
-      right.innerHTML = '<b>Target:</b> ' + r.target + '<br><b>Reports:</b> ' + r.count;
-      const small = document.createElement('div'); small.style.fontSize='12px'; small.style.color='#666'; small.style.marginTop='8px';
-      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
-      right.appendChild(small);
-
-      const btnWrap = document.createElement('div'); btnWrap.style.marginTop='8px';
-      const banBtn = document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban'; banBtn.style.marginRight='8px';
-      banBtn.onclick = ()=> {
-        if (!confirm('Ban user ' + r.target + ' ?')) return;
-        fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
-      };
-      const removeBtn = document.createElement('button'); removeBtn.textContent='Remove Report'; removeBtn.style.background='#6c757d'; removeBtn.style.marginRight='8px';
-      removeBtn.onclick = ()=> {
-        if (!confirm('Remove report for user ' + r.target + ' ?')) return;
-        fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })});
-      };
-      btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); right.appendChild(btnWrap);
-      div.appendChild(left); div.appendChild(right); container.appendChild(div);
-    });
-  }
-
-  function handleAdminUpdate(snap){ renderReportsPanel(snap); }
-</script>
-` + adminFooter();
-  res.send(html);
-});
-
-// Bans page
-app.get("/admin/bans", adminAuth, (req, res) => {
-  const html = adminHeader("Bans") + `
-<div class="panel">
-  <h3>Manage Bans</h3>
-  <div id="bans-panel"></div>
-</div>
-<script>
-  function renderBansPanel(snap) {
-    const container = document.getElementById('bans-panel'); container.innerHTML = '';
-    const iph = document.createElement('div'); iph.innerHTML = '<h4>IP Bans</h4>'; container.appendChild(iph);
-    if (snap.activeIpBans.length === 0) iph.appendChild(document.createTextNode('No IP bans'));
-    else snap.activeIpBans.forEach(b => {
-      const div = document.createElement('div'); div.style.marginBottom='8px';
-      const dt = new Date(b.expires).toLocaleString();
-      div.innerHTML = '<b>'+b.ip+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button'); btn.textContent='Unban'; btn.className='unban';
-      btn.onclick = ()=> fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})});
-      div.appendChild(btn); container.appendChild(div);
-    });
-
-    const dph = document.createElement('div'); dph.innerHTML = '<h4 style="margin-top:12px">Device Bans</h4>'; container.appendChild(dph);
-    if (snap.activeFpBans.length === 0) dph.appendChild(document.createTextNode('No device bans'));
-    else snap.activeFpBans.forEach(b => {
-      const div = document.createElement('div'); div.style.marginBottom='8px';
-      const dt = new Date(b.expires).toLocaleString();
-      div.innerHTML = '<b>'+b.fp+'</b> — expires: '+dt + ' ';
-      const btn = document.createElement('button'); btn.textContent='Unban'; btn.className='unban';
-      btn.onclick = ()=> fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})});
-      div.appendChild(btn); container.appendChild(div);
-    });
-  }
-  function handleAdminUpdate(snap){ renderBansPanel(snap); }
-</script>
-` + adminFooter();
-  res.send(html);
-});
-
-// --- admin endpoints for countries + stats (unchanged) ---
+// admin endpoints for countries + stats
 app.get("/admin/countries-list", adminAuth, (req, res) => {
   res.send({ all: Object.keys(COUNTRIES), banned: Array.from(bannedCountries) });
 });
@@ -633,16 +588,18 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
     const key = t.toISOString().slice(0,10);
     dailyMap.set(key, (dailyMap.get(key)||0) + 1);
   }
-  // ensure dates are continuous (optional): not necessary but we return sorted days present
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
 
+  // country totals (from countryCounts)
   const countries = Array.from(countryCounts.entries()).map(([country,count])=>({country,count})).sort((a,b)=>b.count - a.count).slice(0,50);
+
+  // recent visitors (last 500)
   const recent = visitorsHistory.slice(-500).map(v=>({ ip:v.ip, fp:v.fp, country:v.country, ts:v.ts }));
 
   res.send({ daily, countries, recent });
 });
 
-// admin actions (unchanged)
+// admin endpoints (existing)
 app.post("/admin-broadcast", adminAuth, (req, res) => {
   const msg = req.body.message || (req.body && req.body.message);
   if (msg && msg.trim()) {
@@ -693,7 +650,7 @@ app.post("/remove-report", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
-// socket logic (unchanged, enhanced with country blocking)
+// socket logic (enhanced with country blocking)
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
   userIp.set(socket.id, ip);
@@ -724,7 +681,10 @@ io.on("connection", (socket) => {
 
   // check country block
   if (country && bannedCountries.has(country)) {
+    // tell the client they are blocked by country
     socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
+    // optionally disconnect to fully prevent actions
+    // socket.disconnect(true);
     emitAdminUpdate();
     return;
   }
@@ -864,4 +824,3 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
-
