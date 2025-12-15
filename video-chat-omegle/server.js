@@ -1,7 +1,5 @@
-اجعل البيانات تحفظ في قاعده البيانات هنا وستحذف كل شهر البيانات القديمه لكي لاتنفذ خطتي postgresql://unomegle:aHJr5qb4oCxffr2qs92cH2FPCxW6T2qX@dpg-d4u3diur433s73d9j580-a.oregon-postgres.render.com/unomegle واجعل موقعي شغال 24 ساعه مع تقليل استهلاك خطتي انا استخدم الخطه المجانيه عدل ماطلبته منك واعطني الكود كاملا // File: server.js
 // FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Pages Split
 // Minimal critical comments only.
-
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -866,3 +864,4 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
+
