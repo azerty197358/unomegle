@@ -1,4 +1,3 @@
-عدله واعطني ياه كاملا انا متعب جدا // File: server.js
 // FULL SERVER — POSTGRES PERSISTENCE + CLEANUP + RESOURCE TUNING
 // Minimal critical comments only.
 
@@ -616,3 +615,4 @@ setInterval(()=>{ loadBannedCountriesCache().catch(()=>{}); loadBansCache().catc
 // start server
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
+
