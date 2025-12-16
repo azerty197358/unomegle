@@ -198,9 +198,393 @@ function getAdminSnapshot() {
   };
 }
 
-// ===============  admin page (same HTML)  ===============
+// ===============  admin page (FULL HTML)  ===============
 app.get("/admin", adminAuth, (req, res) => {
-  res.send(`...`); // نفس الـ HTML السابق تماماً (طويل جداً للصقه هنا)
+  res.send(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Admin Panel — Live (Tabs)</title>
+<style>
+  body{font-family:Arial;padding:16px;background:#f7f7f7}
+  .topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .tab{padding:8px 12px;border-radius:6px;background:#fff;cursor:pointer;border:1px solid #eee}
+  .tab.active{box-shadow:0 2px 10px rgba(0,0,0,0.06);background:#fff}
+  .panel{background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
+  .row{display:flex;gap:16px;align-items:flex-start}
+  .card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.05);flex:1}
+  .small{font-size:13px;color:#666}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
+  button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;color:#fff}
+  .unban{background:#28a745}
+  .ban{background:#d9534f}
+  .broadcast{background:#007bff}
+  .stat{font-size:20px;font-weight:700}
+  .screenshot-thumb{max-width:140px;max-height:90px;border:1px solid #eee;margin-left:8px;vertical-align:middle}
+  .rep-card{padding:10px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;background:#fff}
+  .country-list{max-height:420px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px}
+  .country-item{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #f2f2f2}
+  .flex{display:flex;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<h1>Admin — Live Dashboard (Tabs)</h1>
+
+<div class="topbar" id="tabs">
+  <div class="tab active" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="countries">Countries</div>
+  <div class="tab" data-tab="stats">Stats</div>
+  <div class="tab" data-tab="reports">Reports</div>
+  <div class="tab" data-tab="bans">Bans</div>
+  <div style="margin-left:auto;color:#666">Signed in as admin</div>
+</div>
+
+<div id="content">
+  <!-- Dashboard -->
+  <div class="panel" id="panel-dashboard">
+    <div class="row">
+      <div class="card" style="max-width:320px">
+        <h3>Live Stats</h3>
+        <div>Connected: <span id="stat-connected" class="stat">0</span></div>
+        <div>Waiting: <span id="stat-waiting" class="stat">0</span></div>
+        <div>Paired: <span id="stat-partnered" class="stat">0</span></div>
+        <div>Total visitors: <span id="stat-totalvisitors">0</span></div>
+        <h4>By Country</h4>
+        <div id="country-list" class="small"></div>
+      </div>
+
+      <div class="card" style="flex:1">
+        <h3>Broadcast</h3>
+        <form id="broadcastForm">
+          <textarea id="broadcastMsg" rows="3" style="width:100%"></textarea><br><br>
+          <button class="broadcast">Send</button>
+        </form>
+
+        <h3 style="margin-top:12px">Active IP Bans</h3>
+        <div id="ip-bans" class="small"></div>
+
+        <h3>Active Device Bans</h3>
+        <div id="fp-bans" class="small"></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <div class="card">
+        <h3>Reported Users</h3>
+        <div id="reported-list" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h3>Recent Visitors</h3>
+        <div id="visitors-list" class="small" style="max-height:360px;overflow:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Countries Panel -->
+  <div class="panel" id="panel-countries" style="display:none">
+    <h3>Countries — Block / Unblock</h3>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div class="country-list" id="all-countries"></div>
+      </div>
+      <div style="width:320px">
+        <h4>Blocked Countries</h4>
+        <div id="blocked-countries" style="min-height:120px;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+        <div style="margin-top:12px">
+          <button id="clear-blocks" style="background:#d9534f;padding:8px 10px;color:#fff;border-radius:6px">Clear All Blocks</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;color:#666;font-size:13px">
+      ملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة واظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
+    </div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div class="panel" id="panel-stats" style="display:none">
+    <h3>Visitors Analytics</h3>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1">
+        <canvas id="visitorsChart" height="160"></canvas>
+      </div>
+      <div style="width:360px">
+        <h4>By Country</h4>
+        <canvas id="countryChart" height="200"></canvas>
+        <h4 style="margin-top:12px">Controls</h4>
+        <div>
+          <label>From: <input type="date" id="fromDate"></label><br><br>
+          <label>To: <input type="date" id="toDate"></label><br><br>
+          <button id="refreshStats" style="background:#007bff;color:#fff;padding:8px 10px;border-radius:6px">Refresh</button>
+        </div>
+      </div>
+    </div>
+    <h4 style="margin-top:14px">Recent Visitors (last 500)</h4>
+    <div id="stat-visitors-list" style="max-height:240px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px"></div>
+  </div>
+
+  <!-- Reports Panel -->
+  <div class="panel" id="panel-reports" style="display:none">
+    <h3>Reports</h3>
+    <div id="reports-panel"></div>
+  </div>
+
+  <!-- Bans Panel -->
+  <div class="panel" id="panel-bans" style="display:none">
+    <h3>Manage Bans</h3>
+    <div id="bans-panel"></div>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const socket = io();
+  socket.emit('admin-join');
+
+  // tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const tab = t.dataset.tab;
+      document.querySelectorAll('[id^=panel-]').forEach(p=>p.style.display='none');
+      document.getElementById('panel-' + tab).style.display = 'block';
+      if (tab === 'countries') loadCountries();
+      if (tab === 'stats') loadStats();
+      if (tab === 'reports') renderReports();
+      if (tab === 'bans') renderBans();
+    };
+  });
+
+  function renderSnapshot(snap) {
+    document.getElementById('stat-connected').textContent = snap.stats.connected;
+    document.getElementById('stat-waiting').textContent = snap.stats.waiting;
+    document.getElementById('stat-partnered').textContent = snap.stats.partnered;
+    document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors;
+
+    const cl = document.getElementById('country-list');
+    cl.innerHTML = '';
+    const entries = Object.entries(snap.stats.countryCounts);
+    if (entries.length === 0) cl.textContent = 'No data';
+    else {
+      entries.sort((a,b)=>b[1]-a[1]);
+      entries.forEach(([country, cnt]) => {
+        const d = document.createElement('div');
+        d.textContent = country + ': ' + cnt;
+        cl.appendChild(d);
+      });
+    }
+
+    // bans
+    const ipb = document.getElementById('ip-bans');
+    ipb.innerHTML = '';
+    if (snap.activeIpBans.length === 0) ipb.textContent = 'No active IP bans';
+    else snap.activeIpBans.forEach(b => {
+      const div = document.createElement('div');
+      const dt = new Date(b.expires).toLocaleString();
+      div.innerHTML = '<b>'+b.ip+'</b> — expires: '+dt + ' ';
+      const btn = document.createElement('button');
+      btn.textContent = 'Unban';
+      btn.className = 'unban';
+      btn.onclick = () => {
+        fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})}).then(()=>{});
+      };
+      div.appendChild(btn);
+      ipb.appendChild(div);
+    });
+
+    const fpb = document.getElementById('fp-bans');
+    fpb.innerHTML = '';
+    if (snap.activeFpBans.length === 0) fpb.textContent = 'No active device bans';
+    else snap.activeFpBans.forEach(b => {
+      const div = document.createElement('div');
+      const dt = new Date(b.expires).toLocaleString();
+      div.innerHTML = '<b>'+b.fp+'</b> — expires: '+dt + ' ';
+      const btn = document.createElement('button');
+      btn.textContent = 'Unban';
+      btn.className = 'unban';
+      btn.onclick = () => {
+        fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})}).then(()=>{});
+      };
+      div.appendChild(btn);
+      fpb.appendChild(div);
+    });
+
+    // reports
+    const rep = document.getElementById('reported-list');
+    rep.innerHTML = '';
+    if (snap.reportedUsers.length === 0) rep.textContent = 'No reports';
+    else snap.reportedUsers.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'rep-card';
+      const left = document.createElement('div');
+      left.style.display='inline-block'; left.style.verticalAlign='top'; left.style.width='160px';
+      const right = document.createElement('div'); right.style.display='inline-block'; right.style.verticalAlign='top'; right.style.marginLeft='12px'; right.style.width='calc(100% - 180px)';
+      if (r.screenshot) {
+        const img = document.createElement('img'); img.src = r.screenshot; img.className='screenshot-thumb'; left.appendChild(img);
+        const showBtn = document.createElement('button'); showBtn.textContent='Show Screenshot'; showBtn.style.background='#007bff'; showBtn.style.marginTop='6px';
+        showBtn.onclick = ()=>{ const w = window.open("","_blank"); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+r.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">')};
+        left.appendChild(showBtn);
+      } else left.innerHTML = '<div style="color:#777;font-size:13px">No screenshot</div>';
+      right.innerHTML = '<b>Target:</b> ' + r.target + '<br><b>Reports:</b> ' + r.count;
+      const small = document.createElement('div'); small.style.fontSize='12px'; small.style.color='#666'; small.style.marginTop='8px';
+      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+      right.appendChild(small);
+
+      const btnWrap = document.createElement('div'); btnWrap.style.marginTop='8px';
+      const banBtn = document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban'; banBtn.style.marginRight='8px';
+      banBtn.onclick = ()=> {
+        if (!confirm('Ban user ' + r.target + ' ?')) return;
+        fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
+      };
+      const removeBtn = document.createElement('button'); removeBtn.textContent='Remove Report'; removeBtn.style.background='#6c757d'; removeBtn.style.marginRight='8px';
+      removeBtn.onclick = ()=> {
+        if (!confirm('Remove report for user ' + r.target + ' ?')) return;
+        fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
+      };
+      btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); right.appendChild(btnWrap);
+      div.appendChild(left); div.appendChild(right); rep.appendChild(div);
+    });
+
+    // visitors list
+    const vis = document.getElementById('visitors-list');
+    vis.innerHTML = '';
+    if (snap.recentVisitors.length === 0) vis.textContent = 'No visitors yet';
+    else snap.recentVisitors.forEach(v => {
+      const d = document.createElement('div');
+      d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country || 'Unknown') + ' — ' + v.ip + (v.fp ? ' — ' + v.fp.slice(0,8) : '');
+      vis.appendChild(d);
+    });
+
+    // blocked countries (summary)
+    const bc = document.getElementById('blocked-countries');
+    bc.innerHTML = '';
+    if (snap.bannedCountries.length === 0) bc.textContent = 'No blocked countries';
+    else snap.bannedCountries.forEach(c => {
+      const div = document.createElement('div'); div.textContent = (c + ' — ' + (COUNTRY_NAME(c) || c)); bc.appendChild(div);
+    });
+  }
+
+  socket.on('connect', () => {
+    socket.emit('admin-join');
+  });
+  socket.on('adminUpdate', (snap) => {
+    renderSnapshot(snap);
+  });
+
+  document.getElementById('broadcastForm').onsubmit = e => {
+    e.preventDefault();
+    const msg = document.getElementById('broadcastMsg').value.trim();
+    if (!msg) return;
+    fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})}).then(()=>{});
+    document.getElementById('broadcastMsg').value = '';
+  };
+
+  // --- Countries tab logic ---
+  const ALL_COUNTRIES = ${JSON.stringify(COUNTRIES)};
+  function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
+
+  async function loadCountries() {
+    const res = await fetch('/admin/countries-list');
+    const data = await res.json();
+    const banned = new Set(data.banned || []);
+    const container = document.getElementById('all-countries');
+    container.innerHTML = '';
+    const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
+    codes.forEach(code => {
+      const div = document.createElement('div'); div.className='country-item';
+      const left = document.createElement('div'); left.className='flex';
+      const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked = banned.has(code);
+      checkbox.dataset.code = code;
+      const label = document.createElement('div'); label.textContent = code + ' — ' + ALL_COUNTRIES[code];
+      left.appendChild(checkbox); left.appendChild(label);
+      const action = document.createElement('div');
+      const btn = document.createElement('button'); btn.textContent = checkbox.checked ? 'Unblock' : 'Block';
+      btn.style.background = checkbox.checked ? '#28a745' : '#d9534f'; btn.style.color='#fff';
+      btn.onclick = async () => {
+        if (checkbox.checked) {
+          await fetch('/admin/unblock-country', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ code })}).then(()=>{});
+        } else {
+          await fetch('/admin/block-country', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ code })}).then(()=>{});
+        }
+        loadCountries();
+      };
+      action.appendChild(btn);
+      div.appendChild(left); div.appendChild(action);
+      container.appendChild(div);
+    });
+
+    // clear all
+    document.getElementById('clear-blocks').onclick = async () => {
+      if (!confirm('Clear all blocked countries?')) return;
+      await fetch('/admin/clear-blocked', {method:'POST'}).then(()=>{});
+      loadCountries();
+    };
+
+    // update blocked-countries list
+    const bc = document.getElementById('blocked-countries');
+    bc.innerHTML = '';
+    if (data.banned.length === 0) bc.textContent = 'No blocked countries';
+    else data.banned.forEach(c => {
+      const d = document.createElement('div'); d.textContent = c + ' — ' + COUNTRY_NAME(c); bc.appendChild(d);
+    });
+  }
+
+  // --- Stats tab logic ---
+  let visitorsChart = null, countryChart = null;
+  async function loadStats() {
+    const from = document.getElementById('fromDate').value;
+    const to = document.getElementById('toDate').value;
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const res = await fetch('/admin/stats-data?' + params.toString());
+    const data = await res.json();
+
+    // visitors line
+    const ctx = document.getElementById('visitorsChart').getContext('2d');
+    const labels = data.daily.map(d=>d.date);
+    const values = data.daily.map(d=>d.count);
+    if (visitorsChart) visitorsChart.destroy();
+    visitorsChart = new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:'Visitors', data:values, fill:false, tension:0.2 }] }, options:{ responsive:true } });
+
+    // countries bar
+    const ctx2 = document.getElementById('countryChart').getContext('2d');
+    const cLabels = data.countries.map(c=>c.country);
+    const cVals = data.countries.map(c=>c.count);
+    if (countryChart) countryChart.destroy();
+    countryChart = new Chart(ctx2, { type:'bar', data:{ labels:cLabels, datasets:[{ label:'By Country', data:cVals }] }, options:{ responsive:true } });
+
+    // visitors list
+    const list = document.getElementById('stat-visitors-list'); list.innerHTML='';
+    data.recent.forEach(v => {
+      const d = document.createElement('div'); d.textContent = new Date(v.ts).toLocaleString() + ' — ' + (v.country||'Unknown') + ' — ' + v.ip + (v.fp?(' — '+v.fp.slice(0,8)):''); list.appendChild(d);
+    });
+  }
+
+  document.getElementById('refreshStats').onclick = loadStats;
+
+  // --- Reports/Bans renderers reuse adminUpdate snapshot ---
+  function renderReports(){
+    // snapshot will populate reports via adminUpdate
+  }
+  function renderBans(){
+    // snapshot will populate bans via adminUpdate
+  }
+
+  // helper to render reports/bans will be handled by adminUpdate snapshot updates
+
+  // initial load
+  socket.on('adminUpdate', snap => { renderSnapshot(snap); });
+  // manual call to load countries for initial
+  loadCountries();
+  loadStats();
+</script>
+</body>
+</html>`);
 });
 
 // ===============  admin endpoints  ===============
