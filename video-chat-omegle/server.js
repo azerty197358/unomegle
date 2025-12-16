@@ -45,7 +45,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS reports(
 )`);
 
 // ---------- helpers ----------
-const COUNTRIES = { /* ضع هنا كائن الدول الطويل من كودك */ };
+const COUNTRIES = { /* ضع كائن الدول الطويل هنا */ };
 const BANNED_COUNTRIES_FILE = path.join(__dirname, 'banned_countries.json');
 let bannedCountries = new Set();
 try { bannedCountries = new Set(JSON.parse(fs.readFileSync(BANNED_COUNTRIES_FILE, 'utf8'))); } catch {}
@@ -63,7 +63,7 @@ const BAN_MS         = 24 * 60 * 60 * 1000;
 const bannedIps = new Map();
 const bannedFps = new Map();
 
-// ---------- better-sqlite3 helpers (متزامن) ----------
+// ---------- better-sqlite3 helpers ----------
 const stmtAddVisit   = db.prepare('INSERT OR IGNORE INTO visits(fp,ip,country,ts) VALUES (?,?,?,?)');
 const stmtCount24h   = db.prepare('SELECT COUNT(*) as c FROM visits WHERE ts > ?');
 const stmtLoadBans   = db.prepare('SELECT type,value,expiry FROM bans WHERE expiry > ?');
@@ -100,14 +100,13 @@ function saveReport(target, reporter, screenshot = null) {
   stmtSaveRep.run(target, reporter, screenshot, Date.now());
 }
 
-// تهيئة أولية
+// تهيئة
 loadBans();
 loadReports();
 
 // ---------- admin ----------
 function getAdminSnapshot() {
   const now = Date.now();
-  // تنظيف منتهي
   for (const [k, e] of bannedIps.entries()) if (e < now) bannedIps.delete(k);
   for (const [k, e] of bannedFps.entries()) if (e < now) bannedFps.delete(k);
 
@@ -131,7 +130,7 @@ function emitAdminUpdate() {
   io.of('/').emit('adminUpdate', getAdminSnapshot());
 }
 
-// ---------- ban helpers ----------
+// ---------- ban ----------
 function banUser(ip, fp) {
   const exp = Date.now() + BAN_MS;
   if (ip) { bannedIps.set(ip, exp); saveBan('ip', ip, exp); }
@@ -155,6 +154,7 @@ app.get('/admin', adminAuth, (req, res) => {
   .stat{font-size:20px;font-weight:700}
   button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;color:#fff}
   .ban{background:#d9534f}.unban{background:#28a745}.broadcast{background:#007bff}
+  .ss-thumb{max-width:140px;max-height:90px;border:1px solid #ccc;margin-left:8px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -182,6 +182,7 @@ function render(s){
   document.getElementById('c2').textContent=s.stats.waiting;
   document.getElementById('c3').textContent=s.stats.partnered;
   document.getElementById('c4').textContent=s.stats.unique24h;
+  // ip bans
   const ipb=document.getElementById('ipb'); ipb.innerHTML='';
   if(!s.activeIpBans.length) ipb.textContent='No IP bans';
   else s.activeIpBans.forEach(b=>{
@@ -190,6 +191,7 @@ function render(s){
     dv.querySelector('button').onclick=()=>fetch('/unban-ip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:b.ip})});
     ipb.appendChild(dv);
   });
+  // fp bans
   const fpb=document.getElementById('fpb'); fpb.innerHTML='';
   if(!s.activeFpBans.length) fpb.textContent='No device bans';
   else s.activeFpBans.forEach(b=>{
@@ -198,14 +200,26 @@ function render(s){
     dv.querySelector('button').onclick=()=>fetch('/unban-fp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fp:b.fp})});
     fpb.appendChild(dv);
   });
+  // reports
   const rep=document.getElementById('rep'); rep.innerHTML='';
   if(!s.reportedUsers.length) rep.textContent='No reports';
   else s.reportedUsers.forEach(u=>{
     const dv=document.createElement('div'); dv.className='card';
-    dv.innerHTML='<b>Target:</b> '+u.target+' <b>Count:</b> '+u.count+
-      ' <button class="ban">Ban</button> <button class="unban">Clear</button>';
-    dv.querySelector('.ban').onclick=()=>fetch('/manual-ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
-    dv.querySelector('.unban').onclick=()=>fetch('/clear-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
+    dv.innerHTML='<b>Target:</b> '+u.target+' <b>Count:</b> '+u.count;
+    if(u.screenshot){
+      dv.innerHTML+='<br><img class="ss-thumb" src="'+u.screenshot+'">';
+      const show=document.createElement('button'); show.textContent='Show Screenshot';
+      show.style.marginLeft='6px'; show.style.background='#007bff'; show.style.color='#fff';
+      show.onclick=()=>{ const w=window.open('','_blank'); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+u.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">'); };
+      dv.appendChild(show);
+    }
+    const actions=document.createElement('div'); actions.style.marginTop='8px';
+    const banBtn=document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban';
+    banBtn.onclick=()=>fetch('/manual-ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
+    const clrBtn=document.createElement('button'); clrBtn.textContent='Clear Report'; clrBtn.className='unban';
+    clrBtn.onclick=()=>fetch('/clear-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
+    actions.appendChild(banBtn); actions.appendChild(clrBtn);
+    dv.appendChild(actions);
     rep.appendChild(dv);
   });
 }
@@ -344,4 +358,4 @@ io.on('connection', socket => {
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
   console.log('Server on port', PORT);
-}); 
+});
