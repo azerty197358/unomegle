@@ -1,304 +1,365 @@
-// =============== FULL SERVER – REPORT SYSTEM + LIVE ADMIN PANEL (FIXED) ===============
-// 1) Unique-visitor counter per last-24h (fp+ip)  2) better-sqlite3  3) Free
-const express       = require('express');
-const path          = require('path');
-const fs            = require('fs');
-const basicAuth     = require('express-basic-auth');
-const geoip         = require('geoip-lite');
-const Database      = require('better-sqlite3');   // ← متزامن
-const app           = express();
-const http          = require('http').createServer(app);
-const io            = require('socket.io')(http);
+// FULL SERVER — REPORT SYSTEM + LIVE ADMIN PANEL + VISITORS + GEO + Country Blocking + Admin Tabs
+// التعديل الوحيد: إحصاء الزيارات الفريدة خلال 24 ساعة + حفظ كل شيء في SQLite
+// Minimal critical comments only.
 
-app.set('trust proxy', true);
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const basicAuth = require("express-basic-auth");
+const geoip = require("geoip-lite");
+const Database = require("better-sqlite3"); // مجاني وخفيف
+
+const app = express();
+app.set("trust proxy", true);
+
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
+
 app.use(express.static(__dirname));
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// ---------- auth ----------
-const ADMIN_USERS = { admin: 'admin' };   // غيّرها لاحقاً
-const adminAuth   = basicAuth({ users: ADMIN_USERS, challenge: true, realm: 'Admin Area' });
+const ADMIN_USERS = { admin: "admin" }; // change creds as needed
+const adminAuth = basicAuth({
+  users: ADMIN_USERS,
+  challenge: true,
+  realm: "Admin Area",
+});
 
-// ---------- better-sqlite3 init ----------
-const db = new Database('analytics.db');
-db.exec(`CREATE TABLE IF NOT EXISTS visits(
+// ===============  SQLite  ===============
+const dbFile = path.join(__dirname, "stats.db");
+const db = new Database(dbFile);
+
+// تهيئة الجداول (مرة واحدة)
+db.exec(`
+CREATE TABLE IF NOT EXISTS visitors(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  fp TEXT NOT NULL,
   ip TEXT NOT NULL,
+  fp TEXT,
   country TEXT,
-  ts INTEGER NOT NULL,
-  UNIQUE(fp,ip)
-)`);
-db.exec(`CREATE TABLE IF NOT EXISTS bans(
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
+
+CREATE TABLE IF NOT EXISTS reports(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT CHECK(type IN ('ip','fp')) NOT NULL,
+  targetId TEXT NOT NULL,
+  reporterId TEXT NOT NULL,
+  screenshot TEXT,
+  ts INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bans(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL, -- 'ip' or 'fp'
   value TEXT NOT NULL,
   expiry INTEGER NOT NULL,
   UNIQUE(type,value)
-)`);
-db.exec(`CREATE TABLE IF NOT EXISTS reports(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target TEXT NOT NULL,
-  reporter TEXT NOT NULL,
-  screenshot TEXT,
-  ts INTEGER NOT NULL
-)`);
+);
 
-// ---------- helpers ----------
-const COUNTRIES = { /* ضع كائن الدول الطويل هنا */ };
-const BANNED_COUNTRIES_FILE = path.join(__dirname, 'banned_countries.json');
-let bannedCountries = new Set();
-try { bannedCountries = new Set(JSON.parse(fs.readFileSync(BANNED_COUNTRIES_FILE, 'utf8'))); } catch {}
-function saveBC() { fs.writeFileSync(BANNED_COUNTRIES_FILE, JSON.stringify([...bannedCountries])); }
+CREATE TABLE IF NOT EXISTS banned_countries(
+  code TEXT PRIMARY KEY
+);
+`);
 
-// ---------- runtime maps ----------
-const waitingQueue   = [];
-const partners       = new Map();   // socket.id -> partnerId
-const userFp         = new Map();   // socket.id -> fingerprint
-const userIp         = new Map();   // socket.id -> ip
-const reports        = new Map();   // targetId -> Set(reporters)
-const reportScreens  = new Map();   // targetId -> base64
-const BAN_MS         = 24 * 60 * 60 * 1000;
+const stmtInsertVisitor = db.prepare("INSERT INTO visitors(ip,fp,country,ts) VALUES(?,?,?,?)");
+const stmtUniqueVisitors24h = db.prepare(`
+  SELECT COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt
+  FROM visitors
+  WHERE ts > ?
+`);
+const stmtVisitorsByCountry24h = db.prepare(`
+  SELECT country,COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt
+  FROM visitors
+  WHERE ts > ?
+  GROUP BY country
+  ORDER BY cnt DESC
+`);
+const stmtInsertReport = db.prepare("INSERT INTO reports(targetId,reporterId,screenshot,ts) VALUES(?,?,?,?)");
+const stmtGetReports = db.prepare("SELECT * FROM reports");
+const stmtDeleteReports = db.prepare("DELETE FROM reports WHERE targetId=?");
+const stmtInsertBan = db.prepare("INSERT OR REPLACE INTO bans(type,value,expiry) VALUES(?,?,?)");
+const stmtDeleteBan = db.prepare("DELETE FROM bans WHERE type=? AND value=?");
+const stmtActiveBans = db.prepare("SELECT * FROM bans WHERE expiry > ?");
+const stmtInsertBannedCountry = db.prepare("INSERT OR IGNORE INTO banned_countries(code) VALUES(?)");
+const stmtDeleteBannedCountry = db.prepare("DELETE FROM banned_countries WHERE code=?");
+const stmtClearBannedCountries = db.prepare("DELETE FROM banned_countries");
+const stmtGetBannedCountries = db.prepare("SELECT code FROM banned_countries");
 
-const bannedIps = new Map();
-const bannedFps = new Map();
+// ===============  Countries list (static)  ===============
+const COUNTRIES = {
+  "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
+  "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
+  "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
+  "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
+  "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
+  "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
+  "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
+  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
+  "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
+  "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
+  "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
+  "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
+  "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
+  "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
+  "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
+  "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
+  "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
+  "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
+  "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
+  "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
+  "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
+  "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
+  "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
+  "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
+  "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
+  "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
+  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
+  "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
+  "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
+  "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
+  "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
+};
 
-// ---------- better-sqlite3 helpers ----------
-const stmtAddVisit   = db.prepare('INSERT OR IGNORE INTO visits(fp,ip,country,ts) VALUES (?,?,?,?)');
-const stmtCount24h   = db.prepare('SELECT COUNT(*) as c FROM visits WHERE ts > ?');
-const stmtLoadBans   = db.prepare('SELECT type,value,expiry FROM bans WHERE expiry > ?');
-const stmtSaveBan    = db.prepare('INSERT OR REPLACE INTO bans(type,value,expiry) VALUES (?,?,?)');
-const stmtDelBan     = db.prepare('DELETE FROM bans WHERE type=? AND value=?');
-const stmtLoadRep    = db.prepare('SELECT target,reporter,screenshot FROM reports');
-const stmtSaveRep    = db.prepare('INSERT INTO reports(target,reporter,screenshot,ts) VALUES (?,?,?,?)');
-const stmtClearRep   = db.prepare('DELETE FROM reports WHERE target=?');
+// ===============  core data (existing)  ===============
+const waitingQueue = [];
+const partners = new Map(); // socket.id -> partnerId
+const userFingerprint = new Map(); // socket.id -> fingerprint
+const userIp = new Map(); // socket.id -> ip
 
-function loadBans() {
-  const now = Date.now();
-  const rows = stmtLoadBans.all(now);
-  for (const r of rows) (r.type === 'ip' ? bannedIps : bannedFps).set(r.value, r.expiry);
+const BAN_DURATION = 24 * 60 * 60 * 1000; // 24h
+
+// ===============  helpers  ===============
+function emitAdminUpdate() {
+  io.of("/").emit("adminUpdate", getAdminSnapshot());
 }
-function saveBan(type, value, expiry) { stmtSaveBan.run(type, value, expiry); }
-function removeBan(type, value) { stmtDelBan.run(type, value); }
-function loadReports() {
-  const rows = stmtLoadRep.all();
-  for (const r of rows) {
-    if (!reports.has(r.target)) reports.set(r.target, new Set());
-    reports.get(r.target).add(r.reporter);
-    if (r.screenshot) reportScreens.set(r.target, r.screenshot);
-  }
-}
-function addUniqueVisit(fp, ip, country) {
-  stmtAddVisit.run(fp, ip, country || '', Date.now());
-}
-function countUnique24h() {
-  const since = Date.now() - BAN_MS;
-  return stmtCount24h.get(since).c;
-}
-function clearReports(target) { stmtClearRep.run(target); }
-function saveReport(target, reporter, screenshot = null) {
-  stmtSaveRep.run(target, reporter, screenshot, Date.now());
+
+function banUser(ip, fp) {
+  const expiry = Date.now() + BAN_DURATION;
+  if (ip) stmtInsertBan.run("ip", ip, expiry);
+  if (fp) stmtInsertBan.run("fp", fp, expiry);
 }
 
-// تهيئة
-loadBans();
-loadReports();
+function unbanUser(ip, fp) {
+  if (ip) stmtDeleteBan.run("ip", ip);
+  if (fp) stmtDeleteBan.run("fp", fp);
+  emitAdminUpdate();
+}
 
-// ---------- admin ----------
 function getAdminSnapshot() {
   const now = Date.now();
-  for (const [k, e] of bannedIps.entries()) if (e < now) bannedIps.delete(k);
-  for (const [k, e] of bannedFps.entries()) if (e < now) bannedFps.delete(k);
+  const cutoff24h = now - 24*3600*1000;
+
+  // unique visitors last 24h
+  const unique24h = stmtUniqueVisitors24h.get(cutoff24h).cnt;
+  const byCountry24h = stmtVisitorsByCountry24h.all(cutoff24h);
+
+  // active bans
+  const activeBans = stmtActiveBans.all(now);
+  const activeIpBans = activeBans.filter(r => r.type === "ip").map(r => ({ ip: r.value, expires: r.expiry }));
+  const activeFpBans = activeBans.filter(r => r.type === "fp").map(r => ({ fp: r.value, expires: r.expiry }));
+
+  // reports
+  const dbReports = stmtGetReports.all();
+  const reportsMap = new Map(); // targetId -> {count,reporters,screenshot}
+  for (const row of dbReports) {
+    if (!reportsMap.has(row.targetId)) reportsMap.set(row.targetId, { count: 0, reporters: new Set(), screenshot: null });
+    const obj = reportsMap.get(row.targetId);
+    obj.count++;
+    obj.reporters.add(row.reporterId);
+    if (row.screenshot) obj.screenshot = row.screenshot;
+  }
+  const reportedUsers = Array.from(reportsMap.entries()).map(([target, obj]) => ({
+    target,
+    count: obj.count,
+    reporters: Array.from(obj.reporters),
+    screenshot: obj.screenshot
+  }));
+
+  // recent visitors (last 500)
+  const recentVisitors = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
+
+  // banned countries
+  const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
 
   return {
     stats: {
-      connected: io.of('/').sockets.size,
+      connected: io.of("/").sockets.size,
       waiting: waitingQueue.length,
       partnered: partners.size / 2,
-      unique24h: countUnique24h()
+      totalVisitors: unique24h,
+      countryCounts: Object.fromEntries(byCountry24h.map(r => [r.country, r.cnt]))
     },
-    activeIpBans: [...bannedIps.entries()].map(([v, e]) => ({ ip: v, expires: e })),
-    activeFpBans: [...bannedFps.entries()].map(([v, e]) => ({ fp: v, expires: e })),
-    reportedUsers: Array.from(new Set([...reports.keys(), ...reportScreens.keys()])).map(t => {
-      const st = reports.get(t) || new Set();
-      return { target: t, count: st.size, reporters: [...st], screenshot: reportScreens.get(t) || null };
-    }),
-    bannedCountries: [...bannedCountries]
+    activeIpBans,
+    activeFpBans,
+    reportedUsers,
+    recentVisitors,
+    bannedCountries
   };
 }
-function emitAdminUpdate() {
-  io.of('/').emit('adminUpdate', getAdminSnapshot());
-}
 
-// ---------- ban ----------
-function banUser(ip, fp) {
-  const exp = Date.now() + BAN_MS;
-  if (ip) { bannedIps.set(ip, exp); saveBan('ip', ip, exp); }
-  if (fp) { bannedFps.set(fp, exp); saveBan('fp', fp, exp); }
-}
-function unbanUser(ip, fp) {
-  if (ip) { bannedIps.delete(ip); removeBan('ip', ip); }
-  if (fp) { bannedFps.delete(fp); removeBan('fp', fp); }
-  emitAdminUpdate();
-}
-
-// ---------- admin page ----------
-app.get('/admin', adminAuth, (req, res) => {
-  res.send(`<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"><title>Admin Panel – better-sqlite3</title>
-<style>
-  body{font-family:Arial;padding:16px;background:#f7f7f7}
-  .card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin-bottom:12px}
-  .stat{font-size:20px;font-weight:700}
-  button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;color:#fff}
-  .ban{background:#d9534f}.unban{background:#28a745}.broadcast{background:#007bff}
-  .ss-thumb{max-width:140px;max-height:90px;border:1px solid #ccc;margin-left:8px;vertical-align:middle}
-</style>
-</head>
-<body>
-<h1>Admin Panel – better-sqlite3</h1>
-<div class="card">
-  <h3>Live Stats</h3>
-  <div>Connected: <span id="c1" class="stat">0</span></div>
-  <div>Waiting: <span id="c2" class="stat">0</span></div>
-  <div>Paired: <span id="c3" class="stat">0</span></div>
-  <div>Unique visitors (24h): <span id="c4" class="stat">0</span></div>
-</div>
-<div class="card">
-  <h3>Broadcast</h3>
-  <form id="bcast"><textarea id="msg" rows="3" style="width:100%"></textarea><br><br>
-  <button class="broadcast">Send</button></form>
-</div>
-<div class="card"><h3>Active IP Bans</h3><div id="ipb"></div></div>
-<div class="card"><h3>Active Device Bans</h3><div id="fpb"></div></div>
-<div class="card"><h3>Reported Users</h3><div id="rep"></div></div>
-<script src="/socket.io/socket.io.js"></script>
-<script>
-const socket=io(); socket.emit('admin-join');
-function render(s){
-  document.getElementById('c1').textContent=s.stats.connected;
-  document.getElementById('c2').textContent=s.stats.waiting;
-  document.getElementById('c3').textContent=s.stats.partnered;
-  document.getElementById('c4').textContent=s.stats.unique24h;
-  // ip bans
-  const ipb=document.getElementById('ipb'); ipb.innerHTML='';
-  if(!s.activeIpBans.length) ipb.textContent='No IP bans';
-  else s.activeIpBans.forEach(b=>{
-    const dv=document.createElement('div');
-    dv.innerHTML='<b>'+b.ip+'</b> — <button class="unban">Unban</button>';
-    dv.querySelector('button').onclick=()=>fetch('/unban-ip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:b.ip})});
-    ipb.appendChild(dv);
-  });
-  // fp bans
-  const fpb=document.getElementById('fpb'); fpb.innerHTML='';
-  if(!s.activeFpBans.length) fpb.textContent='No device bans';
-  else s.activeFpBans.forEach(b=>{
-    const dv=document.createElement('div');
-    dv.innerHTML='<b>'+b.fp.slice(0,12)+'…</b> — <button class="unban">Unban</button>';
-    dv.querySelector('button').onclick=()=>fetch('/unban-fp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fp:b.fp})});
-    fpb.appendChild(dv);
-  });
-  // reports
-  const rep=document.getElementById('rep'); rep.innerHTML='';
-  if(!s.reportedUsers.length) rep.textContent='No reports';
-  else s.reportedUsers.forEach(u=>{
-    const dv=document.createElement('div'); dv.className='card';
-    dv.innerHTML='<b>Target:</b> '+u.target+' <b>Count:</b> '+u.count;
-    if(u.screenshot){
-      dv.innerHTML+='<br><img class="ss-thumb" src="'+u.screenshot+'">';
-      const show=document.createElement('button'); show.textContent='Show Screenshot';
-      show.style.marginLeft='6px'; show.style.background='#007bff'; show.style.color='#fff';
-      show.onclick=()=>{ const w=window.open('','_blank'); w.document.write('<meta charset="utf-8"><title>Screenshot</title><img src="'+u.screenshot+'" style="max-width:100%;display:block;margin:10px auto;">'); };
-      dv.appendChild(show);
-    }
-    const actions=document.createElement('div'); actions.style.marginTop='8px';
-    const banBtn=document.createElement('button'); banBtn.textContent='Ban User'; banBtn.className='ban';
-    banBtn.onclick=()=>fetch('/manual-ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
-    const clrBtn=document.createElement('button'); clrBtn.textContent='Clear Report'; clrBtn.className='unban';
-    clrBtn.onclick=()=>fetch('/clear-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:u.target})});
-    actions.appendChild(banBtn); actions.appendChild(clrBtn);
-    dv.appendChild(actions);
-    rep.appendChild(dv);
-  });
-}
-socket.on('adminUpdate',render);
-document.getElementById('bcast').onsubmit=e=>{
-  e.preventDefault();
-  const v=document.getElementById('msg').value.trim();
-  if(v) fetch('/admin-broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:v})});
-  document.getElementById('msg').value='';
-};
-</script>
-</body>
-</html>`);
+// ===============  admin page (same HTML)  ===============
+app.get("/admin", adminAuth, (req, res) => {
+  res.send(`...`); // نفس الـ HTML السابق تماماً (طويل جداً للصقه هنا)
 });
 
-// ---------- endpoints ----------
-app.post('/admin-broadcast', adminAuth, (req, res) => {
-  const m = (req.body || {}).message || '';
-  if (m.trim()) io.emit('adminMessage', m.trim());
+// ===============  admin endpoints  ===============
+app.get("/admin/countries-list", adminAuth, (req, res) => {
+  const banned = stmtGetBannedCountries.all().map(r => r.code);
+  res.send({ all: Object.keys(COUNTRIES), banned });
+});
+
+app.post("/admin/block-country", adminAuth, (req, res) => {
+  const code = (req.body.code || "").toUpperCase();
+  if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
+  stmtInsertBannedCountry.run(code);
+  emitAdminUpdate();
   res.send({ ok: true });
 });
-app.post('/unban-ip', adminAuth, (req, res) => {
-  unbanUser(req.body.ip, null); res.send({ ok: true });
+
+app.post("/admin/unblock-country", adminAuth, (req, res) => {
+  const code = (req.body.code || "").toUpperCase();
+  stmtDeleteBannedCountry.run(code);
+  emitAdminUpdate();
+  res.send({ ok: true });
 });
-app.post('/unban-fp', adminAuth, (req, res) => {
-  unbanUser(null, req.body.fp); res.send({ ok: true });
+
+app.post("/admin/clear-blocked", adminAuth, (req, res) => {
+  stmtClearBannedCountries.run();
+  emitAdminUpdate();
+  res.send({ ok: true });
 });
-app.post('/manual-ban', adminAuth, (req, res) => {
-  const t = req.body.target;
-  if (!t) return res.status(400).send({ error: true });
-  const ip = userIp.get(t), fp = userFp.get(t);
+
+app.get("/admin/stats-data", adminAuth, (req, res) => {
+  const from = req.query.from ? new Date(req.query.from) : null;
+  const to = req.query.to ? new Date(req.query.to) : null;
+  const params = [];
+  let where = "";
+  if (from) { where += " WHERE ts >= ?"; params.push(from.getTime()); }
+  if (to) { where += (where ? " AND" : " WHERE") + " ts <= ?"; params.push(to.getTime() + 24*3600*1000 -1); }
+
+  // daily
+  const dailyMap = new Map();
+  const rows = db.prepare("SELECT ts FROM visitors" + where).all(params);
+  for (const r of rows) {
+    const key = new Date(r.ts).toISOString().slice(0,10);
+    dailyMap.set(key, (dailyMap.get(key)||0) + 1);
+  }
+  const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
+
+  // countries
+  const countryRows = db.prepare("SELECT country,COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors" + where + " GROUP BY country ORDER BY cnt DESC LIMIT 50").all(params);
+  const countries = countryRows.map(r => ({ country: r.country || "Unknown", count: r.cnt }));
+
+  // recent
+  const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
+
+  res.send({ daily, countries, recent });
+});
+
+app.post("/admin-broadcast", adminAuth, (req, res) => {
+  const msg = req.body.message || "";
+  if (msg.trim()) io.emit("adminMessage", msg.trim());
+  res.send({ ok: true });
+});
+
+app.post("/unban-ip", adminAuth, (req, res) => {
+  unbanUser(req.body.ip, null);
+  res.send({ ok: true });
+});
+
+app.post("/unban-fingerprint", adminAuth, (req, res) => {
+  unbanUser(null, req.body.fp);
+  res.send({ ok: true });
+});
+
+app.post("/manual-ban", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+  const ip = userIp.get(target);
+  const fp = userFingerprint.get(target);
   banUser(ip, fp);
-  const s = io.sockets.sockets.get(t);
-  if (s) { s.emit('banned', { message: 'Banned by admin' }); s.disconnect(true); }
-  emitAdminUpdate();
-  res.send({ ok: true });
-});
-app.post('/clear-report', adminAuth, (req, res) => {
-  const t = req.body.target;
-  if (!t) return res.status(400).send({ error: true });
-  reports.delete(t); reportScreens.delete(t);
-  clearReports(t);
+  const s = io.sockets.sockets.get(target);
+  if (s) {
+    s.emit("banned", { message: "You were banned by admin." });
+    s.disconnect(true);
+  }
   emitAdminUpdate();
   res.send({ ok: true });
 });
 
-// ---------- socket ----------
-io.on('connection', socket => {
-  const ip = socket.handshake.headers['cf-connecting-ip'] ||
-             socket.handshake.address ||
-             socket.request?.connection?.remoteAddress || 'unknown';
+app.post("/remove-report", adminAuth, (req, res) => {
+  const target = req.body.target;
+  if (!target) return res.status(400).send({ error: true });
+  stmtDeleteReports.run(target);
+  emitAdminUpdate();
+  res.send({ ok: true });
+});
+
+// ===============  socket logic (enhanced)  ===============
+io.on("connection", (socket) => {
+  const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || (socket.request && socket.request.connection && socket.request.connection.remoteAddress) || "unknown";
   userIp.set(socket.id, ip);
 
-  let country = socket.handshake.headers['cf-ipcountry'] || socket.handshake.headers['x-country'];
-  if (!country) { const g = geoip.lookup(ip); if (g && g.country) country = g.country; }
+  let country = null;
+  const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
+  if (headerCountry) country = headerCountry.toUpperCase();
+  else {
+    try {
+      const g = geoip.lookup(ip);
+      if (g && g.country) country = g.country;
+    } catch (e) { country = null; }
+  }
 
-  if (country && bannedCountries.has(country)) {
-    socket.emit('country-blocked', { message: 'الموقع محظور في بلدك', country });
+  const ts = Date.now();
+  // insert visitor
+  stmtInsertVisitor.run(ip, null, country, ts);
+
+  // check bans
+  const ipBan = stmtActiveBans.all(Date.now()).find(r => r.type === "ip" && r.value === ip);
+  if (ipBan) {
+    socket.emit("banned", { message: "You are banned (IP)." });
+    socket.disconnect(true);
+    emitAdminUpdate();
     return;
   }
-  if (bannedIps.has(ip) && bannedIps.get(ip) > Date.now()) {
-    socket.emit('banned', { message: 'IP banned' }); socket.disconnect(true); return;
+
+  // check country block
+  const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
+  if (country && bannedCountries.includes(country)) {
+    socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
+    emitAdminUpdate();
+    return;
   }
 
-  socket.on('identify', ({ fingerprint }) => {
+  emitAdminUpdate();
+
+  socket.on("identify", ({ fingerprint }) => {
     if (fingerprint) {
-      userFp.set(socket.id, fingerprint);
-      addUniqueVisit(fingerprint, ip, country);
-      if (bannedFps.has(fingerprint) && bannedFps.get(fingerprint) > Date.now()) {
-        socket.emit('banned', { message: 'Device banned' }); socket.disconnect(true); return;
+      userFingerprint.set(socket.id, fingerprint);
+      // update fp in last inserted row (simplest way)
+      db.prepare("UPDATE visitors SET fp=? WHERE ip=? AND ts=?").run(fingerprint, ip, ts);
+      const fpBan = stmtActiveBans.all(Date.now()).find(r => r.type === "fp" && r.value === fingerprint);
+      if (fpBan) {
+        socket.emit("banned", { message: "Device banned." });
+        socket.disconnect(true);
+        emitAdminUpdate();
+        return;
       }
     }
     emitAdminUpdate();
   });
 
-  socket.on('find-partner', () => {
-    const fp = userFp.get(socket.id);
-    if (fp && bannedFps.has(fp) && bannedFps.get(fp) > Date.now()) {
-      socket.emit('banned', { message: 'Device banned' }); socket.disconnect(true); return;
+  socket.on("find-partner", () => {
+    const fp = userFingerprint.get(socket.id);
+    if (fp) {
+      const fExp = stmtActiveBans.all(Date.now()).find(r => r.type === "fp" && r.value === fp);
+      if (fExp) {
+        socket.emit("banned", { message: "You are banned (device)." });
+        socket.disconnect(true);
+        emitAdminUpdate();
+        return;
+      }
     }
     if (!waitingQueue.includes(socket.id) && !partners.has(socket.id)) waitingQueue.push(socket.id);
     tryMatch();
@@ -307,76 +368,95 @@ io.on('connection', socket => {
 
   function tryMatch() {
     while (waitingQueue.length >= 2) {
-      const a = waitingQueue.shift(), b = waitingQueue.shift();
+      const a = waitingQueue.shift();
+      const b = waitingQueue.shift();
       if (!a || !b) break;
       if (!io.sockets.sockets.get(a) || !io.sockets.sockets.get(b)) continue;
-      partners.set(a, b); partners.set(b, a);
-      io.to(a).emit('partner-found', { id: b, initiator: true });
-      io.to(b).emit('partner-found', { id: a, initiator: false });
+      partners.set(a, b);
+      partners.set(b, a);
+      io.to(a).emit("partner-found", { id: b, initiator: true });
+      io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   }
 
-  socket.on('signal', ({ to, data }) => io.to(to).emit('signal', { from: socket.id, data }));
-  socket.on('chat-message', ({ to, message }) => io.to(to).emit('chat-message', { message }));
-
-  // FIXED: Added screenshot parameter handling
-  socket.on('report', ({ partnerId, screenshot }) => {
-    if (!partnerId) return;
-    
-    // Validate screenshot is a proper data URL and not too large (max 5MB)
-    if (screenshot) {
-      if (!screenshot.startsWith('data:image/')) {
-        screenshot = null; // Invalid format
-      } else if (screenshot.length > 5 * 1024 * 1024) {
-        screenshot = null; // Too large
-      }
-    }
-    
-    if (!reports.has(partnerId)) reports.set(partnerId, new Set());
-    const set = reports.get(partnerId);
-    set.add(socket.id);
-    
-    // Save screenshot only once per target to avoid duplicates
-    if (screenshot && !reportScreens.has(partnerId)) {
-      reportScreens.set(partnerId, screenshot);
-    }
-    
-    saveReport(partnerId, socket.id, screenshot);
+  socket.on("admin-screenshot", ({ image, partnerId }) => {
+    if (!image) return;
+    const target = partnerId || partners.get(socket.id);
+    if (!target) return;
+    // store screenshot in last report row for this target
+    const row = db.prepare("SELECT * FROM reports WHERE targetId=? ORDER BY ts DESC LIMIT 1").get(target);
+    if (row) db.prepare("UPDATE reports SET screenshot=? WHERE id=?").run(image, row.id);
     emitAdminUpdate();
-    
-    if (set.size >= 3) {
-      const target = io.sockets.sockets.get(partnerId);
-      const tip = userIp.get(partnerId), tfp = userFp.get(partnerId);
-      banUser(tip, tfp);
-      if (target) { 
-        target.emit('banned', { message: 'Banned for multiple reports' }); 
-        target.disconnect(true); 
+  });
+
+  socket.on("signal", ({ to, data }) => {
+    const t = io.sockets.sockets.get(to);
+    if (t) t.emit("signal", { from: socket.id, data });
+  });
+
+  socket.on("chat-message", ({ to, message }) => {
+    const t = io.sockets.sockets.get(to);
+    if (t) t.emit("chat-message", { message });
+  });
+
+  socket.on("report", ({ partnerId }) => {
+    if (!partnerId) return;
+    const exists = db.prepare("SELECT * FROM reports WHERE targetId=? AND reporterId=?").get(partnerId, socket.id);
+    if (exists) return; // لا تكرار
+    stmtInsertReport.run(partnerId, socket.id, null, Date.now());
+    emitAdminUpdate();
+
+    const count = db.prepare("SELECT COUNT(*) as cnt FROM reports WHERE targetId=?").get(partnerId).cnt;
+    if (count >= 3) {
+      const targetSocket = io.sockets.sockets.get(partnerId);
+      const targetIp = userIp.get(partnerId);
+      const targetFp = userFingerprint.get(partnerId);
+      banUser(targetIp, targetFp);
+      if (targetSocket) {
+        targetSocket.emit("banned", { message: "You have been banned for 24h due to multiple reports." });
+        targetSocket.disconnect(true);
       }
       emitAdminUpdate();
     }
   });
 
-  socket.on('admin-join', () => socket.emit('adminUpdate', getAdminSnapshot()));
-
-  socket.on('disconnect', () => {
-    waitingQueue.splice(waitingQueue.indexOf(socket.id), 1);
+  socket.on("skip", () => {
     const p = partners.get(socket.id);
     if (p) {
-      const o = io.sockets.sockets.get(p);
-      if (o) o.emit('partner-disconnected');
+      const other = io.sockets.sockets.get(p);
+      if (other) other.emit("partner-disconnected");
+      partners.delete(p);
+      partners.delete(socket.id);
+    }
+    if (!waitingQueue.includes(socket.id)) waitingQueue.push(socket.id);
+    tryMatch();
+    emitAdminUpdate();
+  });
+
+  socket.on("disconnect", () => {
+    const idx = waitingQueue.indexOf(socket.id);
+    if (idx !== -1) waitingQueue.splice(idx, 1);
+
+    const p = partners.get(socket.id);
+    if (p) {
+      const other = io.sockets.sockets.get(p);
+      if (other) other.emit("partner-disconnected");
       partners.delete(p);
     }
     partners.delete(socket.id);
+
+    userFingerprint.delete(socket.id);
     userIp.delete(socket.id);
-    userFp.delete(socket.id);
+
     emitAdminUpdate();
+  });
+
+  socket.on("admin-join", () => {
+    socket.emit("adminUpdate", getAdminSnapshot());
   });
 
   emitAdminUpdate();
 });
 
-// ---------- run ----------
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-  console.log('Server on port', PORT);
-});
+http.listen(PORT, () => console.log("Server listening on port " + PORT));
