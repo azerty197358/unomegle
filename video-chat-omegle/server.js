@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS visitors(
   ip TEXT NOT NULL, fp TEXT, country TEXT, ts INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
+CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip);
 
 CREATE TABLE IF NOT EXISTS reports(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,8 +149,19 @@ function getAdminSnapshot() {
     screenshot: obj.screenshot
   }));
 
-  // تقليل البيانات من 500 إلى 50 لتحسين الأداء
-  const recentVisitors = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 50").all();
+  // **NEW: عرض آخر 50 IP فريد فقط**
+  const recentVisitors = db.prepare(`
+    SELECT ip, fp, country, ts
+    FROM visitors
+    WHERE id IN (
+      SELECT MAX(id)
+      FROM visitors
+      GROUP BY ip
+    )
+    ORDER BY ts DESC
+    LIMIT 50
+  `).all();
+
   const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
 
   return {
@@ -193,6 +205,7 @@ app.post("/admin/clear-blocked", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
+// **NEW: تحسين بيانات المخطط البياني لتشمل الدول**
 app.get("/admin/stats-data", adminAuth, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
@@ -201,6 +214,7 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   if (from) { where += " WHERE ts >= ?"; params.push(from.getTime()); }
   if (to) { where += (where ? " AND" : " WHERE") + " ts <= ?"; params.push(to.getTime() + 24*3600*1000 -1); }
 
+  // Daily visitors
   const dailyMap = new Map();
   const rows = db.prepare("SELECT ts FROM visitors" + where).all(params);
   for (const r of rows) {
@@ -209,9 +223,11 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   }
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
 
+  // Countries with visitor count
   const countryRows = db.prepare("SELECT country,COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors" + where + " GROUP BY country ORDER BY cnt DESC LIMIT 50").all(params);
   const countries = countryRows.map(r => ({ country: r.country || "Unknown", count: r.cnt }));
 
+  // Recent visitors (last 500 for stats panel)
   const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
 
   res.send({ daily, countries, recent });
