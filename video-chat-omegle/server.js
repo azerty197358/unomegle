@@ -1,4 +1,4 @@
-// =============== FULL SERVER – REPORT SYSTEM + LIVE ADMIN PANEL ===============
+// =============== FULL SERVER – REPORT SYSTEM + LIVE ADMIN PANEL (FIXED) ===============
 // 1) Unique-visitor counter per last-24h (fp+ip)  2) better-sqlite3  3) Free
 const express       = require('express');
 const path          = require('path');
@@ -319,18 +319,39 @@ io.on('connection', socket => {
   socket.on('signal', ({ to, data }) => io.to(to).emit('signal', { from: socket.id, data }));
   socket.on('chat-message', ({ to, message }) => io.to(to).emit('chat-message', { message }));
 
-  socket.on('report', ({ partnerId }) => {
+  // FIXED: Added screenshot parameter handling
+  socket.on('report', ({ partnerId, screenshot }) => {
     if (!partnerId) return;
+    
+    // Validate screenshot is a proper data URL and not too large (max 5MB)
+    if (screenshot) {
+      if (!screenshot.startsWith('data:image/')) {
+        screenshot = null; // Invalid format
+      } else if (screenshot.length > 5 * 1024 * 1024) {
+        screenshot = null; // Too large
+      }
+    }
+    
     if (!reports.has(partnerId)) reports.set(partnerId, new Set());
     const set = reports.get(partnerId);
     set.add(socket.id);
-    saveReport(partnerId, socket.id);
+    
+    // Save screenshot only once per target to avoid duplicates
+    if (screenshot && !reportScreens.has(partnerId)) {
+      reportScreens.set(partnerId, screenshot);
+    }
+    
+    saveReport(partnerId, socket.id, screenshot);
     emitAdminUpdate();
+    
     if (set.size >= 3) {
       const target = io.sockets.sockets.get(partnerId);
       const tip = userIp.get(partnerId), tfp = userFp.get(partnerId);
       banUser(tip, tfp);
-      if (target) { target.emit('banned', { message: 'Banned for multiple reports' }); target.disconnect(true); }
+      if (target) { 
+        target.emit('banned', { message: 'Banned for multiple reports' }); 
+        target.disconnect(true); 
+      }
       emitAdminUpdate();
     }
   });
