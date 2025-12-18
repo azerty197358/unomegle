@@ -1,4 +1,3 @@
-// file: public/js/webrtc-stable-client.js
 // WebRTC client with enhanced connection management, error handling, and status-only updates
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
@@ -49,14 +48,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // Stats monitor
   let statsInterval = null;
   const STATS_POLL_MS = 3000;
+ 
   // Bitrate targets (bps)
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-
-  // ---------------------- BAN STATE ----------------------
-  let isCurrentlyBanned = false; // متغير حالة الحظر الحالية
-
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -70,6 +66,7 @@ window.addEventListener('DOMContentLoaded', () => {
         new Date().getTimezoneOffset(),
         Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
+      // Canvas fingerprint
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -82,6 +79,7 @@ window.addEventListener('DOMContentLoaded', () => {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
+      // Audio fingerprint
       const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
       const oscillator = audioCtx.createOscillator();
       oscillator.type = 'triangle';
@@ -90,6 +88,7 @@ window.addEventListener('DOMContentLoaded', () => {
       oscillator.start();
       oscillator.stop();
       components.push('audio-supported');
+      // Hash function
       const hashCode = (str) => {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -105,7 +104,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
-
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -127,7 +125,6 @@ window.addEventListener('DOMContentLoaded', () => {
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
-
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
@@ -142,7 +139,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
-
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -156,8 +152,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  // Status message handler - replaces old messages instead of adding new ones
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
+   
     if (statusMsg) {
       statusMsg.textContent = msg;
     } else {
@@ -165,6 +163,7 @@ window.addEventListener('DOMContentLoaded', () => {
       statusMsg.id = 'statusMessage';
       statusMsg.className = 'msg status';
       statusMsg.textContent = msg;
+     
       const typing = document.querySelector('.msg.system[style*="italic"]');
       if (typing && typing.parentNode === chatMessages) {
         chatMessages.insertBefore(statusMsg, typing);
@@ -172,6 +171,7 @@ window.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(statusMsg);
       }
     }
+   
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
   function pushAdminNotification(text) {
@@ -190,9 +190,11 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
+  // Exponential backoff (ms)
   function backoffDelay(attempt) {
     return Math.min(30000, Math.pow(2, attempt) * BASE_BACKOFF_MS + Math.floor(Math.random() * 500));
   }
+  // Store remote candidates until pc created
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
@@ -200,10 +202,11 @@ window.addEventListener('DOMContentLoaded', () => {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
       try {
-        peerConnection.addIceCandidate(c).catch(() => {});
+        peerConnection.addIceCandidate(c).catch(() => {/* ignore */});
       } catch (e) {}
     }
   }
+  // Set max bitrate for outbound video sender
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -219,11 +222,14 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
-
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
+   
+    // Clear all timers
     clearAllTimers();
+   
+    // Close peer connection
     if (peerConnection) {
       try {
         if (keepAliveChannel) {
@@ -236,14 +242,21 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       peerConnection = null;
     }
-    if (remoteVideo) remoteVideo.srcObject = null;
+   
+    // Clear remote video
+    if (remoteVideo) {
+      remoteVideo.srcObject = null;
+    }
+   
+    // Clear buffers
     bufferedRemoteCandidates.length = 0;
+   
+    // Reset state
     partnerId = null;
     isInitiator = false;
     makingOffer = false;
     ignoreOffer = false;
   }
-
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -253,7 +266,6 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
-
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -279,7 +291,6 @@ window.addEventListener('DOMContentLoaded', () => {
   chatInput.oninput = () => {
     if (!chatInput.disabled) sendTyping();
   };
-
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     const msg = chatInput.value.trim();
@@ -292,7 +303,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
-
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
@@ -305,7 +315,6 @@ window.addEventListener('DOMContentLoaded', () => {
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
-
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
   function showRemoteSpinnerOnly(show) {
@@ -318,25 +327,26 @@ window.addEventListener('DOMContentLoaded', () => {
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
       try {
         const v = remoteVideo;
-        if (!v || !v.srcObject) return reject(new Error('Remote video not available'));
-        let width = v.videoWidth || v.clientWidth || 640;
-        let height = v.videoHeight || v.clientHeight || 480;
+        if (!v || !v.srcObject) {
+          return reject(new Error('Remote video not available'));
+        }
+        const width = v.videoWidth || v.clientWidth || 640;
+        const height = v.videoHeight || v.clientHeight || 480;
         if (width === 0 || height === 0) {
           setTimeout(() => {
-            width = v.videoWidth || v.clientWidth || 640;
-            height = v.videoHeight || v.clientHeight || 480;
-            if (width === 0 || height === 0) return reject(new Error('Remote video has no frames yet'));
+            const w2 = v.videoWidth || v.clientWidth || 640;
+            const h2 = v.videoHeight || v.clientHeight || 480;
+            if (w2 === 0 || h2 === 0) return reject(new Error('Remote video has no frames yet'));
             const canvas2 = document.createElement('canvas');
-            canvas2.width = width;
-            canvas2.height = height;
+            canvas2.width = w2;
+            canvas2.height = h2;
             const ctx2 = canvas2.getContext('2d');
-            ctx2.drawImage(v, 0, 0, width, height);
+            ctx2.drawImage(v, 0, 0, w2, h2);
             resolve(canvas2.toDataURL('image/png'));
           }, 250);
           return;
@@ -352,7 +362,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
@@ -365,6 +374,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const now = prev + 1;
       reportCounts.set(partnerId, now);
       reportedIds.add(partnerId);
+     
       safeEmit("report", { partnerId });
       safeEmit("skip");
       if (now === 1) {
@@ -386,7 +396,6 @@ window.addEventListener('DOMContentLoaded', () => {
       searchTimer = setSafeTimer(startSearchLoop, 300);
     };
   }
-
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = false;
@@ -396,13 +405,13 @@ window.addEventListener('DOMContentLoaded', () => {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
-
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
-    if (partnerId || isCurrentlyBanned) return;
+    if (partnerId) return;
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
+   
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
@@ -415,12 +424,12 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
   async function startSearch() {
-    if (isCurrentlyBanned) return;
     const mediaReady = await initMedia();
     if (!mediaReady) {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
+   
     cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
@@ -437,85 +446,6 @@ window.addEventListener('DOMContentLoaded', () => {
     clearSafeTimer(pauseTimer);
     startSearchLoop();
   };
-
-  // ---------------------- BAN HANDLING ----------------------
-  let banInterval = null;
-
-  function clearBanState() {
-    if (banInterval) {
-      clearInterval(banInterval);
-      banInterval = null;
-    }
-    localStorage.removeItem('banEndTime');
-    isCurrentlyBanned = false;
-  }
-
-  function checkLocalBan() {
-    const banEnd = localStorage.getItem('banEndTime');
-    if (!banEnd) return false;
-    const endTime = parseInt(banEnd, 10);
-    if (isNaN(endTime)) {
-      localStorage.removeItem('banEndTime');
-      return false;
-    }
-    if (endTime < Date.now()) {
-      clearBanState();
-      return false;
-    }
-    return true;
-  }
-
-  function updateBanMessage() {
-    const endTime = parseInt(localStorage.getItem('banEndTime') || '0', 10);
-    const unblockTime = new Date(endTime).toLocaleString();
-    const banMsg = document.getElementById('banMessage');
-    if (banMsg) {
-      banMsg.innerHTML = `<strong>تم حظرك لقد قمت بعمل جنسي</strong><br>سيفك حظرك في: ${unblockTime}`;
-    }
-  }
-
-  function showBannedState() {
-    isCurrentlyBanned = true;
-    cleanupConnection();
-    disableChat();
-    if (skipBtn) skipBtn.disabled = true;
-    if (micBtn) micBtn.disabled = true;
-    if (reportBtn) reportBtn.disabled = true;
-    showRemoteSpinnerOnly(false);
-    hideAllSpinners();
-
-    const existingStatus = document.getElementById('statusMessage');
-    if (existingStatus) existingStatus.remove();
-
-    chatMessages.innerHTML = '';
-    const msg = document.createElement('div');
-    msg.className = 'msg system';
-    msg.id = 'banMessage';
-    msg.style.textAlign = 'center';
-    msg.style.fontSize = '1.2em';
-    msg.style.color = '#ff4444';
-    chatMessages.appendChild(msg);
-    updateBanMessage();
-
-    if (banInterval) clearInterval(banInterval);
-    banInterval = setInterval(() => {
-      if (!checkLocalBan()) {
-        clearInterval(banInterval);
-        banInterval = null;
-        resumeFromBan();
-      } else {
-        updateBanMessage();
-      }
-    }, 1000);
-  }
-
-  function resumeFromBan() {
-    clearBanState();
-    addMessage('تم فك الحظر عنك بواسطة الإدارة أو انتهت مدة الحظر. مرحباً بعودتك!', 'system');
-    updateStatusMessage('جاري البحث عن شريك...');
-    startSearch();
-  }
-
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => { updateStatusMessage(msg); });
   socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
@@ -530,18 +460,12 @@ window.addEventListener('DOMContentLoaded', () => {
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
-
-  // عند استلام banned من السيرفر (حظر جديد)
-  socket.on('banned', ({ duration = 24 * 60 * 60 * 1000 }) => {
-    localStorage.setItem('banEndTime', Date.now() + duration);
-    showBannedState();
+  socket.on('banned', ({ message }) => {
+    addMessage(message || 'You are banned.', 'system');
+    showRemoteSpinnerOnly(true);
+    updateStatusMessage('Blocked.');
+    cleanupConnection();
   });
-
-  // عند استلام unbanned من السيرفر (فك حظر فوري)
-  socket.on('unbanned', () => {
-    resumeFromBan();
-  });
-
   socket.on('partner-disconnected', () => {
     updateStatusMessage('Partner disconnected.');
     disableChat();
@@ -551,10 +475,7 @@ window.addEventListener('DOMContentLoaded', () => {
     clearSafeTimer(pauseTimer);
     setSafeTimer(startSearchLoop, 500);
   });
-
-  // باقي الأحداث كما هي...
   socket.on('partner-found', async data => {
-    if (isCurrentlyBanned) return; // حماية إضافية
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
       console.error('Invalid partner data received:', data);
@@ -569,12 +490,15 @@ window.addEventListener('DOMContentLoaded', () => {
       setSafeTimer(startSearchLoop, 200);
       return;
     }
+   
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
+   
     try {
       createPeerConnection();
+     
       if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
@@ -590,9 +514,7 @@ window.addEventListener('DOMContentLoaded', () => {
       makingOffer = false;
     }
   });
-
   socket.on('signal', async ({ from, data }) => {
-    if (isCurrentlyBanned) return;
     if (!from || !data) {
       console.error('Invalid signal data:', { from, data });
       return;
@@ -609,6 +531,7 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
     }
+    // Buffer candidates that arrive before remote description is set
     if (data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
@@ -618,6 +541,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
+       
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -632,31 +556,319 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Signal processing failed.');
     }
   });
-
-  // ---------------------- WEBRTC (باقي الكود بدون تغيير) ----------------------
-  // ... (جميع دوال WebRTC كما هي في الكود الأصلي)
-
+  // ---------------------- WEBRTC ----------------------
+  function createPeerConnection() {
+    if (peerConnection) {
+      try { peerConnection.close(); } catch (e) {}
+      peerConnection = null;
+    }
+    try {
+      peerConnection = new RTCPeerConnection(servers);
+      makingOffer = false;
+      ignoreOffer = false;
+      // Add local tracks
+      if (localStream) {
+        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      }
+      // Create datachannel when initiator
+      if (isInitiator) {
+        try {
+          keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
+          setupKeepAliveChannel(keepAliveChannel);
+        } catch (e) {
+          console.error('Failed to create data channel:', e);
+          keepAliveChannel = null;
+        }
+      } else {
+        peerConnection.ondatachannel = (ev) => {
+          keepAliveChannel = ev.channel;
+          setupKeepAliveChannel(keepAliveChannel);
+        };
+      }
+      peerConnection.ontrack = e => {
+        if (!e.streams || e.streams.length === 0) {
+          console.error('No streams in ontrack event');
+          return;
+        }
+       
+        remoteVideo.srcObject = e.streams[0];
+        enableChat();
+        // تم حذف رسالة "Connected with a stranger!" هنا
+        updateStatusMessage('Connected');
+        showRemoteSpinnerOnly(false);
+        flushBufferedCandidates();
+        reconnectAttempts = 0;
+        startStatsMonitor();
+      };
+      peerConnection.onicecandidate = e => {
+        if (e.candidate && partnerId) {
+          safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
+        }
+      };
+      peerConnection.onconnectionstatechange = () => {
+        if (!peerConnection) return;
+       
+        const s = peerConnection.connectionState;
+        console.debug('connectionState:', s);
+       
+        if (s === 'connected') {
+          updateStatusMessage('Connected');
+          reconnectAttempts = 0;
+        } else if (['disconnected', 'failed', 'closed'].includes(s)) {
+          updateStatusMessage('Connection lost.');
+          disableChat();
+          if (autoReconnect) {
+            cleanupConnection();
+            attemptRecovery();
+          }
+        }
+      };
+      peerConnection.oniceconnectionstatechange = async () => {
+        if (!peerConnection) return;
+       
+        const s = peerConnection.iceConnectionState;
+        console.debug('iceConnectionState:', s);
+       
+        if (s === 'failed') {
+          await attemptIceRestartWithBackoff();
+        }
+      };
+      peerConnection.onnegotiationneeded = async () => {
+        if (!peerConnection || makingOffer || !partnerId) return;
+       
+        try {
+          makingOffer = true;
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          safeEmit('signal', { to: partnerId, data: offer });
+        } catch (e) {
+          console.error('Negotiation error:', e);
+        } finally {
+          makingOffer = false;
+        }
+      };
+    } catch (e) {
+      console.error('Failed to create peer connection:', e);
+      throw e;
+    }
+  }
+  // Attempt recovery: try ICE-restart a few times, otherwise rematch
+  async function attemptRecovery() {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
+      cleanupConnection();
+      setSafeTimer(startSearchLoop, 1000);
+      return;
+    }
+   
+    reconnectAttempts++;
+    const delay = backoffDelay(reconnectAttempts);
+    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+   
+    setSafeTimer(async () => {
+      try {
+        if (!peerConnection) {
+          createPeerConnection();
+          if (isInitiator && partnerId) {
+            makingOffer = true;
+            const offer = await peerConnection.createOffer({ iceRestart: true });
+            await peerConnection.setLocalDescription(offer);
+            safeEmit('signal', { to: partnerId, data: offer });
+          }
+        } else {
+          await attemptIceRestartWithBackoff();
+        }
+      } catch (e) {
+        console.error('Recovery attempt failed:', e);
+        attemptRecovery();
+      } finally {
+        makingOffer = false;
+      }
+    }, delay);
+  }
+  let lastIceRestartAt = 0;
+  const ICE_RESTART_MIN_INTERVAL = 5000;
+  async function attemptIceRestartWithBackoff() {
+    const now = Date.now();
+    if (now - lastIceRestartAt < ICE_RESTART_MIN_INTERVAL) return;
+   
+    lastIceRestartAt = now;
+    try {
+      await performIceRestart();
+    } catch (e) {
+      console.error('ICE restart failed:', e);
+      if (autoReconnect) attemptRecovery();
+    }
+  }
+  async function performIceRestart() {
+    if (!peerConnection || !partnerId || peerConnection.signalingState !== 'stable') {
+      throw new Error('Cannot perform ICE restart: invalid state');
+    }
+   
+    try {
+      makingOffer = true;
+      const offer = await peerConnection.createOffer({ iceRestart: true });
+      await peerConnection.setLocalDescription(offer);
+      safeEmit('signal', { to: partnerId, data: offer });
+    } catch (e) {
+      console.error('ICE restart error:', e);
+      throw e;
+    } finally {
+      makingOffer = false;
+    }
+  }
+  // ---------------------- KEEPALIVE (datachannel) ----------------------
+  let pingTimer = null;
+  function setupKeepAliveChannel(dc) {
+    if (!dc) return;
+   
+    dc.onopen = () => {
+      lastPong = Date.now();
+      startPingLoop();
+    };
+    dc.onmessage = (ev) => {
+      if (!ev.data) return;
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'ping') {
+          dc.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+        } else if (msg.type === 'pong') {
+          lastPong = Date.now();
+        }
+      } catch (e) {
+        console.error('KeepAlive message parse error:', e);
+      }
+    };
+    dc.onclose = () => {
+      console.debug('keepAlive channel closed');
+      stopPingLoop();
+    };
+    dc.onerror = (err) => {
+      console.error('keepAlive channel error:', err);
+    };
+  }
+  function startPingLoop() {
+    stopPingLoop();
+    pingTimer = setInterval(() => {
+      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
+        stopPingLoop();
+        return;
+      }
+     
+      try {
+        keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+      } catch (e) {
+        console.error('Ping send error:', e);
+        stopPingLoop();
+      }
+     
+      if (Date.now() - lastPong > PONG_TIMEOUT) {
+        console.warn('PONG timeout -> triggering recovery');
+        stopPingLoop();
+        if (autoReconnect) attemptRecovery();
+      }
+    }, PING_INTERVAL);
+  }
+  function stopPingLoop() {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+  }
+  // ---------------------- STATS MONITOR (adaptive bitrate) ----------------------
+  function startStatsMonitor() {
+    stopStatsMonitor();
+    statsInterval = setInterval(async () => {
+      if (!peerConnection || peerConnection.connectionState !== 'connected') {
+        stopStatsMonitor();
+        return;
+      }
+      try {
+        const stats = await peerConnection.getStats(null);
+        let outboundVideoReport = null;
+        let remoteInboundRtp = null;
+        stats.forEach(report => {
+          if (report.type === 'outbound-rtp' && report.kind === 'video') {
+            outboundVideoReport = report;
+          }
+          if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
+            remoteInboundRtp = report;
+          }
+        });
+        let lossRatio = 0;
+        if (outboundVideoReport?.packetsSent > 0) {
+          if (remoteInboundRtp?.packetsLost >= 0) {
+            const lost = remoteInboundRtp.packetsLost;
+            const sent = (remoteInboundRtp.packetsReceived || 0) + lost;
+            lossRatio = sent > 0 ? lost / sent : 0;
+          } else if (outboundVideoReport.packetsLost >= 0) {
+            lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
+          }
+        }
+        let rtt = 0;
+        stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
+        if (lossRatio > 0.08 || rtt > 0.5) {
+          await setSenderMaxBitrate(BITRATE_LOW);
+        } else if (lossRatio > 0.03 || rtt > 0.25) {
+          await setSenderMaxBitrate(BITRATE_MEDIUM);
+        } else {
+          await setSenderMaxBitrate(BITRATE_HIGH);
+        }
+      } catch (e) {
+        console.debug('Stats monitor error:', e);
+      }
+    }, STATS_POLL_MS);
+  }
+  function stopStatsMonitor() {
+    if (statsInterval) {
+      clearInterval(statsInterval);
+      statsInterval = null;
+    }
+  }
+  // ---------------------- EXIT ----------------------
+  exitBtn.onclick = () => {
+    cleanupConnection();
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
+    location.href = 'index.html';
+  };
+  // ---------------------- MEDIA INIT ----------------------
+  async function initMedia() {
+    if (localStream) return true;
+   
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      localVideo.srcObject = localStream;
+      updateMicButton();
+      return true;
+    } catch (e) {
+      console.error('Media initialization error:', e);
+      updateStatusMessage('Camera/Mic access denied. Please check permissions.');
+      localStream = null;
+      updateMicButton();
+      return false;
+    }
+  }
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
     updateMicButton();
-
+   
+    // Generate and send fingerprint for device ban system
     try {
       const fingerprint = await generateFingerprint();
       safeEmit('identify', { fingerprint });
     } catch (e) {
       console.error('Failed to send fingerprint:', e);
     }
-
-    // التحقق من الحظر المحلي فقط عند التحميل الأولي
-    if (checkLocalBan()) {
-      showBannedState();
-    } else {
-      startSearch();
-    }
+   
+    startSearch();
   }
   initialize();
-
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
