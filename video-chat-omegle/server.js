@@ -82,7 +82,7 @@ const COUNTRIES = {
   "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
   "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
   "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
-  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan May Mayen","SE":"Sweden","CH":"Switzerland",
+  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
   "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
   "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
   "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
@@ -93,8 +93,6 @@ const waitingQueue = [];
 const partners = new Map();
 const userFingerprint = new Map();
 const userIp = new Map();
-const userSocketByIp = new Map();      // جديد: IP → socket.id
-const userSocketByFp = new Map();      // جديد: FP → socket.id
 const BAN_DURATION = 24 * 60 * 60 * 1000;
 // ======== دوال المساعدة ========
 function emitAdminUpdate() {
@@ -104,28 +102,12 @@ function banUser(ip, fp) {
   const expiry = Date.now() + BAN_DURATION;
   if (ip) stmtInsertBan.run("ip", ip, expiry);
   if (fp) stmtInsertBan.run("fp", fp, expiry);
-  emitAdminUpdate();
+  emitAdminUpdate(); // إصلاح: التحديث الفوري بعد الحظر
 }
 function unbanUser(ip, fp) {
   if (ip) stmtDeleteBan.run("ip", ip);
   if (fp) stmtDeleteBan.run("fp", fp);
   emitAdminUpdate();
-
-  // **الجديد: إرسال حدث unbanned إلى المستخدم المعني إذا كان متصلًا حاليًا**
-  if (ip) {
-    const socketId = userSocketByIp.get(ip);
-    if (socketId) {
-      const s = io.sockets.sockets.get(socketId);
-      if (s) s.emit("unbanned");
-    }
-  }
-  if (fp) {
-    const socketId = userSocketByFp.get(fp);
-    if (socketId) {
-      const s = io.sockets.sockets.get(socketId);
-      if (s) s.emit("unbanned");
-    }
-  }
 }
 function getAdminSnapshot() {
   const now = Date.now();
@@ -149,6 +131,7 @@ function getAdminSnapshot() {
     reporters: Array.from(obj.reporters),
     screenshot: obj.screenshot
   }));
+  // **NEW: عرض آخر 50 IP فريد فقط**
   const recentVisitors = db.prepare(`
     SELECT ip, fp, country, ts
     FROM visitors
@@ -196,6 +179,7 @@ app.post("/admin/clear-blocked", adminAuth, (req, res) => {
   emitAdminUpdate();
   res.send({ ok: true });
 });
+// **NEW: تحسين بيانات المخطط البياني لتشمل الدول**
 app.get("/admin/stats-data", adminAuth, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
@@ -203,6 +187,7 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   let where = "";
   if (from) { where += " WHERE ts >= ?"; params.push(from.getTime()); }
   if (to) { where += (where ? " AND" : " WHERE") + " ts <= ?"; params.push(to.getTime() + 24*3600*1000 -1); }
+  // Daily visitors
   const dailyMap = new Map();
   const rows = db.prepare("SELECT ts FROM visitors" + where).all(params);
   for (const r of rows) {
@@ -210,8 +195,10 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
     dailyMap.set(key, (dailyMap.get(key)||0) + 1);
   }
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
+  // Countries with visitor count
   const countryRows = db.prepare("SELECT country,COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors" + where + " GROUP BY country ORDER BY cnt DESC LIMIT 50").all(params);
   const countries = countryRows.map(r => ({ country: r.country || "Unknown", count: r.cnt }));
+  // Recent visitors (last 500 for stats panel)
   const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
   res.send({ daily, countries, recent });
 });
@@ -221,15 +208,11 @@ app.post("/admin-broadcast", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 app.post("/unban-ip", adminAuth, (req, res) => {
-  const ip = req.body.ip;
-  if (!ip) return res.status(400).send({ error: true });
-  unbanUser(ip, null);
+  unbanUser(req.body.ip, null);
   res.send({ ok: true });
 });
 app.post("/unban-fingerprint", adminAuth, (req, res) => {
-  const fp = req.body.fp;
-  if (!fp) return res.status(400).send({ error: true });
-  unbanUser(null, fp);
+  unbanUser(null, req.body.fp);
   res.send({ ok: true });
 });
 app.post("/manual-ban", adminAuth, (req, res) => {
@@ -256,8 +239,6 @@ app.post("/remove-report", adminAuth, (req, res) => {
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || "unknown";
   userIp.set(socket.id, ip);
-  userSocketByIp.set(ip, socket.id);           // حفظ ربط IP → socket
-
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
   if (headerCountry) country = headerCountry.toUpperCase();
@@ -281,11 +262,9 @@ io.on("connection", (socket) => {
     return;
   }
   emitAdminUpdate();
-
   socket.on("identify", ({ fingerprint }) => {
     if (fingerprint) {
       userFingerprint.set(socket.id, fingerprint);
-      userSocketByFp.set(fingerprint, socket.id);  // حفظ ربط FP → socket
       db.prepare("UPDATE visitors SET fp=? WHERE ip=? AND ts=?").run(fingerprint, ip, ts);
       const fpBan = stmtActiveBans.all(Date.now()).find(r => r.type === "fp" && r.value === fingerprint);
       if (fpBan) {
@@ -296,7 +275,6 @@ io.on("connection", (socket) => {
     }
     emitAdminUpdate();
   });
-
   socket.on("find-partner", () => {
     const fp = userFingerprint.get(socket.id);
     if (fp) {
@@ -311,7 +289,6 @@ io.on("connection", (socket) => {
     tryMatch();
     emitAdminUpdate();
   });
-
   function tryMatch() {
     while (waitingQueue.length >= 2) {
       const a = waitingQueue.shift();
@@ -324,7 +301,6 @@ io.on("connection", (socket) => {
       io.to(b).emit("partner-found", { id: a, initiator: false });
     }
   }
-
   socket.on("admin-screenshot", ({ image, partnerId }) => {
     if (!image) return;
     const target = partnerId || partners.get(socket.id);
@@ -333,17 +309,14 @@ io.on("connection", (socket) => {
     if (row) db.prepare("UPDATE reports SET screenshot=? WHERE id=?").run(image, row.id);
     emitAdminUpdate();
   });
-
   socket.on("signal", ({ to, data }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("signal", { from: socket.id, data });
   });
-
   socket.on("chat-message", ({ to, message }) => {
     const t = io.sockets.sockets.get(to);
     if (t) t.emit("chat-message", { message });
   });
-
   socket.on("report", ({ partnerId }) => {
     if (!partnerId) return;
     const exists = db.prepare("SELECT * FROM reports WHERE targetId=? AND reporterId=?").get(partnerId, socket.id);
@@ -363,7 +336,6 @@ io.on("connection", (socket) => {
       emitAdminUpdate();
     }
   });
-
   socket.on("skip", () => {
     const p = partners.get(socket.id);
     if (p) {
@@ -376,14 +348,7 @@ io.on("connection", (socket) => {
     tryMatch();
     emitAdminUpdate();
   });
-
   socket.on("disconnect", () => {
-    // تنظيف الخرائط عند قطع الاتصال
-    const ipToClean = userIp.get(socket.id);
-    const fpToClean = userFingerprint.get(socket.id);
-    if (ipToClean) userSocketByIp.delete(ipToClean);
-    if (fpToClean) userSocketByFp.delete(fpToClean);
-
     const idx = waitingQueue.indexOf(socket.id);
     if (idx !== -1) waitingQueue.splice(idx, 1);
     const p = partners.get(socket.id);
@@ -398,6 +363,5 @@ io.on("connection", (socket) => {
     emitAdminUpdate();
   });
 });
-
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
