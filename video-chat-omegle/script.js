@@ -448,27 +448,36 @@ window.addEventListener('DOMContentLoaded', () => {
     startSearchLoop();
   };
   // ---------------------- BAN HANDLING ----------------------
+  let banInterval = null;
+
+  function clearBanState() {
+    if (banInterval) {
+      clearInterval(banInterval);
+      banInterval = null;
+    }
+    localStorage.removeItem('banEndTime');
+  }
+
   function isBanned() {
     const banEnd = localStorage.getItem('banEndTime');
     if (!banEnd) return false;
     const endTime = parseInt(banEnd);
     if (endTime < Date.now()) {
-      localStorage.removeItem('banEndTime');
+      clearBanState();
       return false;
     }
     return true;
   }
 
   function updateBanMessage() {
-    const endTime = parseInt(localStorage.getItem('banEndTime'));
+    const endTime = parseInt(localStorage.getItem('banEndTime') || '0');
     const unblockTime = new Date(endTime).toLocaleString();
     const banMsg = document.getElementById('banMessage');
     if (banMsg) {
-      banMsg.textContent = `تم حظرك لقد قمت بعمل جنسي. سيفك حظرك في ${unblockTime}`;
+      banMsg.innerHTML = `<strong>تم حظرك لقد قمت بعمل جنسي</strong><br>سيفك حظرك في: ${unblockTime}`;
     }
   }
 
-  let banInterval = null;
   function showBannedState() {
     cleanupConnection();
     disableChat();
@@ -477,12 +486,21 @@ window.addEventListener('DOMContentLoaded', () => {
     if (reportBtn) reportBtn.disabled = true;
     showRemoteSpinnerOnly(false);
     hideAllSpinners();
+
+    // Remove any existing status message
+    const existingStatus = document.getElementById('statusMessage');
+    if (existingStatus) existingStatus.remove();
+
     chatMessages.innerHTML = '';
     const msg = document.createElement('div');
     msg.className = 'msg system';
     msg.id = 'banMessage';
+    msg.style.textAlign = 'center';
+    msg.style.fontSize = '1.2em';
+    msg.style.color = '#ff4444';
     chatMessages.appendChild(msg);
     updateBanMessage();
+
     if (banInterval) clearInterval(banInterval);
     banInterval = setInterval(() => {
       if (!isBanned()) {
@@ -494,6 +512,18 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, 1000);
   }
+
+  function resumeFromBan() {
+    clearBanState();
+    if (banInterval) {
+      clearInterval(banInterval);
+      banInterval = null;
+    }
+    addMessage('تم فك الحظر عنك بواسطة الإدارة. مرحباً بعودتك!', 'system');
+    updateStatusMessage('جاري البحث عن شريك...');
+    startSearch();
+  }
+
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => { updateStatusMessage(msg); });
   socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
@@ -508,11 +538,16 @@ window.addEventListener('DOMContentLoaded', () => {
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
-  socket.on('banned', ({ message }) => {
-    const banDuration = 24 * 60 * 60 * 1000; // 24 hours
-    localStorage.setItem('banEndTime', Date.now() + banDuration);
+  socket.on('banned', ({ message, duration = 24 * 60 * 60 * 1000 }) => {  // duration in ms, default 24h
+    localStorage.setItem('banEndTime', Date.now() + duration);
     showBannedState();
   });
+
+  // جديد: حدث فك الحظر من السيرفر
+  socket.on('unbanned', () => {
+    resumeFromBan();
+  });
+
   socket.on('partner-disconnected', () => {
     updateStatusMessage('Partner disconnected.');
     disableChat();
@@ -640,7 +675,6 @@ window.addEventListener('DOMContentLoaded', () => {
        
         remoteVideo.srcObject = e.streams[0];
         enableChat();
-        // تم حذف رسالة "Connected with a stranger!" هنا
         updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
