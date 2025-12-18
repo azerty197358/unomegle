@@ -1,4 +1,4 @@
-سنعمل بالنظام السابق الدي يتصل بلخادم لانه اكثر اما نا هاهو ملف الخادم لدي const express = require("express");
+const express = require("express");
 const path = require("path");
 const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
@@ -418,3 +418,4 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
+
