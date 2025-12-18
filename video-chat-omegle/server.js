@@ -3,6 +3,8 @@ const path = require("path");
 const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
 const app = express();
 app.set("trust proxy", true);
@@ -13,10 +15,36 @@ app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// بيانات اعتماد الأدمن
-const ADMIN_USERS = { admin: "admin" };
+// ======== إعدادات JWT والمصادقة ========
+const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key-change-this-in-production";
+const JWT_EXPIRES_IN = "24h";
+
+// بيانات اعتماد الأدمن (يجب حفظها في قاعدة البيانات لاحقاً)
+const ADMIN_USERS = { 
+    admin: bcrypt.hashSync("admin123", 10) // كلمة المرور: admin123
+};
+
+// middleware للتحقق من التوكن
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Access token required' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ success: false, message: 'Invalid or expired token' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// بيانات اعتماد الأدمن القديم (للتوافق)
 const adminAuth = basicAuth({
-  users: ADMIN_USERS,
+  users: { admin: "admin" },
   challenge: true,
   realm: "Admin Area",
 });
@@ -47,7 +75,24 @@ CREATE TABLE IF NOT EXISTS bans(
 );
 
 CREATE TABLE IF NOT EXISTS banned_countries(code TEXT PRIMARY KEY);
+
+CREATE TABLE IF NOT EXISTS admin_users(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  permissions TEXT DEFAULT 'ban,broadcast,reports',
+  created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
 `);
+
+// إنشاء أول أدمن إذا لم يكن موجوداً
+const existingAdmin = db.prepare("SELECT * FROM admin_users WHERE username = ?").get("admin");
+if (!existingAdmin) {
+    const hashedPassword = bcrypt.hashSync("admin123", 10);
+    db.prepare("INSERT INTO admin_users (username, password, permissions) VALUES (?, ?, ?)")
+      .run("admin", hashedPassword, "ban,broadcast,reports");
+    console.log("✅ Admin user created - Username: admin, Password: admin123");
+}
 
 // الاستعلامات المعدة
 const stmtInsertVisitor = db.prepare("INSERT INTO visitors(ip,fp,country,ts) VALUES(?,?,?,?)");
@@ -63,6 +108,7 @@ const stmtInsertBannedCountry = db.prepare("INSERT OR IGNORE INTO banned_countri
 const stmtDeleteBannedCountry = db.prepare("DELETE FROM banned_countries WHERE code=?");
 const stmtClearBannedCountries = db.prepare("DELETE FROM banned_countries");
 const stmtGetBannedCountries = db.prepare("SELECT code FROM banned_countries");
+const stmtGetAdminUser = db.prepare("SELECT * FROM admin_users WHERE username = ?");
 
 // قائمة الدول
 const COUNTRIES = {
@@ -73,7 +119,7 @@ const COUNTRIES = {
   "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
   "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
   "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
-  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
+  "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d'Ivoire","HR":"Croatia",
   "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
   "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
   "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
@@ -99,13 +145,6 @@ const COUNTRIES = {
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
 
-// المتغيرات الأساسية
-const waitingQueue = [];
-const partners = new Map();
-const userFingerprint = new Map();
-const userIp = new Map();
-const BAN_DURATION = 24 * 60 * 60 * 1000;
-
 // ======== دوال المساعدة ========
 function emitAdminUpdate() {
   io.emit("adminUpdate", getAdminSnapshot());
@@ -115,7 +154,7 @@ function banUser(ip, fp) {
   const expiry = Date.now() + BAN_DURATION;
   if (ip) stmtInsertBan.run("ip", ip, expiry);
   if (fp) stmtInsertBan.run("fp", fp, expiry);
-  emitAdminUpdate(); // إصلاح: التحديث الفوري بعد الحظر
+  emitAdminUpdate();
 }
 
 function unbanUser(ip, fp) {
@@ -149,7 +188,6 @@ function getAdminSnapshot() {
     screenshot: obj.screenshot
   }));
 
-  // **NEW: عرض آخر 50 IP فريد فقط**
   const recentVisitors = db.prepare(`
     SELECT ip, fp, country, ts
     FROM visitors
@@ -176,16 +214,102 @@ function getAdminSnapshot() {
   };
 }
 
-// ======== المسارات ========
-app.get("/admin", adminAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, "admin-panel.html"));
+// ======== نقاط نهاية المصادقة الجديدة ========
+
+// تسجيل الدخول
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: "Username and password required" });
+    }
+
+    // البحث عن المستخدم في قاعدة البيانات
+    const user = stmtGetAdminUser.get(username);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: "اسم المستخدم أو كلمة المرور غير صحيحة" });
+    }
+
+    // التحقق من كلمة المرور
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ success: false, message: "اسم المستخدم أو كلمة المرور غير صحيحة" });
+    }
+
+    // إنشاء التوكن
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        username: user.username,
+        permissions: user.permissions ? user.permissions.split(',') : ['ban', 'broadcast', 'reports']
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ 
+      success: true, 
+      token: token,
+      user: { 
+        username: user.username,
+        permissions: user.permissions ? user.permissions.split(',') : ['ban', 'broadcast', 'reports']
+      }
+    });
+
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ success: false, message: "خطأ في الخادم" });
+  }
 });
 
-app.get("/admin/countries-list", adminAuth, (req, res) => {
+// التحقق من التوكن
+app.post("/api/admin/verify", authenticateToken, (req, res) => {
+  res.json({ 
+    success: true, 
+    user: req.user,
+    message: "Token is valid"
+  });
+});
+
+// تحديث التوكن
+app.post("/api/admin/refresh", authenticateToken, (req, res) => {
+  const newToken = jwt.sign(
+    { 
+      userId: req.user.userId, 
+      username: req.user.username,
+      permissions: req.user.permissions
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+
+  res.json({ 
+    success: true, 
+    token: newToken
+  });
+});
+
+// التحقق من الصلاحيات
+app.post("/api/admin/permissions", authenticateToken, (req, res) => {
+  const { level } = req.body;
+  const hasPermission = req.user.permissions && req.user.permissions.includes(level);
+  res.json({ hasPermission: !!hasPermission });
+});
+
+// ======== المسارات القديمة (مع التوكن الجديد) ========
+
+app.get("/admin", adminAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-dashboard.html"));
+});
+
+app.get("/admin/countries-list", authenticateToken, (req, res) => {
   res.send({ all: Object.keys(COUNTRIES), banned: stmtGetBannedCountries.all().map(r => r.code) });
 });
 
-app.post("/admin/block-country", adminAuth, (req, res) => {
+app.post("/admin/block-country", authenticateToken, (req, res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
   stmtInsertBannedCountry.run(code);
@@ -193,20 +317,19 @@ app.post("/admin/block-country", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
-app.post("/admin/unblock-country", adminAuth, (req, res) => {
+app.post("/admin/unblock-country", authenticateToken, (req, res) => {
   stmtDeleteBannedCountry.run((req.body.code || "").toUpperCase());
   emitAdminUpdate();
   res.send({ ok: true });
 });
 
-app.post("/admin/clear-blocked", adminAuth, (req, res) => {
+app.post("/admin/clear-blocked", authenticateToken, (req, res) => {
   stmtClearBannedCountries.run();
   emitAdminUpdate();
   res.send({ ok: true });
 });
 
-// **NEW: تحسين بيانات المخطط البياني لتشمل الدول**
-app.get("/admin/stats-data", adminAuth, (req, res) => {
+app.get("/admin/stats-data", authenticateToken, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
   const params = [];
@@ -233,23 +356,23 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   res.send({ daily, countries, recent });
 });
 
-app.post("/admin-broadcast", adminAuth, (req, res) => {
+app.post("/admin-broadcast", authenticateToken, (req, res) => {
   const msg = req.body.message || "";
   if (msg.trim()) io.emit("adminMessage", msg.trim());
   res.send({ ok: true });
 });
 
-app.post("/unban-ip", adminAuth, (req, res) => {
+app.post("/unban-ip", authenticateToken, (req, res) => {
   unbanUser(req.body.ip, null);
   res.send({ ok: true });
 });
 
-app.post("/unban-fingerprint", adminAuth, (req, res) => {
+app.post("/unban-fingerprint", authenticateToken, (req, res) => {
   unbanUser(null, req.body.fp);
   res.send({ ok: true });
 });
 
-app.post("/manual-ban", adminAuth, (req, res) => {
+app.post("/manual-ban", authenticateToken, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
   const ip = userIp.get(target);
@@ -263,7 +386,7 @@ app.post("/manual-ban", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
-app.post("/remove-report", adminAuth, (req, res) => {
+app.post("/remove-report", authenticateToken, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
   stmtDeleteReports.run(target);
@@ -272,6 +395,12 @@ app.post("/remove-report", adminAuth, (req, res) => {
 });
 
 // ======== Socket.io Logic ========
+const waitingQueue = [];
+const partners = new Map();
+const userFingerprint = new Map();
+const userIp = new Map();
+const BAN_DURATION = 24 * 60 * 60 * 1000;
+
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || "unknown";
   userIp.set(socket.id, ip);
@@ -417,4 +546,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log("Server listening on port " + PORT));
+http.listen(PORT, () => console.log("🚀 Server listening on port " + PORT));
+
+console.log("📋 Admin Panel: http://localhost:" + PORT + "/admin");
+console.log("🔐 Default Admin: Username=admin, Password=admin123");
