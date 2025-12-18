@@ -302,7 +302,7 @@ app.post("/api/admin/permissions", authenticateToken, (req, res) => {
 // ======== المسارات القديمة (مع التوكن الجديد) ========
 
 app.get("/admin", adminAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, "admin-dashboard.html"));
+  res.sendFile(path.join(__dirname, "admin-panel.html"));
 });
 
 app.get("/admin/countries-list", authenticateToken, (req, res) => {
@@ -550,3 +550,4 @@ http.listen(PORT, () => console.log("🚀 Server listening on port " + PORT));
 
 console.log("📋 Admin Panel: http://localhost:" + PORT + "/admin");
 console.log("🔐 Default Admin: Username=admin, Password=admin123");
+
