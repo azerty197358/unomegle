@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Admin Panel — Live Dashboard</title>
+<script src="admin-auth.js"></script>
 <style>
   :root {
     --primary: #4b6cb7;
@@ -146,6 +147,12 @@
     margin: 4px 0;
   }
 
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
   #country-list, #ip-bans, #fp-bans, #reported-list, #visitors-list, #blocked-countries {
     max-height: 400px;
     overflow-y: auto;
@@ -174,6 +181,10 @@
   .ban { background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%); }
   .broadcast { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
   .clear { background: linear-gradient(135deg, var(--danger) 0%, #b91c1c 100%); }
+  .logout { 
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    margin-left: auto;
+  }
 
   /* Forms */
   textarea {
@@ -253,26 +264,90 @@
     gap: 24px;
   }
 
-  /* Stats Panel */
+  /* Charts Container */
   .charts-container {
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 24px;
   }
 
+  /* Chart specific styles */
+  .chart-wrapper {
+    position: relative;
+    height: 300px;
+    margin-top: 16px;
+  }
+
+  .chart-small {
+    position: relative;
+    height: 200px;
+    margin-top: 16px;
+  }
+
+  .small {
+    font-size: 14px;
+    color: var(--gray);
+    font-weight: 500;
+  }
+
+  /* Loading spinner */
+  .loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(75, 108, 183, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary);
+    animation: spin 1s ease-in-out infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Mobile responsive */
   @media (max-width: 768px) {
     .row, .charts-container, .dashboard-grid {
       grid-template-columns: 1fr;
     }
     .topbar {
       overflow-x: auto;
+      flex-wrap: wrap;
     }
     .tab {
       padding: 10px 14px;
       font-size: 14px;
     }
+    .stat-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Auth status */
+  .auth-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--gray);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .auth-status .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
   }
 </style>
+<base target="_blank">
 </head>
 <body>
 <h1>📊 Admin Live Dashboard</h1>
@@ -283,7 +358,11 @@
   <div class="tab" data-tab="stats">📊 Statistics</div>
   <div class="tab" data-tab="reports">🚨 Reports</div>
   <div class="tab" data-tab="bans">⚠️ Bans</div>
-  <div style="margin-left:auto;color:var(--gray);font-size:14px;font-weight:600">👤 Admin Mode</div>
+  <div class="auth-status">
+    <div class="status-dot"></div>
+    <span>Admin Connected</span>
+  </div>
+  <button class="logout" onclick="AdminAuthHelpers.logout()">تسجيل الخروج</button>
 </div>
 
 <div id="content">
@@ -292,7 +371,7 @@
     <div class="dashboard-grid">
       <div class="card">
         <h3>📡 Live Statistics</h3>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+        <div class="stat-grid">
           <div>
             <div class="small">Connected Users</div>
             <span id="stat-connected" class="stat">0</span>
@@ -319,7 +398,7 @@
         <h3>📢 Broadcast Message</h3>
         <form id="broadcastForm">
           <textarea id="broadcastMsg" rows="4" placeholder="Type your message to broadcast to all users..."></textarea><br><br>
-          <button class="broadcast">Send Broadcast</button>
+          <button class="broadcast" data-permission="broadcast">Send Broadcast</button>
         </form>
       </div>
 
@@ -371,11 +450,15 @@
     <div class="charts-container">
       <div class="card">
         <h3>Daily Visitors Trend</h3>
-        <canvas id="visitorsChart" height="120"></canvas>
+        <div class="chart-wrapper">
+          <canvas id="visitorsChart"></canvas>
+        </div>
       </div>
       <div class="card">
         <h3>Top Countries</h3>
-        <canvas id="countryChart" height="160"></canvas>
+        <div class="chart-small">
+          <canvas id="countryChart"></canvas>
+        </div>
         
         <h4 style="margin-top:24px">📅 Date Range</h4>
         <div style="display:flex;flex-direction:column;gap:12px">
@@ -394,7 +477,7 @@
   </div>
 
   <!-- Reports Panel -->
-  <div class="panel" id="panel-reports" style="display:none">
+  <div class="panel" id="panel-reports" style="display:none" data-permission="reports">
     <h2>🚨 User Reports</h2>
     <div id="reports-panel"></div>
   </div>
@@ -409,345 +492,388 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  const socket = io();
-  socket.emit('admin-join');
+  // التحقق من المصادقة عند تحميل الصفحة
+  document.addEventListener('DOMContentLoaded', async () => {
+    const isAuthenticated = await AdminAuthHelpers.checkAuth();
+    if (!isAuthenticated) {
+      window.location.href = '/admin-login.html';
+      return;
+    }
 
-  // Tabs
-  document.querySelectorAll('.tab').forEach(t => {
-    t.onclick = () => {
-      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-      t.classList.add('active');
-      const tab = t.dataset.tab;
-      document.querySelectorAll('[id^=panel-]').forEach(p=>p.style.display='none');
-      document.getElementById('panel-' + tab).style.display = 'block';
-      if (tab === 'countries') loadCountries();
-      if (tab === 'stats') loadStats();
-      if (tab === 'reports') renderReports();
-      if (tab === 'bans') renderBans();
-    };
+    // تهيئة لوحة التحكم بعد التحقق من المصادقة
+    initializeDashboard();
   });
 
-  function renderSnapshot(snap) {
-    document.getElementById('stat-connected').textContent = snap.stats.connected || 0;
-    document.getElementById('stat-waiting').textContent = snap.stats.waiting || 0;
-    document.getElementById('stat-partnered').textContent = snap.stats.partnered || 0;
-    document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
+  function initializeDashboard() {
+    const socket = io();
+    socket.emit('admin-join');
 
-    // Countries list
-    const cl = document.getElementById('country-list');
-    cl.innerHTML = '';
-    const entries = Object.entries(snap.stats.countryCounts || {});
-    if (entries.length === 0) cl.textContent = 'No data';
-    else {
-      entries.sort((a,b)=>b[1]-a[1]).forEach(([country, cnt]) => {
+    // Tabs
+    document.querySelectorAll('.tab').forEach(t => {
+      t.onclick = () => {
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        const tab = t.dataset.tab;
+        document.querySelectorAll('[id^=panel-]').forEach(p=>p.style.display='none');
+        document.getElementById('panel-' + tab).style.display = 'block';
+        if (tab === 'countries') loadCountries();
+        if (tab === 'stats') loadStats();
+        if (tab === 'reports') renderReports();
+        if (tab === 'bans') renderBans();
+      };
+    });
+
+    function renderSnapshot(snap) {
+      document.getElementById('stat-connected').textContent = snap.stats.connected || 0;
+      document.getElementById('stat-waiting').textContent = snap.stats.waiting || 0;
+      document.getElementById('stat-partnered').textContent = snap.stats.partnered || 0;
+      document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
+
+      // Countries list
+      const cl = document.getElementById('country-list');
+      cl.innerHTML = '';
+      const entries = Object.entries(snap.stats.countryCounts || {});
+      if (entries.length === 0) cl.textContent = 'No data';
+      else {
+        entries.sort((a,b)=>b[1]-a[1]).forEach(([country, cnt]) => {
+          const d = document.createElement('div');
+          d.style.padding = '8px';
+          d.style.borderBottom = '1px solid #e2e8f0';
+          d.innerHTML = `<span style="font-weight:600">${country}</span>: <span style="color:var(--primary)">${cnt}</span>`;
+          cl.appendChild(d);
+        });
+      }
+
+      // IP Bans
+      const ipb = document.getElementById('ip-bans');
+      ipb.innerHTML = snap.activeIpBans.length ? '' : '<div style="color:var(--gray)">No active IP bans</div>';
+      snap.activeIpBans.forEach(b => {
+        const div = document.createElement('div');
+        div.style.padding = '8px';
+        div.style.marginBottom = '8px';
+        div.style.background = 'rgba(239, 68, 68, 0.1)';
+        div.style.borderRadius = '6px';
+        div.innerHTML = `<b style="color:var(--danger)">${b.ip}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
+        const btn = document.createElement('button');
+        btn.textContent = 'Unban'; btn.className = 'unban';
+        btn.style.padding = '6px 10px';
+        btn.onclick = () => AdminAuthHelpers.authFetch('/unban-ip', {
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body:JSON.stringify({ip:b.ip})
+        });
+        div.appendChild(btn);
+        ipb.appendChild(div);
+      });
+
+      // Fingerprint Bans
+      const fpb = document.getElementById('fp-bans');
+      fpb.innerHTML = snap.activeFpBans.length ? '' : '<div style="color:var(--gray)">No active device bans</div>';
+      snap.activeFpBans.forEach(b => {
+        const div = document.createElement('div');
+        div.style.padding = '8px';
+        div.style.marginBottom = '8px';
+        div.style.background = 'rgba(239, 68, 68, 0.1)';
+        div.style.borderRadius = '6px';
+        div.innerHTML = `<b style="color:var(--danger)">${b.fp}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
+        const btn = document.createElement('button');
+        btn.textContent = 'Unban'; btn.className = 'unban';
+        btn.style.padding = '6px 10px';
+        btn.onclick = () => AdminAuthHelpers.authFetch('/unban-fingerprint', {
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body:JSON.stringify({fp:b.fp})
+        });
+        div.appendChild(btn);
+        fpb.appendChild(div);
+      });
+
+      // Reported Users
+      const rep = document.getElementById('reported-list');
+      rep.innerHTML = snap.reportedUsers.length ? '' : '<div style="color:var(--gray)">No reports</div>';
+      snap.reportedUsers.forEach(r => {
+        const div = document.createElement('div'); div.className = 'rep-card';
+        
+        if (r.screenshot) {
+          const img = document.createElement('img');
+          img.src = r.screenshot; img.className = 'screenshot-thumb';
+          img.style.maxWidth = '160px'; img.style.marginRight = '16px';
+          const showBtn = document.createElement('button');
+          showBtn.textContent = 'View Screenshot'; 
+          showBtn.style.cssText = 'background:var(--primary);margin-top:8px;padding:6px';
+          showBtn.onclick = () => {
+            const w = window.open("", "_blank");
+            w.document.write(`<meta charset="utf-8"><title>Screenshot</title><img src="${r.screenshot}" style="max-width:100%;display:block;margin:10px auto;">`);
+          };
+          div.appendChild(img); div.appendChild(showBtn);
+        } else div.innerHTML += '<div style="color:var(--gray);margin-bottom:8px">📷 No screenshot</div>';
+        
+        div.innerHTML += `<div style="margin-top:12px"><b>Target:</b> ${r.target}<br><b>Reports:</b> <span style="color:var(--danger)">${r.count}</span></div>`;
+        
+        const small = document.createElement('div'); small.style.cssText = 'font-size:12px;color:var(--gray);margin-top:8px';
+        small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+        div.appendChild(small);
+
+        const btnWrap = document.createElement('div'); btnWrap.style.marginTop = '12px'; btnWrap.style.display = 'flex'; btnWrap.style.gap = '8px';
+        const banBtn = document.createElement('button'); banBtn.textContent = 'Ban User'; banBtn.className = 'ban';
+        banBtn.onclick = () => {
+          if (!confirm(`Ban user ${r.target}?`)) return;
+          AdminAuthHelpers.authFetch('/manual-ban', {
+            method:'POST', 
+            headers:{'Content-Type':'application/json'}, 
+            body:JSON.stringify({ target: r.target })
+          }).then(()=>{});
+        };
+        const removeBtn = document.createElement('button'); removeBtn.textContent = 'Remove Report'; 
+        removeBtn.style.cssText = 'background:var(--gray)';
+        removeBtn.onclick = () => {
+          if (!confirm(`Remove report for user ${r.target}?`)) return;
+          AdminAuthHelpers.authFetch('/remove-report', {
+            method:'POST', 
+            headers:{'Content-Type':'application/json'}, 
+            body:JSON.stringify({ target: r.target })
+          }).then(()=>{});
+        };
+        btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); div.appendChild(btnWrap);
+        rep.appendChild(div);
+      });
+
+      // Recent Visitors
+      const vis = document.getElementById('visitors-list');
+      vis.innerHTML = snap.recentVisitors.length ? '' : '<div style="color:var(--gray)">No visitors yet</div>';
+      snap.recentVisitors.forEach(v => {
         const d = document.createElement('div');
         d.style.padding = '8px';
         d.style.borderBottom = '1px solid #e2e8f0';
-        d.innerHTML = `<span style="font-weight:600">${country}</span>: <span style="color:var(--primary)">${cnt}</span>`;
-        cl.appendChild(d);
+        d.innerHTML = `<small style="color:var(--gray)">${new Date(v.ts).toLocaleString()}</small> — 
+                       <b>${v.country || 'Unknown'}</b> — ${v.ip}${v.fp ? ' — ' + v.fp.slice(0,8) : ''}`;
+        vis.appendChild(d);
+      });
+
+      // Blocked Countries
+      const bc = document.getElementById('blocked-countries');
+      bc.innerHTML = snap.bannedCountries.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
+      snap.bannedCountries.forEach(c => {
+        const d = document.createElement('div');
+        d.style.padding = '8px';
+        d.style.marginBottom = '6px';
+        d.style.background = 'rgba(239, 68, 68, 0.1)';
+        d.style.borderRadius = '6px';
+        d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
+        bc.appendChild(d);
       });
     }
 
-    // IP Bans
-    const ipb = document.getElementById('ip-bans');
-    ipb.innerHTML = snap.activeIpBans.length ? '' : '<div style="color:var(--gray)">No active IP bans</div>';
-    snap.activeIpBans.forEach(b => {
-      const div = document.createElement('div');
-      div.style.padding = '8px';
-      div.style.marginBottom = '8px';
-      div.style.background = 'rgba(239, 68, 68, 0.1)';
-      div.style.borderRadius = '6px';
-      div.innerHTML = `<b style="color:var(--danger)">${b.ip}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
-      const btn = document.createElement('button');
-      btn.textContent = 'Unban'; btn.className = 'unban';
-      btn.style.padding = '6px 10px';
-      btn.onclick = () => fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})});
-      div.appendChild(btn);
-      ipb.appendChild(div);
-    });
+    socket.on('connect', () => socket.emit('admin-join'));
+    socket.on('adminUpdate', renderSnapshot);
 
-    // Fingerprint Bans
-    const fpb = document.getElementById('fp-bans');
-    fpb.innerHTML = snap.activeFpBans.length ? '' : '<div style="color:var(--gray)">No active device bans</div>';
-    snap.activeFpBans.forEach(b => {
-      const div = document.createElement('div');
-      div.style.padding = '8px';
-      div.style.marginBottom = '8px';
-      div.style.background = 'rgba(239, 68, 68, 0.1)';
-      div.style.borderRadius = '6px';
-      div.innerHTML = `<b style="color:var(--danger)">${b.fp}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
-      const btn = document.createElement('button');
-      btn.textContent = 'Unban'; btn.className = 'unban';
-      btn.style.padding = '6px 10px';
-      btn.onclick = () => fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})});
-      div.appendChild(btn);
-      fpb.appendChild(div);
-    });
-
-    // Reported Users
-    const rep = document.getElementById('reported-list');
-    rep.innerHTML = snap.reportedUsers.length ? '' : '<div style="color:var(--gray)">No reports</div>';
-    snap.reportedUsers.forEach(r => {
-      const div = document.createElement('div'); div.className = 'rep-card';
-      
-      if (r.screenshot) {
-        const img = document.createElement('img');
-        img.src = r.screenshot; img.className = 'screenshot-thumb';
-        img.style.maxWidth = '160px'; img.style.marginRight = '16px';
-        const showBtn = document.createElement('button');
-        showBtn.textContent = 'View Screenshot'; 
-        showBtn.style.cssText = 'background:var(--primary);margin-top:8px;padding:6px';
-        showBtn.onclick = () => {
-          const w = window.open("", "_blank");
-          w.document.write(`<meta charset="utf-8"><title>Screenshot</title><img src="${r.screenshot}" style="max-width:100%;display:block;margin:10px auto;">`);
-        };
-        div.appendChild(img); div.appendChild(showBtn);
-      } else div.innerHTML += '<div style="color:var(--gray);margin-bottom:8px">📷 No screenshot</div>';
-      
-      div.innerHTML += `<div style="margin-top:12px"><b>Target:</b> ${r.target}<br><b>Reports:</b> <span style="color:var(--danger)">${r.count}</span></div>`;
-      
-      const small = document.createElement('div'); small.style.cssText = 'font-size:12px;color:var(--gray);margin-top:8px';
-      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
-      div.appendChild(small);
-
-      const btnWrap = document.createElement('div'); btnWrap.style.marginTop = '12px'; btnWrap.style.display = 'flex'; btnWrap.style.gap = '8px';
-      const banBtn = document.createElement('button'); banBtn.textContent = 'Ban User'; banBtn.className = 'ban';
-      banBtn.onclick = () => {
-        if (!confirm(`Ban user ${r.target}?`)) return;
-        fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
-      };
-      const removeBtn = document.createElement('button'); removeBtn.textContent = 'Remove Report'; 
-      removeBtn.style.cssText = 'background:var(--gray)';
-      removeBtn.onclick = () => {
-        if (!confirm(`Remove report for user ${r.target}?`)) return;
-        fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
-      };
-      btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); div.appendChild(btnWrap);
-      rep.appendChild(div);
-    });
-
-    // Recent Visitors
-    const vis = document.getElementById('visitors-list');
-    vis.innerHTML = snap.recentVisitors.length ? '' : '<div style="color:var(--gray)">No visitors yet</div>';
-    snap.recentVisitors.forEach(v => {
-      const d = document.createElement('div');
-      d.style.padding = '8px';
-      d.style.borderBottom = '1px solid #e2e8f0';
-      d.innerHTML = `<small style="color:var(--gray)">${new Date(v.ts).toLocaleString()}</small> — 
-                     <b>${v.country || 'Unknown'}</b> — ${v.ip}${v.fp ? ' — ' + v.fp.slice(0,8) : ''}`;
-      vis.appendChild(d);
-    });
-
-    // Blocked Countries
-    const bc = document.getElementById('blocked-countries');
-    bc.innerHTML = snap.bannedCountries.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
-    snap.bannedCountries.forEach(c => {
-      const d = document.createElement('div');
-      d.style.padding = '8px';
-      d.style.marginBottom = '6px';
-      d.style.background = 'rgba(239, 68, 68, 0.1)';
-      d.style.borderRadius = '6px';
-      d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
-      bc.appendChild(d);
-    });
-  }
-
-  socket.on('connect', () => socket.emit('admin-join'));
-  socket.on('adminUpdate', renderSnapshot);
-
-  // Broadcast form
-  document.getElementById('broadcastForm').onsubmit = e => {
-    e.preventDefault();
-    const msg = document.getElementById('broadcastMsg').value.trim();
-    if (!msg) return;
-    fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})}).then(()=>{});
-    document.getElementById('broadcastMsg').value = '';
-  };
-
-  // Countries
-  const ALL_COUNTRIES = {
-    "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
-    "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
-    "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
-    "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
-    "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
-    "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
-    "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
-    "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
-    "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Dijbouti","DM":"Dominica","DO":"Dominican Republic",
-    "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
-    "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
-    "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
-    "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
-    "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
-    "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
-    "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
-    "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
-    "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
-    "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
-    "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
-    "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
-    "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
-    "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
-    "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
-    "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
-    "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
-    "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
-    "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
-    "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
-    "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
-    "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
-  };
-  
-  function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
-
-  async function loadCountries() {
-    const res = await fetch('/admin/countries-list');
-    const data = await res.json();
-    const banned = new Set(data.banned || []);
-    const container = document.getElementById('all-countries');
-    container.innerHTML = '';
-    const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
-    
-    codes.forEach(code => {
-      const div = document.createElement('div'); div.className='country-item';
-      const left = document.createElement('div'); left.className='flex';
-      const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked = banned.has(code);
-      checkbox.dataset.code = code;
-      const label = document.createElement('div'); label.textContent = code + ' — ' + ALL_COUNTRIES[code];
-      left.appendChild(checkbox); left.appendChild(label);
-      
-      const action = document.createElement('div');
-      const btn = document.createElement('button'); btn.textContent = checkbox.checked ? '🟢 Unblock' : '🔴 Block';
-      btn.style.background = checkbox.checked ? 'var(--success)' : 'var(--danger)'; btn.style.color='#fff';
-      btn.onclick = async () => {
-        const endpoint = checkbox.checked ? '/admin/unblock-country' : '/admin/block-country';
-        await fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ code })}).then(()=>{});
-        loadCountries();
-      };
-      action.appendChild(btn);
-      div.appendChild(left); div.appendChild(action);
-      container.appendChild(div);
-    });
-
-    document.getElementById('clear-blocks').onclick = async () => {
-      if (!confirm('Clear all blocked countries?')) return;
-      await fetch('/admin/clear-blocked', {method:'POST'}).then(()=>{});
-      loadCountries();
+    // Broadcast form
+    document.getElementById('broadcastForm').onsubmit = e => {
+      e.preventDefault();
+      const msg = document.getElementById('broadcastMsg').value.trim();
+      if (!msg) return;
+      AdminAuthHelpers.authFetch('/admin-broadcast', {
+        method:'POST', 
+        headers:{'Content-Type':'application/json'}, 
+        body:JSON.stringify({message: msg})
+      }).then(()=>{});
+      document.getElementById('broadcastMsg').value = '';
     };
 
-    const bc = document.getElementById('blocked-countries');
-    bc.innerHTML = data.banned.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
-    data.banned.forEach(c => {
-      const d = document.createElement('div'); 
-      d.style.padding = '8px'; d.style.marginBottom = '6px';
-      d.style.background = 'rgba(239, 68, 68, 0.1)'; d.style.borderRadius = '6px';
-      d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
-      bc.appendChild(d);
-    });
-  }
-
-  // Charts
-  let visitorsChart = null, countryChart = null;
-  async function loadStats() {
-    const from = document.getElementById('fromDate').value;
-    const to = document.getElementById('toDate').value;
-    const params = new URLSearchParams();
-    if (from) params.append('from', from);
-    if (to) params.append('to', to);
+    // Countries
+    const ALL_COUNTRIES = {
+      "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
+      "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
+      "AZ":"Azerbaijan","BS":"Bahamas","BH":"Bahrain","BD":"Bangladesh","BB":"Barbados","BY":"Belarus","BE":"Belgium","BZ":"Belize",
+      "BJ":"Benin","BM":"Bermuda","BT":"Bhutan","BO":"Bolivia","BA":"Bosnia and Herzegovina","BW":"Botswana","BR":"Brazil",
+      "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
+      "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
+      "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
+      "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d'Ivoire","HR":"Croatia",
+      "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Dijbouti","DM":"Dominica","DO":"Dominican Republic",
+      "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
+      "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
+      "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
+      "GP":"Guadeloupe","GU":"Guam","GT":"Guatemala","GG":"Guernsey","GN":"Guinea","GW":"Guinea-Bissau","GY":"Guyana","HT":"Haiti",
+      "HN":"Honduras","HK":"Hong Kong","HU":"Hungary","IS":"Iceland","IN":"India","ID":"Indonesia","IR":"Iran","IQ":"Iraq","IE":"Ireland",
+      "IM":"Isle of Man","IL":"Israel","IT":"Italy","JM":"Jamaica","JP":"Japan","JE":"Jersey","JO":"Jordan","KZ":"Kazakhstan","KE":"Kenya",
+      "KI":"Kiribati","XK":"Kosovo","KW":"Kuwait","KG":"Kyrgyzstan","LA":"Laos","LV":"Latvia","LB":"Lebanon","LS":"Lesotho","LR":"Liberia",
+      "LY":"Libya","LI":"Liechtenstein","LT":"Lithuania","LU":"Luxembourg","MO":"Macao","MK":"North Macedonia","MG":"Madagascar","MW":"Malawi",
+      "MY":"Malaysia","MV":"Maldives","ML":"Mali","MT":"Malta","MH":"Marshall Islands","MQ":"Martinique","MR":"Mauritania","MU":"Mauritius",
+      "YT":"Mayotte","MX":"Mexico","FM":"Micronesia","MD":"Moldova","MC":"Monaco","MN":"Mongolia","ME":"Montenegro","MS":"Montserrat",
+      "MA":"Morocco","MZ":"Mozambique","MM":"Myanmar","NA":"Namibia","NR":"Nauru","NP":"Nepal","NL":"Netherlands","NC":"New Caledonia",
+      "NZ":"New Zealand","NI":"Nicaragua","NE":"Niger","NG":"Nigeria","NU":"Niue","KP":"North Korea","MP":"Northern Mariana Islands","NO":"Norway",
+      "OM":"Oman","PK":"Pakistan","PW":"Palau","PS":"Palestine","PA":"Panama","PG":"Papua New Guinea","PY":"Paraguay","PE":"Peru","PH":"Philippines",
+      "PL":"Poland","PT":"Portugal","PR":"Puerto Rico","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","WS":"Samoa",
+      "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
+      "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
+      "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
+      "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
+      "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
+      "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
+      "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
+      "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
+    };
     
-    const res = await fetch('/admin/stats-data?' + params.toString());
-    const data = await res.json();
+    function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
 
-    // Line chart
-    const ctx = document.getElementById('visitorsChart').getContext('2d');
-    const labels = data.daily.map(d=>d.date);
-    const values = data.daily.map(d=>d.count);
-    if (visitorsChart) visitorsChart.destroy();
-    visitorsChart = new Chart(ctx, { 
-      type:'line', 
-      data:{ 
-        labels, 
-        datasets:[{ 
-          label:'Daily Visitors', 
-          data:values, 
-          fill:true, 
-          tension:0.4, 
-          borderColor:'#4b6cb7',
-          backgroundColor: 'rgba(75, 108, 183, 0.1)',
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          borderWidth: 3,
-          pointBackgroundColor: '#fff',
-          pointBorderColor: '#4b6cb7'
-        }] 
-      }, 
-      options:{ 
-        responsive:true, 
-        maintainAspectRatio:false,
-        scales: {
-          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
-          x: { grid: { color: 'rgba(0,0,0,0.03)' } }
-        },
-        plugins: {
-          legend: { display: true, position: 'top', labels: { font: { size: 14 } } },
-          tooltip: {
-            mode: 'index',
-            intersect: false,
-            backgroundColor: 'rgba(30, 41, 59, 0.9)',
-            titleColor: '#fff',
-            bodyColor: '#fff'
+    async function loadCountries() {
+      const res = await AdminAuthHelpers.authFetch('/admin/countries-list');
+      const data = await res.json();
+      const banned = new Set(data.banned || []);
+      const container = document.getElementById('all-countries');
+      container.innerHTML = '';
+      const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
+      
+      codes.forEach(code => {
+        const div = document.createElement('div'); div.className='country-item';
+        const left = document.createElement('div'); left.className='flex';
+        const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked = banned.has(code);
+        checkbox.dataset.code = code;
+        const label = document.createElement('div'); label.textContent = code + ' — ' + ALL_COUNTRIES[code];
+        left.appendChild(checkbox); left.appendChild(label);
+        
+        const action = document.createElement('div');
+        const btn = document.createElement('button'); btn.textContent = checkbox.checked ? '🟢 Unblock' : '🔴 Block';
+        btn.style.background = checkbox.checked ? 'var(--success)' : 'var(--danger)'; btn.style.color='#fff';
+        btn.onclick = async () => {
+          const endpoint = checkbox.checked ? '/admin/unblock-country' : '/admin/block-country';
+          await AdminAuthHelpers.authFetch(endpoint, {
+            method:'POST', 
+            headers:{'Content-Type':'application/json'}, 
+            body:JSON.stringify({ code })
+          }).then(()=>{});
+          loadCountries();
+        };
+        action.appendChild(btn);
+        div.appendChild(left); div.appendChild(action);
+        container.appendChild(div);
+      });
+
+      document.getElementById('clear-blocks').onclick = async () => {
+        if (!confirm('Clear all blocked countries?')) return;
+        await AdminAuthHelpers.authFetch('/admin/clear-blocked', {method:'POST'}).then(()=>{});
+        loadCountries();
+      };
+
+      const bc = document.getElementById('blocked-countries');
+      bc.innerHTML = data.banned.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
+      data.banned.forEach(c => {
+        const d = document.createElement('div'); 
+        d.style.padding = '8px'; d.style.marginBottom = '6px';
+        d.style.background = 'rgba(239, 68, 68, 0.1)'; d.style.borderRadius = '6px';
+        d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
+        bc.appendChild(d);
+      });
+    }
+
+    // Charts
+    let visitorsChart = null, countryChart = null;
+    async function loadStats() {
+      const from = document.getElementById('fromDate').value;
+      const to = document.getElementById('toDate').value;
+      const params = new URLSearchParams();
+      if (from) params.append('from', from);
+      if (to) params.append('to', to);
+      
+      const res = await AdminAuthHelpers.authFetch('/admin/stats-data?' + params.toString());
+      const data = await res.json();
+
+      // Line chart
+      const ctx = document.getElementById('visitorsChart').getContext('2d');
+      const labels = data.daily.map(d=>d.date);
+      const values = data.daily.map(d=>d.count);
+      if (visitorsChart) visitorsChart.destroy();
+      visitorsChart = new Chart(ctx, { 
+        type:'line', 
+        data:{ 
+          labels, 
+          datasets:[{ 
+            label:'Daily Visitors', 
+            data:values, 
+            fill:true, 
+            tension:0.4, 
+            borderColor:'#4b6cb7',
+            backgroundColor: 'rgba(75, 108, 183, 0.1)',
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            borderWidth: 3,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: '#4b6cb7'
+          }] 
+        }, 
+        options:{ 
+          responsive:true, 
+          maintainAspectRatio:false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
+            x: { grid: { color: 'rgba(0,0,0,0.03)' } }
+          },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { font: { size: 14 } } },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(30, 41, 59, 0.9)',
+              titleColor: '#fff',
+              bodyColor: '#fff'
+            }
           }
-        }
-      } 
-    });
+        } 
+      });
 
-    // Bar chart
-    const ctx2 = document.getElementById('countryChart').getContext('2d');
-    const cLabels = data.countries.map(c=>c.country);
-    const cVals = data.countries.map(c=>c.count);
-    if (countryChart) countryChart.destroy();
-    countryChart = new Chart(ctx2, { 
-      type:'bar', 
-      data:{ 
-        labels:cLabels, 
-        datasets:[{ 
-          label:'Visitors by Country', 
-          data:cVals, 
-          backgroundColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 55%)`),
-          borderColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 45%)`),
-          borderWidth: 1,
-          borderRadius: 6
-        }] 
-      }, 
-      options:{ 
-        responsive:true, 
-        maintainAspectRatio:false,
-        scales: {
-          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
-          x: { grid: { display: false } }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                return context.parsed.y + ' visitors';
+      // Bar chart
+      const ctx2 = document.getElementById('countryChart').getContext('2d');
+      const cLabels = data.countries.map(c=>c.country);
+      const cVals = data.countries.map(c=>c.count);
+      if (countryChart) countryChart.destroy();
+      countryChart = new Chart(ctx2, { 
+        type:'bar', 
+        data:{ 
+          labels:cLabels, 
+          datasets:[{ 
+            label:'Visitors by Country', 
+            data:cVals, 
+            backgroundColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 55%)`),
+            borderColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 45%)`),
+            borderWidth: 1,
+            borderRadius: 6
+          }] 
+        }, 
+        options:{ 
+          responsive:true, 
+          maintainAspectRatio:false,
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
+            x: { grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.parsed.y + ' visitors';
+                }
               }
             }
           }
-        }
-      } 
-    });
+        } 
+      });
+    }
+
+    document.getElementById('refreshStats').onclick = loadStats;
+    function renderReports(){ /* Handled by adminUpdate */ }
+    function renderBans(){ /* Handled by adminUpdate */ }
+
+    // Initial load
+    loadCountries();
+    loadStats();
+
+    // تهيئة UI حسب الصلاحيات
+    if (window.adminAuth) {
+      window.adminAuth.setupUIBasedOnPermissions();
+    }
   }
-
-  document.getElementById('refreshStats').onclick = loadStats;
-  function renderReports(){ /* Handled by adminUpdate */ }
-  function renderBans(){ /* Handled by adminUpdate */ }
-
-  // Initial load
-  loadCountries();
-  loadStats();
 </script>
 </body>
 </html>
