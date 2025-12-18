@@ -1,4 +1,3 @@
-// file: public/js/webrtc-stable-client.js
 // WebRTC client with enhanced connection management, error handling, and status-only updates
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
@@ -447,53 +446,6 @@ window.addEventListener('DOMContentLoaded', () => {
     clearSafeTimer(pauseTimer);
     startSearchLoop();
   };
-  // ---------------------- BAN HANDLING ----------------------
-  function isBanned() {
-    const banEnd = localStorage.getItem('banEndTime');
-    if (!banEnd) return false;
-    const endTime = parseInt(banEnd);
-    if (endTime < Date.now()) {
-      localStorage.removeItem('banEndTime');
-      return false;
-    }
-    return true;
-  }
-
-  function updateBanMessage() {
-    const endTime = parseInt(localStorage.getItem('banEndTime'));
-    const unblockTime = new Date(endTime).toLocaleString();
-    const banMsg = document.getElementById('banMessage');
-    if (banMsg) {
-      banMsg.textContent = `تم حظرك لقد قمت بعمل جنسي. سيفك حظرك في ${unblockTime}`;
-    }
-  }
-
-  let banInterval = null;
-  function showBannedState() {
-    cleanupConnection();
-    disableChat();
-    if (skipBtn) skipBtn.disabled = true;
-    if (micBtn) micBtn.disabled = true;
-    if (reportBtn) reportBtn.disabled = true;
-    showRemoteSpinnerOnly(false);
-    hideAllSpinners();
-    chatMessages.innerHTML = '';
-    const msg = document.createElement('div');
-    msg.className = 'msg system';
-    msg.id = 'banMessage';
-    chatMessages.appendChild(msg);
-    updateBanMessage();
-    if (banInterval) clearInterval(banInterval);
-    banInterval = setInterval(() => {
-      if (!isBanned()) {
-        clearInterval(banInterval);
-        banInterval = null;
-        location.reload();
-      } else {
-        updateBanMessage();
-      }
-    }, 1000);
-  }
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => { updateStatusMessage(msg); });
   socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
@@ -509,9 +461,10 @@ window.addEventListener('DOMContentLoaded', () => {
     addMessage('📢 Admin: ' + msg, 'system');
   });
   socket.on('banned', ({ message }) => {
-    const banDuration = 24 * 60 * 60 * 1000; // 24 hours
-    localStorage.setItem('banEndTime', Date.now() + banDuration);
-    showBannedState();
+    addMessage(message || 'You are banned.', 'system');
+    showRemoteSpinnerOnly(true);
+    updateStatusMessage('Blocked.');
+    cleanupConnection();
   });
   socket.on('partner-disconnected', () => {
     updateStatusMessage('Partner disconnected.');
@@ -913,11 +866,7 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to send fingerprint:', e);
     }
    
-    if (isBanned()) {
-      showBannedState();
-    } else {
-      startSearch();
-    }
+    startSearch();
   }
   initialize();
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
