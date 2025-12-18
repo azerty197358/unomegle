@@ -39,7 +39,7 @@
     font-weight: 700;
   }
 
-  /* Tabs */
+  /* Enhanced Tabs */
   .topbar {
     display: flex;
     gap: 8px;
@@ -146,13 +146,74 @@
     margin: 4px 0;
   }
 
-  /* Country list (scrollable) */
+  /* Enhanced Country List */
   #country-list {
     max-height: 240px;
     overflow-y: auto;
     padding: 12px;
     background: var(--light-gray);
     border-radius: 8px;
+  }
+
+  /* Top Countries List - New Design */
+  .top-countries-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 16px;
+  }
+
+  .country-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    background: var(--white);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+    border-left: 4px solid var(--primary);
+  }
+
+  .country-item:hover {
+    background: #f8fafc;
+    transform: translateX(4px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .country-name {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .country-flag {
+    font-size: 18px;
+  }
+
+  .country-count {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 16px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  .country-rank {
+    background: var(--light-gray);
+    color: var(--gray);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 8px;
   }
 
   #ip-bans, #fp-bans, #reported-list, #visitors-list, #blocked-countries {
@@ -269,6 +330,41 @@
     gap: 24px;
   }
 
+  /* Enhanced Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .stat-item {
+    background: var(--white);
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: transform 0.3s ease;
+  }
+
+  .stat-item:hover {
+    transform: translateY(-2px);
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--primary);
+  }
+
   @media (max-width: 768px) {
     .row, .charts-container, .dashboard-grid {
       grid-template-columns: 1fr;
@@ -280,8 +376,12 @@
       padding: 10px 14px;
       font-size: 14px;
     }
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
+<base target="_blank">
 </head>
 <body>
 <h1>📊 Admin Live Dashboard</h1>
@@ -301,28 +401,27 @@
     <div class="dashboard-grid">
       <div class="card">
         <h3>📡 Live Statistics</h3>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
-          <div>
-            <div class="small">Connected Users</div>
-            <span id="stat-connected" class="stat">0</span>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label">Connected Users</div>
+            <span id="stat-connected" class="stat-value">0</span>
           </div>
-          <div>
-            <div class="small">Waiting</div>
-            <span id="stat-waiting" class="stat">0</span>
+          <div class="stat-item">
+            <div class="stat-label">Waiting</div>
+            <span id="stat-waiting" class="stat-value">0</span>
           </div>
-          <div>
-            <div class="small">Paired</div>
-            <span id="stat-partnered" class="stat">0</span>
+          <div class="stat-item">
+            <div class="stat-label">Paired</div>
+            <span id="stat-partnered" class="stat-value">0</span>
           </div>
-          <div>
-            <div class="small">Total Visitors</div>
-            <span id="stat-totalvisitors" class="stat">0</span>
+          <div class="stat-item">
+            <div class="stat-label">Total Visitors</div>
+            <span id="stat-totalvisitors" class="stat-value">0</span>
           </div>
         </div>
         
         <h4>🌐 Top Countries</h4>
-        <div id="country-list" class="small"></div>
-        <button id="toggleMoreCountries" class="broadcast" style="margin-top:8px;width:100%">عرض المزيد</button>
+        <div id="country-list" class="top-countries-list"></div>
       </div>
 
       <div class="card">
@@ -385,7 +484,7 @@
       </div>
       <div class="card">
         <h3>Top Countries</h3>
-        <canvas id="countryChart" height="160"></canvas>
+        <div id="stats-country-list" style="max-height: 300px; overflow-y: auto; padding: 12px; background: var(--light-gray); border-radius: 8px;"></div>
         
         <h4 style="margin-top:24px">📅 Date Range</h4>
         <div style="display:flex;flex-direction:column;gap:12px">
@@ -416,8 +515,8 @@
   </div>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js "></script>
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
@@ -443,30 +542,47 @@
     document.getElementById('stat-partnered').textContent = snap.stats.partnered || 0;
     document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
 
-    // Countries list
+    // Enhanced Countries list with new design
     const cl = document.getElementById('country-list');
     cl.innerHTML = '';
     const entries = Object.entries(snap.stats.countryCounts || {});
-    if (entries.length === 0) cl.textContent = 'No data';
-    else {
+    if (entries.length === 0) {
+      cl.textContent = 'No data';
+    } else {
       entries.sort((a,b)=>b[1]-a[1]);
-      const topN = 10;
+      const topN = 15;
       const toShow = entries.slice(0, topN);
-      toShow.forEach(([country, cnt]) => {
+      
+      toShow.forEach(([country, cnt], index) => {
         const d = document.createElement('div');
-        d.style.padding = '8px';
-        d.style.borderBottom = '1px solid #e2e8f0';
-        d.innerHTML = `<span style="font-weight:600">${country}</span>: <span style="color:var(--primary)">${cnt}</span>`;
+        d.className = 'country-item';
+        
+        const rank = document.createElement('span');
+        rank.className = 'country-rank';
+        rank.textContent = `#${index + 1}`;
+        
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'country-name';
+        
+        const flag = document.createElement('span');
+        flag.className = 'country-flag';
+        flag.textContent = getCountryFlag(country);
+        
+        const name = document.createElement('span');
+        name.textContent = country;
+        
+        nameDiv.appendChild(rank);
+        nameDiv.appendChild(flag);
+        nameDiv.appendChild(name);
+        
+        const count = document.createElement('span');
+        count.className = 'country-count';
+        count.textContent = cnt;
+        
+        d.appendChild(nameDiv);
+        d.appendChild(count);
         cl.appendChild(d);
       });
-      if (entries.length > topN) {
-        const showMore = document.createElement('div');
-        showMore.style.padding = '6px';
-        showMore.style.fontSize = '12px';
-        showMore.style.color = 'var(--gray)';
-        showMore.textContent = `+${entries.length - topN} more...`;
-        cl.appendChild(showMore);
-      }
     }
 
     // IP Bans
@@ -583,6 +699,23 @@
     document.getElementById('broadcastMsg').value = '';
   };
 
+  // Helper function to get country flags
+  function getCountryFlag(countryCode) {
+    const flagMap = {
+      'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹', 'ES': '🇪🇸', 
+      'CA': '🇨🇦', 'AU': '🇦🇺', 'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'IN': '🇮🇳',
+      'BR': '🇧🇷', 'RU': '🇷🇺', 'MX': '🇲🇽', 'AR': '🇦🇷', 'ZA': '🇿🇦', 'EG': '🇪🇬',
+      'TR': '🇹🇷', 'IR': '🇮🇷', 'TH': '🇹🇭', 'VN': '🇻🇳', 'PH': '🇵🇭', 'MY': '🇲🇾',
+      'SG': '🇸🇬', 'ID': '🇮🇩', 'BD': '🇧🇩', 'PK': '🇵🇰', 'NG': '🇳🇬', 'KE': '🇰🇪',
+      'SA': '🇸🇦', 'AE': '🇦🇪', 'IL': '🇮🇱', 'UA': '🇺🇦', 'PL': '🇵🇱', 'SE': '🇸🇪',
+      'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭',
+      'AT': '🇦🇹', 'CZ': '🇨🇿', 'HU': '🇭🇺', 'RO': '🇷🇴', 'BG': '🇧🇬', 'HR': '🇭🇷',
+      'RS': '🇷🇸', 'SK': '🇸🇰', 'SI': '🇸🇮', 'LT': '🇱🇹', 'LV': '🇱🇻', 'EE': '🇪🇪',
+      'IE': '🇮🇪', 'PT': '🇵🇹', 'GR': '🇬🇷', 'CY': '🇨🇾', 'MT': '🇲🇹', 'LU': '🇱🇺'
+    };
+    return flagMap[countryCode] || '🌍';
+  }
+
   // Countries
   const ALL_COUNTRIES = {
     "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
@@ -592,7 +725,7 @@
     "IO":"British Indian Ocean Territory","VG":"British Virgin Islands","BN":"Brunei","BG":"Bulgaria","BF":"Burkina Faso",
     "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
     "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
-    "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d’Ivoire","HR":"Croatia",
+    "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d'Ivoire","HR":"Croatia",
     "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Dijbouti","DM":"Dominica","DO":"Dominican Republic",
     "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
     "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
@@ -667,7 +800,7 @@
   }
 
   // Charts
-  let visitorsChart = null, countryChart = null;
+  let visitorsChart = null;
   async function loadStats() {
     const from = document.getElementById('fromDate').value;
     const to = document.getElementById('toDate').value;
@@ -721,42 +854,38 @@
       } 
     });
 
-    // Bar chart
-    const ctx2 = document.getElementById('countryChart').getContext('2d');
-    const cLabels = data.countries.map(c=>c.country);
-    const cVals = data.countries.map(c=>c.count);
-    if (countryChart) countryChart.destroy();
-    countryChart = new Chart(ctx2, { 
-      type:'bar', 
-      data:{ 
-        labels:cLabels, 
-        datasets:[{ 
-          label:'Visitors by Country', 
-          data:cVals, 
-          backgroundColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 55%)`),
-          borderColor: cLabels.map((_, i) => `hsl(${i * 360 / Math.max(cLabels.length, 1)}, 65%, 45%)`),
-          borderWidth: 1,
-          borderRadius: 6
-        }] 
-      }, 
-      options:{ 
-        responsive:true, 
-        maintainAspectRatio:false,
-        scales: {
-          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } },
-          x: { grid: { display: false } }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                return context.parsed.y + ' visitors';
-              }
-            }
-          }
-        }
-      } 
+    // Update country list in stats panel
+    const countryList = document.getElementById('stats-country-list');
+    countryList.innerHTML = '';
+    data.countries.forEach((country, index) => {
+      const div = document.createElement('div');
+      div.className = 'country-item';
+      
+      const rank = document.createElement('span');
+      rank.className = 'country-rank';
+      rank.textContent = `#${index + 1}`;
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'country-name';
+      
+      const flag = document.createElement('span');
+      flag.className = 'country-flag';
+      flag.textContent = getCountryFlag(country.country);
+      
+      const name = document.createElement('span');
+      name.textContent = country.country;
+      
+      nameDiv.appendChild(rank);
+      nameDiv.appendChild(flag);
+      nameDiv.appendChild(name);
+      
+      const count = document.createElement('span');
+      count.className = 'country-count';
+      count.textContent = country.count;
+      
+      div.appendChild(nameDiv);
+      div.appendChild(count);
+      countryList.appendChild(div);
     });
   }
 
