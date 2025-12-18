@@ -24,18 +24,12 @@
     box-sizing: border-box;
   }
 
-  html, body {
-    height: 100%;                 /* أولاً: نحدد ارتفاعاً كاملاً */
-    overflow: hidden;             /* نمنع scroll على body */
-  }
-
   body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, var(--light-gray) 0%, #e2e8f0 100%);
     padding: 20px;
+    min-height: 100vh;
     color: var(--dark);
-    display: flex;                /* ثانياً: flex column */
-    flex-direction: column;
   }
 
   h1 {
@@ -94,21 +88,12 @@
   }
 
   /* Panels */
-  #content {
-    flex: 1;                              /* يملأ المساحة المتبقية */
-    min-height: 0;                        /* يسمح للأبناء بأخذ overflow */
-  }
-
   .panel {
     background: var(--white);
     padding: 24px;
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     animation: fadeIn 0.3s ease;
-    height: 100%;                         /* ثالثاً: نجعل الـ panel نفسه مالئاً */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;                     /* لا scroll هنا */
   }
 
   @keyframes fadeIn {
@@ -161,19 +146,19 @@
     margin: 4px 0;
   }
 
-  /* القوائم التى تحتوى محتوى كبيراً */
-  #country-list,
-  #ip-bans,
-  #fp-bans,
-  #reported-list,
-  #visitors-list,
-  #blocked-countries,
-  .country-list {
-    flex: 1;                              /* يأخذ المساحة المتبقية */
-    min-height: 0;                        /* يسمح بـ overflow */
-    max-height: none;                     /* نلغى 400px القديمة */
-    overflow-y: auto;                     /* scroll داخلى فقط */
-    overscroll-behavior: contain;         /* يمنع تمرير الـ body */
+  /* ====== الإصلاح الأساسي هنا ====== */
+  #country-list {
+    max-height: 240px;   /* لا تزيد عن هذا الارتفاع */
+    overflow-y: auto;    /* شريط تمرير داخلي */
+    padding: 12px;
+    background: var(--light-gray);
+    border-radius: 8px;
+  }
+  /* ====== نهاية الإصلاح ====== */
+
+  #ip-bans, #fp-bans, #reported-list, #visitors-list, #blocked-countries {
+    max-height: 400px;
+    overflow-y: auto;
     padding: 12px;
     background: var(--light-gray);
     border-radius: 8px;
@@ -217,6 +202,11 @@
   }
 
   /* Country List */
+  .country-list {
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
   .country-item {
     display: flex;
     justify-content: space-between;
@@ -268,8 +258,6 @@
 
   /* Dashboard Grid */
   .dashboard-grid {
-    flex: 1;                              /* يملأ panel */
-    min-height: 0;                        /* يسمح بالتمرير الداخلى */
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 24px;
@@ -335,6 +323,8 @@
         
         <h4>🌐 By Country</h4>
         <div id="country-list" class="small"></div>
+        <!-- زر اختياري لفتح/غلق بقية الدول -->
+        <button id="toggleMoreCountries" class="broadcast" style="margin-top:8px;width:100%">عرض المزيد</button>
       </div>
 
       <div class="card">
@@ -461,13 +451,27 @@
     const entries = Object.entries(snap.stats.countryCounts || {});
     if (entries.length === 0) cl.textContent = 'No data';
     else {
-      entries.sort((a,b)=>b[1]-a[1]).forEach(([country, cnt]) => {
+      entries.sort((a,b)=>b[1]-a[1]);
+      // ====== التحكم بعدد الدول الظاهرة ======
+      const topN = 10; // يمكنك تغييره إلى 15 أو 20
+      const toShow = entries.slice(0, topN);
+      // ======================================
+      toShow.forEach(([country, cnt]) => {
         const d = document.createElement('div');
         d.style.padding = '8px';
         d.style.borderBottom = '1px solid #e2e8f0';
         d.innerHTML = `<span style="font-weight:600">${country}</span>: <span style="color:var(--primary)">${cnt}</span>`;
         cl.appendChild(d);
       });
+      // زر عرض المزيد (اختياري)
+      if (entries.length > topN) {
+        const showMore = document.createElement('div');
+        showMore.style.padding = '6px';
+        showMore.style.fontSize = '12px';
+        showMore.style.color = 'var(--gray)';
+        showMore.textContent = `+${entries.length - topN} more...`;
+        cl.appendChild(showMore);
+      }
     }
 
     // IP Bans
@@ -564,11 +568,9 @@
     const bc = document.getElementById('blocked-countries');
     bc.innerHTML = snap.bannedCountries.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
     snap.bannedCountries.forEach(c => {
-      const d = document.createElement('div');
-      d.style.padding = '8px';
-      d.style.marginBottom = '6px';
-      d.style.background = 'rgba(239, 68, 68, 0.1)';
-      d.style.borderRadius = '6px';
+      const d = document.createElement('div'); 
+      d.style.padding = '8px'; d.style.marginBottom = '6px';
+      d.style.background = 'rgba(239, 68, 68, 0.1)'; d.style.borderRadius = '6px';
       d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
       bc.appendChild(d);
     });
