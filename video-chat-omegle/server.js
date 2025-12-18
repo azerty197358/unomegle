@@ -3,16 +3,13 @@ const path = require("path");
 const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
-
 const app = express();
 app.set("trust proxy", true);
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
-
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
 // بيانات اعتماد الأدمن
 const ADMIN_USERS = { admin: "admin" };
 const adminAuth = basicAuth({
@@ -20,11 +17,9 @@ const adminAuth = basicAuth({
   challenge: true,
   realm: "Admin Area",
 });
-
 // ============== قاعدة البيانات ==============
 const dbFile = path.join(__dirname, "stats.db");
 const db = new Database(dbFile);
-
 // إنشاء الجداول
 db.exec(`
 CREATE TABLE IF NOT EXISTS visitors(
@@ -33,22 +28,18 @@ CREATE TABLE IF NOT EXISTS visitors(
 );
 CREATE INDEX IF NOT EXISTS idx_visitors_ts ON visitors(ts);
 CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip);
-
 CREATE TABLE IF NOT EXISTS reports(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   targetId TEXT NOT NULL, reporterId TEXT NOT NULL,
   screenshot TEXT, ts INTEGER NOT NULL
 );
-
 CREATE TABLE IF NOT EXISTS bans(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL, value TEXT NOT NULL,
   expiry INTEGER NOT NULL, UNIQUE(type,value)
 );
-
 CREATE TABLE IF NOT EXISTS banned_countries(code TEXT PRIMARY KEY);
 `);
-
 // الاستعلامات المعدة
 const stmtInsertVisitor = db.prepare("INSERT INTO visitors(ip,fp,country,ts) VALUES(?,?,?,?)");
 const stmtUniqueVisitors24h = db.prepare("SELECT COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors WHERE ts > ?");
@@ -63,7 +54,6 @@ const stmtInsertBannedCountry = db.prepare("INSERT OR IGNORE INTO banned_countri
 const stmtDeleteBannedCountry = db.prepare("DELETE FROM banned_countries WHERE code=?");
 const stmtClearBannedCountries = db.prepare("DELETE FROM banned_countries");
 const stmtGetBannedCountries = db.prepare("SELECT code FROM banned_countries");
-
 // قائمة الدول
 const COUNTRIES = {
   "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
@@ -92,48 +82,59 @@ const COUNTRIES = {
   "SM":"San Marino","ST":"São Tomé & Príncipe","SA":"Saudi Arabia","SN":"Senegal","RS":"Serbia","SC":"Seychelles","SL":"Sierra Leone",
   "SG":"Singapore","SX":"Sint Maarten","SK":"Slovakia","SI":"Slovenia","SB":"Solomon Islands","SO":"Somalia","ZA":"South Africa","KR":"South Korea",
   "SS":"South Sudan","ES":"Spain","LK":"Sri Lanka","BL":"St. Barthélemy","SH":"St. Helena","KN":"St. Kitts & Nevis","LC":"St. Lucia","MF":"St. Martin",
-  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan Mayen","SE":"Sweden","CH":"Switzerland",
+  "PM":"St. Pierre & Miquelon","VC":"St. Vincent & the Grenadines","SD":"Sudan","SR":"Suriname","SJ":"Svalbard & Jan May Mayen","SE":"Sweden","CH":"Switzerland",
   "SY":"Syria","TW":"Taiwan","TJ":"Tajikistan","TZ":"Tanzania","TH":"Thailand","TL":"Timor-Leste","TG":"Togo","TK":"Tokelau","TO":"Tonga",
   "TT":"Trinidad & Tobago","TN":"Tunisia","TR":"Turkey","TM":"Turkmenistan","TC":"Turks & Caicos Islands","TV":"Tuvalu","UG":"Uganda","UA":"Ukraine",
   "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
-
 // المتغيرات الأساسية
 const waitingQueue = [];
 const partners = new Map();
 const userFingerprint = new Map();
 const userIp = new Map();
+const userSocketByIp = new Map();      // جديد: IP → socket.id
+const userSocketByFp = new Map();      // جديد: FP → socket.id
 const BAN_DURATION = 24 * 60 * 60 * 1000;
-
 // ======== دوال المساعدة ========
 function emitAdminUpdate() {
   io.emit("adminUpdate", getAdminSnapshot());
 }
-
 function banUser(ip, fp) {
   const expiry = Date.now() + BAN_DURATION;
   if (ip) stmtInsertBan.run("ip", ip, expiry);
   if (fp) stmtInsertBan.run("fp", fp, expiry);
-  emitAdminUpdate(); // إصلاح: التحديث الفوري بعد الحظر
+  emitAdminUpdate();
 }
-
 function unbanUser(ip, fp) {
   if (ip) stmtDeleteBan.run("ip", ip);
   if (fp) stmtDeleteBan.run("fp", fp);
   emitAdminUpdate();
-}
 
+  // **الجديد: إرسال حدث unbanned إلى المستخدم المعني إذا كان متصلًا حاليًا**
+  if (ip) {
+    const socketId = userSocketByIp.get(ip);
+    if (socketId) {
+      const s = io.sockets.sockets.get(socketId);
+      if (s) s.emit("unbanned");
+    }
+  }
+  if (fp) {
+    const socketId = userSocketByFp.get(fp);
+    if (socketId) {
+      const s = io.sockets.sockets.get(socketId);
+      if (s) s.emit("unbanned");
+    }
+  }
+}
 function getAdminSnapshot() {
   const now = Date.now();
   const cutoff24h = now - 24*3600*1000;
-
   const unique24h = stmtUniqueVisitors24h.get(cutoff24h).cnt;
   const byCountry24h = stmtVisitorsByCountry24h.all(cutoff24h);
   const activeBans = stmtActiveBans.all(now);
   const activeIpBans = activeBans.filter(r => r.type === "ip").map(r => ({ ip: r.value, expires: r.expiry }));
   const activeFpBans = activeBans.filter(r => r.type === "fp").map(r => ({ fp: r.value, expires: r.expiry }));
-
   const dbReports = stmtGetReports.all();
   const reportsMap = new Map();
   for (const row of dbReports) {
@@ -148,8 +149,6 @@ function getAdminSnapshot() {
     reporters: Array.from(obj.reporters),
     screenshot: obj.screenshot
   }));
-
-  // **NEW: عرض آخر 50 IP فريد فقط**
   const recentVisitors = db.prepare(`
     SELECT ip, fp, country, ts
     FROM visitors
@@ -161,9 +160,7 @@ function getAdminSnapshot() {
     ORDER BY ts DESC
     LIMIT 50
   `).all();
-
   const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
-
   return {
     stats: {
       connected: io.of("/").sockets.size,
@@ -175,16 +172,13 @@ function getAdminSnapshot() {
     activeIpBans, activeFpBans, reportedUsers, recentVisitors, bannedCountries
   };
 }
-
 // ======== المسارات ========
 app.get("/admin", adminAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "admin-panel.html"));
 });
-
 app.get("/admin/countries-list", adminAuth, (req, res) => {
   res.send({ all: Object.keys(COUNTRIES), banned: stmtGetBannedCountries.all().map(r => r.code) });
 });
-
 app.post("/admin/block-country", adminAuth, (req, res) => {
   const code = (req.body.code || "").toUpperCase();
   if (!code || !COUNTRIES[code]) return res.status(400).send({ error: "invalid" });
@@ -192,20 +186,16 @@ app.post("/admin/block-country", adminAuth, (req, res) => {
   emitAdminUpdate();
   res.send({ ok: true });
 });
-
 app.post("/admin/unblock-country", adminAuth, (req, res) => {
   stmtDeleteBannedCountry.run((req.body.code || "").toUpperCase());
   emitAdminUpdate();
   res.send({ ok: true });
 });
-
 app.post("/admin/clear-blocked", adminAuth, (req, res) => {
   stmtClearBannedCountries.run();
   emitAdminUpdate();
   res.send({ ok: true });
 });
-
-// **NEW: تحسين بيانات المخطط البياني لتشمل الدول**
 app.get("/admin/stats-data", adminAuth, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
@@ -213,8 +203,6 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
   let where = "";
   if (from) { where += " WHERE ts >= ?"; params.push(from.getTime()); }
   if (to) { where += (where ? " AND" : " WHERE") + " ts <= ?"; params.push(to.getTime() + 24*3600*1000 -1); }
-
-  // Daily visitors
   const dailyMap = new Map();
   const rows = db.prepare("SELECT ts FROM visitors" + where).all(params);
   for (const r of rows) {
@@ -222,33 +210,28 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
     dailyMap.set(key, (dailyMap.get(key)||0) + 1);
   }
   const daily = Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,count])=>({date,count}));
-
-  // Countries with visitor count
   const countryRows = db.prepare("SELECT country,COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors" + where + " GROUP BY country ORDER BY cnt DESC LIMIT 50").all(params);
   const countries = countryRows.map(r => ({ country: r.country || "Unknown", count: r.cnt }));
-
-  // Recent visitors (last 500 for stats panel)
   const recent = db.prepare("SELECT ip,fp,country,ts FROM visitors ORDER BY ts DESC LIMIT 500").all();
-
   res.send({ daily, countries, recent });
 });
-
 app.post("/admin-broadcast", adminAuth, (req, res) => {
   const msg = req.body.message || "";
   if (msg.trim()) io.emit("adminMessage", msg.trim());
   res.send({ ok: true });
 });
-
 app.post("/unban-ip", adminAuth, (req, res) => {
-  unbanUser(req.body.ip, null);
+  const ip = req.body.ip;
+  if (!ip) return res.status(400).send({ error: true });
+  unbanUser(ip, null);
   res.send({ ok: true });
 });
-
 app.post("/unban-fingerprint", adminAuth, (req, res) => {
-  unbanUser(null, req.body.fp);
+  const fp = req.body.fp;
+  if (!fp) return res.status(400).send({ error: true });
+  unbanUser(null, fp);
   res.send({ ok: true });
 });
-
 app.post("/manual-ban", adminAuth, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
@@ -262,7 +245,6 @@ app.post("/manual-ban", adminAuth, (req, res) => {
   }
   res.send({ ok: true });
 });
-
 app.post("/remove-report", adminAuth, (req, res) => {
   const target = req.body.target;
   if (!target) return res.status(400).send({ error: true });
@@ -270,11 +252,11 @@ app.post("/remove-report", adminAuth, (req, res) => {
   emitAdminUpdate();
   res.send({ ok: true });
 });
-
 // ======== Socket.io Logic ========
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || "unknown";
   userIp.set(socket.id, ip);
+  userSocketByIp.set(ip, socket.id);           // حفظ ربط IP → socket
 
   let country = null;
   const headerCountry = socket.handshake.headers["cf-ipcountry"] || socket.handshake.headers["x-country"];
@@ -285,28 +267,25 @@ io.on("connection", (socket) => {
       if (g && g.country) country = g.country;
     } catch (e) { country = null; }
   }
-
   const ts = Date.now();
   stmtInsertVisitor.run(ip, null, country, ts);
-
   const ipBan = stmtActiveBans.all(Date.now()).find(r => r.type === "ip" && r.value === ip);
   if (ipBan) {
     socket.emit("banned", { message: "You are banned (IP)." });
     socket.disconnect(true);
     return;
   }
-
   const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
   if (country && bannedCountries.includes(country)) {
     socket.emit("country-blocked", { message: "الموقع محظور في بلدك", country });
     return;
   }
-
   emitAdminUpdate();
 
   socket.on("identify", ({ fingerprint }) => {
     if (fingerprint) {
       userFingerprint.set(socket.id, fingerprint);
+      userSocketByFp.set(fingerprint, socket.id);  // حفظ ربط FP → socket
       db.prepare("UPDATE visitors SET fp=? WHERE ip=? AND ts=?").run(fingerprint, ip, ts);
       const fpBan = stmtActiveBans.all(Date.now()).find(r => r.type === "fp" && r.value === fingerprint);
       if (fpBan) {
@@ -371,7 +350,6 @@ io.on("connection", (socket) => {
     if (exists) return;
     stmtInsertReport.run(partnerId, socket.id, null, Date.now());
     emitAdminUpdate();
-
     const count = db.prepare("SELECT COUNT(*) as cnt FROM reports WHERE targetId=?").get(partnerId).cnt;
     if (count >= 3) {
       const targetSocket = io.sockets.sockets.get(partnerId);
@@ -400,9 +378,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    // تنظيف الخرائط عند قطع الاتصال
+    const ipToClean = userIp.get(socket.id);
+    const fpToClean = userFingerprint.get(socket.id);
+    if (ipToClean) userSocketByIp.delete(ipToClean);
+    if (fpToClean) userSocketByFp.delete(fpToClean);
+
     const idx = waitingQueue.indexOf(socket.id);
     if (idx !== -1) waitingQueue.splice(idx, 1);
-
     const p = partners.get(socket.id);
     if (p) {
       const other = io.sockets.sockets.get(p);
@@ -418,4 +401,3 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log("Server listening on port " + PORT));
-
