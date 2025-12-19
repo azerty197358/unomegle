@@ -2,6 +2,7 @@
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
+  
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -17,6 +18,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
+  
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
@@ -24,35 +26,135 @@ window.addEventListener('DOMContentLoaded', () => {
   let isInitiator = false;
   let micEnabled = true;
   let autoReconnect = true;
+  let isBanned = false;
+  let banStartTime = null;
+  
   // Timer management
   const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
+  
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
+  
   // Reconnection/backoff state
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 6;
   const BASE_BACKOFF_MS = 800;
+  
   // Candidate buffering
   const bufferedRemoteCandidates = [];
+  
   // Negotiation guard
   let makingOffer = false;
   let ignoreOffer = false;
+  
   // Datachannel for keepalive
   let keepAliveChannel = null;
   let lastPong = Date.now();
   const PING_INTERVAL = 4000;
   const PONG_TIMEOUT = 11000;
+  
   // Stats monitor
   let statsInterval = null;
   const STATS_POLL_MS = 3000;
- 
+  
   // Bitrate targets (bps)
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
+  
+  // ---------------------- BAN SYSTEM ----------------------
+  function checkBanStatus() {
+    const banData = localStorage.getItem('banData');
+    if (banData) {
+      const { startTime, duration } = JSON.parse(banData);
+      const now = Date.now();
+      const banEndTime = startTime + duration;
+      
+      if (now < banEndTime) {
+        isBanned = true;
+        banStartTime = startTime;
+        showBanMessage();
+        return true;
+      } else {
+        localStorage.removeItem('banData');
+        return false;
+      }
+    }
+    return false;
+  }
+  
+  function showBanMessage() {
+    const banData = JSON.parse(localStorage.getItem('banData'));
+    const banEndTime = banData.startTime + banData.duration;
+    const remainingTime = Math.ceil((banEndTime - Date.now()) / 1000 / 60); // بالدقائق
+    
+    const hours = Math.floor(remainingTime / 60);
+    const minutes = remainingTime % 60;
+    
+    const banDate = new Date(banData.startTime).toLocaleString('ar-SA');
+    
+    const banMessage = document.createElement('div');
+    banMessage.id = 'banMessage';
+    banMessage.className = 'msg system';
+    banMessage.style.cssText = `
+      background: linear-gradient(135deg, #ff416c, #ff4b2b);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 20px auto;
+      max-width: 400px;
+      box-shadow: 0 4px 15px rgba(255, 75, 43, 0.3);
+    `;
+    
+    banMessage.innerHTML = `
+      <div style="font-size: 24px; margin-bottom: 10px;">⛔</div>
+      <div>لقد تم حظرك لمدة 24 ساعة</div>
+      <div style="font-size: 14px; margin-top: 10px; opacity: 0.9;">
+        وقت الحظر: ${banDate}
+      </div>
+      <div style="font-size: 16px; margin-top: 15px;">
+        المتبقي: ${hours} ساعة و ${minutes} دقيقة
+      </div>
+    `;
+    
+    chatMessages.appendChild(banMessage);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+  
+  function updateBanTimer() {
+    const banMessage = document.getElementById('banMessage');
+    if (banMessage && isBanned) {
+      const banData = JSON.parse(localStorage.getItem('banData'));
+      const banEndTime = banData.startTime + banData.duration;
+      const remainingTime = Math.ceil((banEndTime - Date.now()) / 1000 / 60);
+      
+      if (remainingTime <= 0) {
+        localStorage.removeItem('banData');
+        isBanned = false;
+        banMessage.remove();
+        location.reload();
+        return;
+      }
+      
+      const hours = Math.floor(remainingTime / 60);
+      const minutes = remainingTime % 60;
+      
+      const timeElement = banMessage.querySelector('div:last-child');
+      if (timeElement) {
+        timeElement.textContent = `المتبقي: ${hours} ساعة و ${minutes} دقيقة`;
+      }
+    }
+  }
+  
+  // تحديث العداد كل دقيقة
+  setInterval(updateBanTimer, 60000);
+  
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -66,6 +168,7 @@ window.addEventListener('DOMContentLoaded', () => {
         new Date().getTimezoneOffset(),
         Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
+      
       // Canvas fingerprint
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -79,6 +182,7 @@ window.addEventListener('DOMContentLoaded', () => {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
+      
       // Audio fingerprint
       const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
       const oscillator = audioCtx.createOscillator();
@@ -88,6 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
       oscillator.start();
       oscillator.stop();
       components.push('audio-supported');
+      
       // Hash function
       const hashCode = (str) => {
         let hash = 0;
@@ -98,12 +203,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         return hash.toString(16);
       };
+      
       return hashCode(components.join('||'));
     } catch (e) {
       console.error('Fingerprint generation failed:', e);
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
+  
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -113,32 +220,36 @@ window.addEventListener('DOMContentLoaded', () => {
     activeTimers.add(timerId);
     return timerId;
   }
+  
   function clearSafeTimer(timerId) {
     if (timerId) {
       clearTimeout(timerId);
       activeTimers.delete(timerId);
     }
   }
+  
   function clearAllTimers() {
     activeTimers.forEach(timerId => clearTimeout(timerId));
     activeTimers.clear();
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
+  
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
-      if (socket.connected) {
+      if (socket.connected && !isBanned) {
         socket.emit(event, data);
         return true;
       }
-      console.warn(`Socket not connected, cannot emit ${event}`);
+      console.warn(`Socket not connected or user banned, cannot emit ${event}`);
       return false;
     } catch (e) {
       console.error(`Error emitting ${event}:`, e);
       return false;
     }
   }
+  
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -152,10 +263,11 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  
   // Status message handler - replaces old messages instead of adding new ones
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
-   
+ 
     if (statusMsg) {
       statusMsg.textContent = msg;
     } else {
@@ -163,7 +275,7 @@ window.addEventListener('DOMContentLoaded', () => {
       statusMsg.id = 'statusMessage';
       statusMsg.className = 'msg status';
       statusMsg.textContent = msg;
-     
+   
       const typing = document.querySelector('.msg.system[style*="italic"]');
       if (typing && typing.parentNode === chatMessages) {
         chatMessages.insertBefore(statusMsg, typing);
@@ -171,9 +283,10 @@ window.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(statusMsg);
       }
     }
-   
+ 
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -182,6 +295,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
+  
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -190,14 +304,17 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
+  
   // Exponential backoff (ms)
   function backoffDelay(attempt) {
     return Math.min(30000, Math.pow(2, attempt) * BASE_BACKOFF_MS + Math.floor(Math.random() * 500));
   }
+  
   // Store remote candidates until pc created
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
+  
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -206,6 +323,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
   }
+  
   // Set max bitrate for outbound video sender
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
@@ -222,13 +340,14 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
+  
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
-   
+ 
     // Clear all timers
     clearAllTimers();
-   
+ 
     // Close peer connection
     if (peerConnection) {
       try {
@@ -242,21 +361,22 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       peerConnection = null;
     }
-   
+ 
     // Clear remote video
     if (remoteVideo) {
       remoteVideo.srcObject = null;
     }
-   
+ 
     // Clear buffers
     bufferedRemoteCandidates.length = 0;
-   
+ 
     // Reset state
     partnerId = null;
     isInitiator = false;
     makingOffer = false;
     ignoreOffer = false;
   }
+  
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -264,8 +384,10 @@ window.addEventListener('DOMContentLoaded', () => {
     notifyBell.classList.remove('shake');
     notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
   };
+  
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
+  
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -273,11 +395,13 @@ window.addEventListener('DOMContentLoaded', () => {
   typingIndicator.style.fontStyle = 'italic';
   typingIndicator.textContent = 'Stranger is typing...';
   chatMessages.appendChild(typingIndicator);
+  
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
+  
   function sendTyping() {
-    if (!partnerId) return;
+    if (!partnerId || isBanned) return;
     if (!typing) {
       typing = true;
       safeEmit('typing', { to: partnerId });
@@ -288,45 +412,62 @@ window.addEventListener('DOMContentLoaded', () => {
       safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
+  
   chatInput.oninput = () => {
-    if (!chatInput.disabled) sendTyping();
+    if (!chatInput.disabled && !isBanned) sendTyping();
   };
+  
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     const msg = chatInput.value.trim();
-    if (!msg || !partnerId) return;
+    if (!msg || !partnerId || isBanned) return;
     addMessage(msg, 'you');
     safeEmit('chat-message', { to: partnerId, message: msg });
     chatInput.value = '';
     typing = false;
     safeEmit('stop-typing', { to: partnerId });
   }
+  
   sendBtn.onclick = sendMessage;
-  chatInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+  chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
+  
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
-    micBtn.disabled = !localStream;
-    micBtn.style.opacity = localStream ? '1' : '0.8';
+    micBtn.disabled = !localStream || isBanned;
+    micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
+  
   micBtn.onclick = () => {
-    if (!localStream) return alert('Microphone not ready yet.');
+    if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
+  
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
+  
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
-    if (localVideo) localVideo.style.display = 'block';
+    if (localVideo && !isBanned) {
+      localVideo.style.display = 'block';
+    } else if (localVideo && isBanned) {
+      localVideo.style.display = 'none';
+    }
   }
+  
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
-    if (localVideo) localVideo.style.display = 'block';
+    if (localVideo && !isBanned) {
+      localVideo.style.display = 'block';
+    } else if (localVideo && isBanned) {
+      localVideo.style.display = 'none';
+    }
   }
+  
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -362,19 +503,20 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = async () => {
-      if (!partnerId) {
-        updateStatusMessage("No user to report.");
+      if (!partnerId || isBanned) {
+        updateStatusMessage(isBanned ? "أنت محظور حالياً." : "No user to report.");
         return;
       }
       const prev = reportCounts.get(partnerId) || 0;
       const now = prev + 1;
       reportCounts.set(partnerId, now);
       reportedIds.add(partnerId);
-     
+   
       safeEmit("report", { partnerId });
       safeEmit("skip");
       if (now === 1) {
@@ -396,25 +538,28 @@ window.addEventListener('DOMContentLoaded', () => {
       searchTimer = setSafeTimer(startSearchLoop, 300);
     };
   }
+  
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = false;
     sendBtn.disabled = false;
   }
+  
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
+  
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
-    if (partnerId) return;
+    if (partnerId || isBanned) return;
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
-   
+ 
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
-      if (!partnerId) {
+      if (!partnerId && !isBanned) {
         safeEmit('stop');
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
@@ -423,21 +568,33 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, 3500);
   }
+  
   async function startSearch() {
+    if (isBanned) {
+      updateStatusMessage('أنت محظور حالياً. لا يمكنك البحث عن شركاء.');
+      return;
+    }
+    
     const mediaReady = await initMedia();
     if (!mediaReady) {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
-   
+ 
     cleanupConnection();
     chatMessages.innerHTML = '';
-    chatMessages.appendChild(typingIndicator);
+    if (isBanned) {
+      showBanMessage();
+    } else {
+      chatMessages.appendChild(typingIndicator);
+    }
     showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
     startSearchLoop();
   }
+  
   skipBtn.onclick = () => {
+    if (isBanned) return;
     safeEmit('skip');
     updateStatusMessage('You skipped.');
     disableChat();
@@ -446,36 +603,80 @@ window.addEventListener('DOMContentLoaded', () => {
     clearSafeTimer(pauseTimer);
     startSearchLoop();
   };
+  
   // ---------------------- SOCKET EVENTS ----------------------
-  socket.on('waiting', msg => { updateStatusMessage(msg); });
-  socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
-  socket.on('typing', () => {
-    typingIndicator.style.display = 'block';
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+  socket.on('waiting', msg => { 
+    if (!isBanned) updateStatusMessage(msg); 
   });
-  socket.on('stop-typing', () => { typingIndicator.style.display = 'none'; });
+  
+  socket.on('chat-message', ({ message }) => { 
+    if (!isBanned) addMessage(message, 'them'); 
+  });
+  
+  socket.on('typing', () => {
+    if (!isBanned) {
+      typingIndicator.style.display = 'block';
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  });
+  
+  socket.on('stop-typing', () => { 
+    if (!isBanned) typingIndicator.style.display = 'none'; 
+  });
+  
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
-    addMessage('📢 Admin: ' + msg, 'system');
+    if (!isBanned) addMessage('📢 Admin: ' + msg, 'system');
   });
-  socket.on('banned', ({ message }) => {
-    addMessage(message || 'You are banned.', 'system');
+  
+  socket.on('banned', ({ message, duration = 24 * 60 * 60 * 1000 }) => {
+    isBanned = true;
+    const banData = {
+      startTime: Date.now(),
+      duration: duration
+    };
+    localStorage.setItem('banData', JSON.stringify(banData));
+    banStartTime = banData.startTime;
+    
+    addMessage('⛔ لقد تم حظرك لمدة 24 ساعة', 'system');
+    showBanMessage();
+    
+    // إخفاء الفيديو المحلي
+    if (localVideo) localVideo.style.display = 'none';
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+    }
+    
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('Blocked.');
+    updateStatusMessage('تم الحظر.');
     cleanupConnection();
+    
+    // تعطيل جميع الأزرار
+    skipBtn.disabled = true;
+    micBtn.disabled = true;
+    sendBtn.disabled = true;
+    chatInput.disabled = true;
+    reportBtn.disabled = true;
   });
+  
   socket.on('partner-disconnected', () => {
-    updateStatusMessage('Partner disconnected.');
-    disableChat();
-    cleanupConnection();
-    reconnectAttempts = 0;
-    clearSafeTimer(searchTimer);
-    clearSafeTimer(pauseTimer);
-    setSafeTimer(startSearchLoop, 500);
+    if (!isBanned) {
+      updateStatusMessage('Partner disconnected.');
+      disableChat();
+      cleanupConnection();
+      reconnectAttempts = 0;
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      setSafeTimer(startSearchLoop, 500);
+    }
   });
+  
   socket.on('partner-found', async data => {
+    if (isBanned) return;
+    
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
       console.error('Invalid partner data received:', data);
@@ -490,15 +691,15 @@ window.addEventListener('DOMContentLoaded', () => {
       setSafeTimer(startSearchLoop, 200);
       return;
     }
-   
+ 
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
-   
+ 
     try {
       createPeerConnection();
-     
+   
       if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
@@ -514,7 +715,10 @@ window.addEventListener('DOMContentLoaded', () => {
       makingOffer = false;
     }
   });
+  
   socket.on('signal', async ({ from, data }) => {
+    if (isBanned) return;
+    
     if (!from || !data) {
       console.error('Invalid signal data:', { from, data });
       return;
@@ -541,7 +745,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
-       
+     
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -556,6 +760,7 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Signal processing failed.');
     }
   });
+  
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
@@ -566,12 +771,14 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
-      // Add local tracks
-      if (localStream) {
+      
+      // Add local tracks only if not banned
+      if (localStream && !isBanned) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
+      
       // Create datachannel when initiator
-      if (isInitiator) {
+      if (isInitiator && !isBanned) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
           setupKeepAliveChannel(keepAliveChannel);
@@ -579,63 +786,69 @@ window.addEventListener('DOMContentLoaded', () => {
           console.error('Failed to create data channel:', e);
           keepAliveChannel = null;
         }
-      } else {
+      } else if (!isBanned) {
         peerConnection.ondatachannel = (ev) => {
           keepAliveChannel = ev.channel;
           setupKeepAliveChannel(keepAliveChannel);
         };
       }
+      
       peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) {
           console.error('No streams in ontrack event');
           return;
         }
-       
+     
         remoteVideo.srcObject = e.streams[0];
-        enableChat();
-        // تم حذف رسالة "Connected with a stranger!" هنا
+        if (!isBanned) enableChat();
         updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
         reconnectAttempts = 0;
-        startStatsMonitor();
+        if (!isBanned) startStatsMonitor();
       };
+      
       peerConnection.onicecandidate = e => {
-        if (e.candidate && partnerId) {
+        if (e.candidate && partnerId && !isBanned) {
           safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
         }
       };
+      
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
-       
+     
         const s = peerConnection.connectionState;
         console.debug('connectionState:', s);
-       
+     
         if (s === 'connected') {
           updateStatusMessage('Connected');
           reconnectAttempts = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           updateStatusMessage('Connection lost.');
-          disableChat();
-          if (autoReconnect) {
-            cleanupConnection();
-            attemptRecovery();
+          if (!isBanned) {
+            disableChat();
+            if (autoReconnect) {
+              cleanupConnection();
+              attemptRecovery();
+            }
           }
         }
       };
+      
       peerConnection.oniceconnectionstatechange = async () => {
         if (!peerConnection) return;
-       
+     
         const s = peerConnection.iceConnectionState;
         console.debug('iceConnectionState:', s);
-       
-        if (s === 'failed') {
+     
+        if (s === 'failed' && !isBanned) {
           await attemptIceRestartWithBackoff();
         }
       };
+      
       peerConnection.onnegotiationneeded = async () => {
-        if (!peerConnection || makingOffer || !partnerId) return;
-       
+        if (!peerConnection || makingOffer || !partnerId || isBanned) return;
+     
         try {
           makingOffer = true;
           const offer = await peerConnection.createOffer();
@@ -652,19 +865,20 @@ window.addEventListener('DOMContentLoaded', () => {
       throw e;
     }
   }
+  
   // Attempt recovery: try ICE-restart a few times, otherwise rematch
   async function attemptRecovery() {
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS || isBanned) {
       updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
       cleanupConnection();
       setSafeTimer(startSearchLoop, 1000);
       return;
     }
-   
+ 
     reconnectAttempts++;
     const delay = backoffDelay(reconnectAttempts);
     updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
-   
+ 
     setSafeTimer(async () => {
       try {
         if (!peerConnection) {
@@ -686,25 +900,28 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, delay);
   }
+  
   let lastIceRestartAt = 0;
   const ICE_RESTART_MIN_INTERVAL = 5000;
+  
   async function attemptIceRestartWithBackoff() {
     const now = Date.now();
     if (now - lastIceRestartAt < ICE_RESTART_MIN_INTERVAL) return;
-   
+ 
     lastIceRestartAt = now;
     try {
       await performIceRestart();
     } catch (e) {
       console.error('ICE restart failed:', e);
-      if (autoReconnect) attemptRecovery();
+      if (autoReconnect && !isBanned) attemptRecovery();
     }
   }
+  
   async function performIceRestart() {
     if (!peerConnection || !partnerId || peerConnection.signalingState !== 'stable') {
       throw new Error('Cannot perform ICE restart: invalid state');
     }
-   
+ 
     try {
       makingOffer = true;
       const offer = await peerConnection.createOffer({ iceRestart: true });
@@ -717,15 +934,18 @@ window.addEventListener('DOMContentLoaded', () => {
       makingOffer = false;
     }
   }
+  
   // ---------------------- KEEPALIVE (datachannel) ----------------------
   let pingTimer = null;
+  
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
-   
+ 
     dc.onopen = () => {
       lastPong = Date.now();
-      startPingLoop();
+      if (!isBanned) startPingLoop();
     };
+    
     dc.onmessage = (ev) => {
       if (!ev.data) return;
       try {
@@ -739,45 +959,54 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('KeepAlive message parse error:', e);
       }
     };
+    
     dc.onclose = () => {
       console.debug('keepAlive channel closed');
       stopPingLoop();
     };
+    
     dc.onerror = (err) => {
       console.error('keepAlive channel error:', err);
     };
   }
+  
   function startPingLoop() {
     stopPingLoop();
+    if (isBanned) return;
+    
     pingTimer = setInterval(() => {
       if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
         stopPingLoop();
         return;
       }
-     
+   
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {
         console.error('Ping send error:', e);
         stopPingLoop();
       }
-     
+   
       if (Date.now() - lastPong > PONG_TIMEOUT) {
         console.warn('PONG timeout -> triggering recovery');
         stopPingLoop();
-        if (autoReconnect) attemptRecovery();
+        if (autoReconnect && !isBanned) attemptRecovery();
       }
     }, PING_INTERVAL);
   }
+  
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
   }
+  
   // ---------------------- STATS MONITOR (adaptive bitrate) ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
+    if (isBanned) return;
+    
     statsInterval = setInterval(async () => {
       if (!peerConnection || peerConnection.connectionState !== 'connected') {
         stopStatsMonitor();
@@ -819,12 +1048,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, STATS_POLL_MS);
   }
+  
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
       statsInterval = null;
     }
   }
+  
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -833,10 +1064,15 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     location.href = 'index.html';
   };
+  
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (localStream) return true;
-   
+    if (isBanned) {
+      updateStatusMessage('أنت محظور حالياً. لا يمكنك استخدام الكاميرا.');
+      return false;
+    }
+ 
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -853,11 +1089,15 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
+  
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
     updateMicButton();
-   
+    
+    // التحقق من حالة الحظر أولاً
+    checkBanStatus();
+ 
     // Generate and send fingerprint for device ban system
     try {
       const fingerprint = await generateFingerprint();
@@ -865,23 +1105,31 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('Failed to send fingerprint:', e);
     }
-   
+ 
     startSearch();
   }
+  
   initialize();
+  
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
-    updateStatusMessage('An unexpected error occurred. Refreshing...');
-    setSafeTimer(() => location.reload(), 3000);
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    console.error('Unhandled promise rejection:', e.reason);
-    updateStatusMessage('Connection error detected. Recovering...');
-    if (autoReconnect && !partnerId) {
-      setSafeTimer(startSearchLoop, 1000);
+    if (!isBanned) {
+      updateStatusMessage('An unexpected error occurred. Refreshing...');
+      setSafeTimer(() => location.reload(), 3000);
     }
   });
+  
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
+    if (!isBanned) {
+      updateStatusMessage('Connection error detected. Recovering...');
+      if (autoReconnect && !partnerId) {
+        setSafeTimer(startSearchLoop, 1000);
+      }
+    }
+  });
+  
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
