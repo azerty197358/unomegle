@@ -1,4 +1,5 @@
-  // ---------------------- SOCKET ----------------------
+window.addEventListener('DOMContentLoaded', () => {
+// ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
