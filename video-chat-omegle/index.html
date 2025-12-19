@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
   <meta name="monetag" content="bf2e01fed11adb68702054bb92e47444">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SparkChat - Talk to strangers!</title>
-  <script>(function(s){s.dataset.zone='10313661',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -14,7 +13,6 @@
       color:#333;
       overflow-x: hidden;
     }
-
     .hero {
       height: 100vh;
       display: flex;
@@ -23,7 +21,6 @@
       position: relative;
       background: #fff;
     }
-
     /* ==================== الشعار ==================== */
     .logo {
       position: fixed;
@@ -35,19 +32,34 @@
       z-index: 100;
       text-shadow: 2px 2px 6px rgba(0,0,0,0.25);
       user-select: none;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      direction: ltr; /* مهم جدًا: يجعل ترتيب الحروف من اليسار إلى اليمين داخل اللوغو */
+      unicode-bidi: embed;
+    }
+    .logo span {
+      display: inline-block;
+    }
+    .logo .first-letter {
+      color: #ff6600;
+      position: relative;
     }
 
-    .logo span { 
-      display: inline-block; 
-      transition: transform 0.6s ease-in-out;
+    /* أنيميشن الانتفاخ والانفجار للحرف الأول فقط */
+    @keyframes puff-explode {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.4); }
+      40% { transform: scale(1.2); }
+      60% { transform: scale(1.6); opacity: 1; }
+      80% { transform: scale(2); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
     }
 
-    /* أنيميشن الشقلبة */
-    .flip {
-      transform: rotateX(360deg);
+    .puff {
+      animation: puff-explode 1s ease-in-out;
     }
 
-    /* باقي التصميمات كما هي */
     .modal {
       background: #fafafa;
       border: 1px solid #ddd;
@@ -72,7 +84,6 @@
     .age-warning { font-size: 16px; line-height: 1.7; margin: 22px 0; }
     .age-warning a { color:#0066cc; text-decoration:underline; }
     .adult-link { margin: 25px 0; color:#666; font-size:15px; }
-
     .start-btn {
       background: #4a90e2;
       color: white;
@@ -92,7 +103,6 @@
       transform: translateY(-5px);
       box-shadow: 0 12px 30px rgba(74,144,226,0.6);
     }
-
     .features-section {
       padding: 100px 20px;
       background: linear-gradient(135deg, #fff8f0 0%, #fff0e6 100%);
@@ -134,7 +144,6 @@
       font-size: 16px;
       line-height: 1.6;
     }
-
     .footer {
       padding: 30px;
       background: #111;
@@ -143,7 +152,6 @@
       font-size: 14px;
     }
     .footer a { color: #ff6600; text-decoration: none; margin: 0 10px; }
-
     @media (max-width: 768px) {
       .logo { font-size:38px; top:16px; left:20px; }
       .modal { padding:30px; }
@@ -153,28 +161,20 @@
   </style>
 </head>
 <body>
-
   <section class="hero">
-    <div class="logo" id="logo">
-      <span>S</span><span>p</span><span>a</span><span>r</span><span>k</span><span>C</span><span>h</span><span>a</span><span>t</span>
-    </div>
-
+    <div class="logo" id="logo"></div>
     <div class="modal">
       <h2>YOU MUST BE 18 OR OLDER TO USE SPARKCHAT</h2>
       <p class="age-warning">
-        See SparkChat <a href="#">Terms of Service</a> for more info. Parental controls available at 
+        See SparkChat <a href="#">Terms of Service</a> for more info. Parental controls available at
         <a href="https://www.connectsafely.org/controls" target="_blank">connectsafely.org</a>
       </p>
-
       <div class="warning">Video is monitored. Keep it clean!</div>
-
       <p class="adult-link">Looking for adult content? This is not the place.</p>
-
       <p style="font-weight:bold; margin:40px 0 20px; font-size:19px;">Start chatting:</p>
       <a href="chat.html" class="start-btn">Video</a>
     </div>
   </section>
-
   <section class="features-section">
     <h2>Why SparkChat is Better</h2>
     <div class="features-grid">
@@ -210,27 +210,35 @@
       </div>
     </div>
   </section>
-
   <div class="footer">
     © 2025 SparkChat • <a href="#">Terms</a> • <a href="#">Privacy</a> • <a href="#">Guidelines</a>
   </div>
 
-  <!-- ==================== JavaScript: قلب حرف كل 3 ثواني ==================== -->
   <script>
-    const letters = document.querySelectorAll("#logo span");
+    /* إنشاء اللوغو بحروف صغيرة مع ترتيب صحيح */
+    const logoText = "sparkchat";
+    const logoContainer = document.getElementById("logo");
 
+    logoText.split("").forEach((letter, i) => {
+      const span = document.createElement("span");
+      if (i === 0) {
+        span.classList.add("first-letter");
+        span.style.color = "#ff6600";
+      } else {
+        span.style.color = (i < 5) ? "#ff6600" : "#3fa0ff";
+      }
+      span.textContent = letter;
+      logoContainer.appendChild(span);
+    });
+
+    /* تأثير الانتفاخ والانفجار للحرف الأول (s) كل 5 ثوانٍ */
+    const firstLetter = logoContainer.querySelector(".first-letter");
     setInterval(() => {
-      const random = Math.floor(Math.random() * letters.length);
-      const letter = letters[random];
-
-      letter.classList.add("flip");
-
+      firstLetter.classList.add("puff");
       setTimeout(() => {
-        letter.classList.remove("flip");
-      }, 700);
-
+        firstLetter.classList.remove("puff");
+      }, 1000);
     }, 3000);
   </script>
-
 </body>
 </html>
