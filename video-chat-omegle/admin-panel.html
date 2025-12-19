@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Admin Panel — Live Dashboard</title>
+<title>Admin Panel — Live Dashboard with Database</title>
 <style>
   :root {
     --primary: #4b6cb7;
@@ -35,6 +35,7 @@
     font-size: 28px;
     font-weight: 700;
   }
+  /* Enhanced Tabs */
   .topbar {
     display: flex;
     gap: 8px;
@@ -77,6 +78,7 @@
     border-right: 8px solid transparent;
     border-top: 8px solid var(--primary-dark);
   }
+  /* Panels */
   .panel {
     background: var(--white);
     padding: 24px;
@@ -88,16 +90,20 @@
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  .row {
+    display: flex;
     gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
+  /* Cards */
   .card {
     background: var(--white);
     padding: 20px;
     border-radius: 12px;
     box-shadow: var(--shadow);
+    flex: 1;
+    min-width: 300px;
     transition: transform 0.3s ease;
   }
   .card:hover {
@@ -115,35 +121,23 @@
     margin: 16px 0 12px 0;
     font-size: 16px;
   }
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    margin-bottom: 20px;
-  }
-  .stat-item {
-    background: var(--white);
-    padding: 16px;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    text-align: center;
-    transition: transform 0.3s ease;
-  }
-  .stat-item:hover {
-    transform: translateY(-2px);
-  }
-  .stat-label {
-    font-size: 12px;
-    color: var(--gray);
-    font-weight: 600;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  .stat-value {
-    font-size: 28px;
+  /* Stats */
+  .stat {
+    font-size: 32px;
     font-weight: 800;
     color: var(--primary);
+    display: block;
+    margin: 4px 0;
   }
+  /* Enhanced Country List */
+  #country-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--light-gray);
+    border-radius: 8px;
+  }
+  /* Top Countries List - New Design */
   .top-countries-list {
     max-height: 400px;
     overflow-y: auto;
@@ -197,41 +191,14 @@
     font-weight: 600;
     margin-right: 8px;
   }
-  #ip-bans, #fp-bans, #reported-list, #blocked-countries {
+  #ip-bans, #fp-bans, #reported-list, #visitors-list, #blocked-countries {
     max-height: 400px;
     overflow-y: auto;
     padding: 12px;
     background: var(--light-gray);
     border-radius: 8px;
   }
-  #db-visitors-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 16px;
-  }
-  #db-visitors-table th, #db-visitors-table td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  #db-visitors-table th {
-    background: var(--primary);
-    color: white;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
-  #db-visitors-table tr:hover {
-    background: #f8fafc;
-  }
-  #db-visitors-table tbody tr:nth-child(even) {
-    background: #f9fafb;
-  }
-  .page-info {
-    margin-top: 12px;
-    font-size: 14px;
-    color: var(--gray);
-  }
+  /* Buttons */
   button {
     padding: 10px 16px;
     border: none;
@@ -249,7 +216,8 @@
   .ban { background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%); }
   .broadcast { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
   .clear { background: linear-gradient(135deg, var(--danger) 0%, #b91c1c 100%); }
-  .export-btn { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
+  .export { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+  /* Forms */
   textarea {
     width: 100%;
     border: 2px solid #e2e8f0;
@@ -263,9 +231,25 @@
     outline: none;
     border-color: var(--primary);
   }
+  /* Country List */
   .country-list {
     max-height: 500px;
     overflow-y: auto;
+  }
+  .country-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--white);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease;
+  }
+  .country-item:hover {
+    background: #f8fafc;
+    transform: translateX(4px);
   }
   .flex {
     display: flex;
@@ -277,6 +261,7 @@
     height: 18px;
     cursor: pointer;
   }
+  /* Reports */
   .rep-card {
     padding: 16px;
     border-left: 4px solid var(--primary);
@@ -289,16 +274,59 @@
     box-shadow: var(--shadow);
     border-left-color: var(--danger);
   }
+  .rep-card img {
+    border-radius: 8px;
+    border: 2px solid var(--white);
+  }
+  /* Dashboard Grid */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+  }
+  /* Stats Panel */
   .charts-container {
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 24px;
   }
+  /* Enhanced Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-item {
+    background: var(--white);
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: transform 0.3s ease;
+  }
+  .stat-item:hover {
+    transform: translateY(-2px);
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--primary);
+  }
+  /* Fixed Chart Container */
   .chart-container {
     position: relative;
     height: 400px;
     width: 100%;
   }
+  /* Stats Country List */
   .stats-country-list {
     max-height: 300px;
     overflow-y: auto;
@@ -306,12 +334,42 @@
     background: var(--light-gray);
     border-radius: 8px;
   }
+  /* Data Export Section */
+  .export-section {
+    margin-top: 24px;
+    background: var(--white);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .export-options {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .export-option {
+    background: var(--light-gray);
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+  }
+  .export-option:hover {
+    background: #e2e8f0;
+    border-color: var(--primary);
+  }
   @media (max-width: 768px) {
-    .charts-container, .dashboard-grid {
+    .row, .charts-container, .dashboard-grid {
       grid-template-columns: 1fr;
     }
     .topbar {
       overflow-x: auto;
+    }
+    .tab {
+      padding: 10px 14px;
+      font-size: 14px;
     }
     .stats-grid {
       grid-template-columns: 1fr;
@@ -324,17 +382,16 @@
 <base target="_blank">
 </head>
 <body>
-<h1>📊 Admin Live Dashboard</h1>
+<h1>📊 Admin Live Dashboard with Database</h1>
 <div class="topbar" id="tabs">
   <div class="tab active" data-tab="dashboard">📈 Dashboard</div>
   <div class="tab" data-tab="countries">🌍 Countries</div>
   <div class="tab" data-tab="stats">📊 Statistics</div>
   <div class="tab" data-tab="reports">🚨 Reports</div>
   <div class="tab" data-tab="bans">⚠️ Bans</div>
-  <div class="tab" data-tab="dbvisitors">🗄️ زوار قاعدة البيانات</div>
+  <div class="tab" data-tab="database">🗄️ Database</div>
   <div style="margin-left:auto;color:var(--gray);font-size:14px;font-weight:600">👤 Admin Mode</div>
 </div>
-
 <div id="content">
   <!-- Dashboard Panel -->
   <div class="panel" id="panel-dashboard">
@@ -355,58 +412,39 @@
             <span id="stat-partnered" class="stat-value">0</span>
           </div>
           <div class="stat-item">
-            <div class="stat-label">Total Visitors (DB)</div>
+            <div class="stat-label">Total Visitors</div>
             <span id="stat-totalvisitors" class="stat-value">0</span>
           </div>
         </div>
+      
         <h4>🌐 Top Countries</h4>
         <div id="country-list" class="top-countries-list"></div>
       </div>
-
       <div class="card">
         <h3>📢 Broadcast Message</h3>
         <form id="broadcastForm">
-          <textarea id="broadcastMsg" rows="4" placeholder="اكتب رسالتك لإرسالها لجميع المستخدمين..."></textarea><br><br>
-          <button type="submit" class="broadcast">إرسال الرسالة</button>
+          <textarea id="broadcastMsg" rows="4" placeholder="Type your message to broadcast to all users..."></textarea><br><br>
+          <button class="broadcast">Send Broadcast</button>
         </form>
       </div>
-
       <div class="card">
         <h3>🚫 Active Bans</h3>
         <h4>IP Bans</h4>
-        <div id="ip-bans"></div>
-        <h4 style="margin-top:16px">Device Bans</h4>
-        <div id="fp-bans"></div>
+        <div id="ip-bans" class="small"></div>
+      
+        <h4>Device Bans</h4>
+        <div id="fp-bans" class="small"></div>
       </div>
-
       <div class="card">
         <h3>🚨 Reported Users</h3>
-        <div id="reported-list"></div>
+        <div id="reported-list" class="small"></div>
       </div>
-
       <div class="card" style="grid-column: 1 / -1;">
-        <h3>🗄️ قاعدة بيانات الزوار الدائمة (لا تُحذف أبدًا)</h3>
-        <div style="margin-bottom:12px;">
-          <button id="export-csv" class="export-btn">تصدير الصفحة الحالية كـ CSV</button>
-          <button id="export-json" class="export-btn" style="margin-left:8px;background:#f59e0b">تصدير الصفحة الحالية كـ JSON</button>
-        </div>
-        <table id="db-visitors-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>التاريخ والوقت</th>
-              <th>IP</th>
-              <th>الدولة</th>
-              <th>Fingerprint (أول 12 حرف)</th>
-            </tr>
-          </thead>
-          <tbody id="db-visitors-body"></tbody>
-        </table>
-        <div class="page-info" id="db-page-info">جاري التحميل...</div>
+        <h3>👥 Recent Unique Visitors (Last 50 IPs)</h3>
+        <div id="visitors-list" class="small"></div>
       </div>
     </div>
   </div>
-
   <!-- Countries Panel -->
   <div class="panel" id="panel-countries" style="display:none">
     <h2>🌍 Country Management</h2>
@@ -419,7 +457,7 @@
         <div class="card">
           <h4>🔒 Blocked Countries</h4>
           <div id="blocked-countries"></div>
-          <button id="clear-blocks" class="clear" style="width:100%;margin-top:16px">مسح جميع الحظر</button>
+          <button id="clear-blocks" class="clear" style="width:100%;margin-top:16px">Clear All Blocks</button>
         </div>
       </div>
     </div>
@@ -427,7 +465,6 @@
       💡 الملاحظة: الحظر سيؤدي إلى تعطيل الكاميرا والدردشة وإظهار رسالة "الموقع محظور في بلدك" للمستخدمين من هذه الدول فور اتصالهم.
     </div>
   </div>
-
   <!-- Stats Panel -->
   <div class="panel" id="panel-stats" style="display:none">
     <h2>📊 Visitors Analytics</h2>
@@ -441,58 +478,106 @@
       <div class="card">
         <h3>Top Countries</h3>
         <div id="stats-country-list" class="stats-country-list"></div>
+      
         <h4 style="margin-top:24px">📅 Date Range</h4>
         <div style="display:flex;flex-direction:column;gap:12px">
-          <label><span class="small">من</span><input type="date" id="fromDate"></label>
-          <label><span class="small">إلى</span><input type="date" id="toDate"></label>
-          <button id="refreshStats" class="broadcast" style="width:100%">تحديث الرسوم البيانية</button>
+          <label style="display:flex;flex-direction:column;gap:4px">
+            <span class="small">From</span>
+            <input type="date" id="fromDate" style="padding:8px;border:2px solid #e2e8f0;border-radius:6px">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px">
+            <span class="small">To</span>
+            <input type="date" id="toDate" style="padding:8px;border:2px solid #e2e8f0;border-radius:6px">
+          </label>
+          <button id="refreshStats" class="broadcast" style="width:100%">Refresh Charts</button>
         </div>
       </div>
     </div>
   </div>
-
   <!-- Reports Panel -->
   <div class="panel" id="panel-reports" style="display:none">
     <h2>🚨 User Reports</h2>
     <div id="reports-panel"></div>
   </div>
-
   <!-- Bans Panel -->
   <div class="panel" id="panel-bans" style="display:none">
     <h2>⚠️ Ban Management</h2>
     <div id="bans-panel"></div>
   </div>
-
-  <!-- Database Visitors Full Panel -->
-  <div class="panel" id="panel-dbvisitors" style="display:none">
-    <h2>🗄️ جميع زيارات الموقع المخزنة في قاعدة البيانات (دائمة - لا تُحذف أبدًا)</h2>
-    <div style="margin-bottom:16px;">
-      <button id="export-all-csv" class="export-btn">تصدير الكل كـ CSV</button>
-      <button id="export-all-json" class="export-btn" style="margin-left:8px;background:#f59e0b">تصدير الكل كـ JSON</button>
+  <!-- Database Panel -->
+  <div class="panel" id="panel-database" style="display:none">
+    <h2>🗄️ Database Management</h2>
+    
+    <div class="export-section">
+      <h3>📊 Export Data</h3>
+      <p style="color:var(--gray);margin-bottom:16px;">جميع بيانات الزوار والأحصائيات مخزنة بشكل دائم في قاعدة البيانات ولن تحذف أبداً.</p>
+      
+      <div class="export-options">
+        <div class="export-option" onclick="exportData('visitors')">
+          <div style="font-size:32px;">👥</div>
+          <div style="font-weight:600;">All Visitors Data</div>
+          <div style="font-size:12px;color:var(--gray);">جميع الزوار (IP، الدولة، الوقت)</div>
+        </div>
+        
+        <div class="export-option" onclick="exportData('statistics')">
+          <div style="font-size:32px;">📈</div>
+          <div style="font-weight:600;">Daily Statistics</div>
+          <div style="font-size:12px;color:var(--gray);">الإحصائيات اليومية</div>
+        </div>
+        
+        <div class="export-option" onclick="exportData('bans')">
+          <div style="font-size:32px;">🚫</div>
+          <div style="font-weight:600;">Bans History</div>
+          <div style="font-size:12px;color:var(--gray);">سجل الحظر</div>
+        </div>
+        
+        <div class="export-option" onclick="exportData('reports')">
+          <div style="font-size:32px;">🚨</div>
+          <div style="font-weight:600;">Reports History</div>
+          <div style="font-size:12px;color:var(--gray);">سجل البلاغات</div>
+        </div>
+        
+        <div class="export-option" onclick="exportData('full')">
+          <div style="font-size:32px;">💾</div>
+          <div style="font-weight:600;">Full Database Backup</div>
+          <div style="font-size:12px;color:var(--gray);">نسخة احتياطية كاملة</div>
+        </div>
+      </div>
+      
+      <div style="margin-top:24px;">
+        <button class="export" onclick="exportData('full')" style="padding:12px 24px;font-size:16px;">
+          ⬇️ Download Complete Database Backup
+        </button>
+      </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th style="background:var(--primary);color:white;padding:12px">#</th>
-          <th style="background:var(--primary);color:white;padding:12px">التاريخ والوقت</th>
-          <th style="background:var(--primary);color:white;padding:12px">IP</th>
-          <th style="background:var(--primary);color:white;padding:12px">الدولة</th>
-          <th style="background:var(--primary);color:white;padding:12px">Fingerprint</th>
-        </tr>
-      </thead>
-      <tbody id="db-all-body"></tbody>
-    </table>
-    <div class="page-info" id="db-all-info">جاري التحميل...</div>
+    
+    <div class="card" style="margin-top:24px;">
+      <h3>📈 Database Statistics</h3>
+      <div id="db-stats" style="padding:16px;background:var(--light-gray);border-radius:8px;">
+        جاري تحميل إحصائيات قاعدة البيانات...
+      </div>
+      <button onclick="loadDatabaseStats()" class="broadcast" style="margin-top:16px;">
+        🔄 Refresh Database Stats
+      </button>
+    </div>
+    
+    <div class="card" style="margin-top:24px;background:#fff3cd;border-color:#f59e0b;">
+      <h3 style="color:#d97706;">⚠️ Important Notice</h3>
+      <p style="color:#92400e;">
+        • جميع بيانات الزوار تخزن بشكل دائم ولا تحذف تلقائياً<br>
+        • يمكنك تصدير البيانات في أي وقت بصيغة JSON<br>
+        • النسخ الاحتياطية تحفظ جميع الإحصائيات والتواريخ<br>
+        • يمكن استيراد البيانات لاحقاً إذا لزم الأمر
+      </p>
+    </div>
   </div>
 </div>
-
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   const socket = io();
   socket.emit('admin-join');
-  socket.on('connect', () => socket.emit('admin-join'));
-
+  
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
     t.onclick = () => {
@@ -503,141 +588,166 @@
       document.getElementById('panel-' + tab).style.display = 'block';
       if (tab === 'countries') loadCountries();
       if (tab === 'stats') loadStats();
-      if (tab === 'dbvisitors') loadAllDbVisitors();
+      if (tab === 'reports') renderReports();
+      if (tab === 'bans') renderBans();
+      if (tab === 'database') loadDatabaseStats();
     };
   });
-
-  // Live Snapshot Update
+  
   function renderSnapshot(snap) {
     document.getElementById('stat-connected').textContent = snap.stats.connected || 0;
     document.getElementById('stat-waiting').textContent = snap.stats.waiting || 0;
     document.getElementById('stat-partnered').textContent = snap.stats.partnered || 0;
     document.getElementById('stat-totalvisitors').textContent = snap.stats.totalVisitors || 0;
-
-    // Top Countries
+    
+    // Enhanced Countries list with new design
     const cl = document.getElementById('country-list');
     cl.innerHTML = '';
     const entries = Object.entries(snap.stats.countryCounts || {});
     if (entries.length === 0) {
-      cl.textContent = 'لا توجد بيانات';
+      cl.textContent = 'No data';
     } else {
       entries.sort((a,b)=>b[1]-a[1]);
       const topN = 15;
       const toShow = entries.slice(0, topN);
+    
       toShow.forEach(([country, cnt], index) => {
         const d = document.createElement('div');
         d.className = 'country-item';
+      
         const rank = document.createElement('span');
         rank.className = 'country-rank';
         rank.textContent = `#${index + 1}`;
+      
         const nameDiv = document.createElement('div');
         nameDiv.className = 'country-name';
+      
         const flag = document.createElement('span');
         flag.className = 'country-flag';
         flag.textContent = getCountryFlag(country);
+      
         const name = document.createElement('span');
         name.textContent = country;
+      
         nameDiv.appendChild(rank);
         nameDiv.appendChild(flag);
         nameDiv.appendChild(name);
+      
         const count = document.createElement('span');
         count.className = 'country-count';
         count.textContent = cnt;
+      
         d.appendChild(nameDiv);
         d.appendChild(count);
         cl.appendChild(d);
       });
     }
-
+    
     // IP Bans
     const ipb = document.getElementById('ip-bans');
-    ipb.innerHTML = snap.activeIpBans.length ? '' : '<div style="color:var(--gray)">لا يوجد حظر IP نشط</div>';
+    ipb.innerHTML = snap.activeIpBans.length ? '' : '<div style="color:var(--gray)">No active IP bans</div>';
     snap.activeIpBans.forEach(b => {
       const div = document.createElement('div');
       div.style.padding = '8px';
       div.style.marginBottom = '8px';
       div.style.background = 'rgba(239, 68, 68, 0.1)';
       div.style.borderRadius = '6px';
-      div.innerHTML = `<b style="color:var(--danger)">${b.ip}</b><br><small>ينتهي: ${new Date(b.expires).toLocaleString()}</small> `;
+      div.innerHTML = `<b style="color:var(--danger)">${b.ip}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
       const btn = document.createElement('button');
-      btn.textContent = 'إلغاء الحظر'; btn.className = 'unban';
+      btn.textContent = 'Unban'; btn.className = 'unban';
       btn.style.padding = '6px 10px';
       btn.onclick = () => fetch('/unban-ip', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ip:b.ip})});
       div.appendChild(btn);
       ipb.appendChild(div);
     });
-
+    
     // Fingerprint Bans
     const fpb = document.getElementById('fp-bans');
-    fpb.innerHTML = snap.activeFpBans.length ? '' : '<div style="color:var(--gray)">لا يوجد حظر جهاز نشط</div>';
+    fpb.innerHTML = snap.activeFpBans.length ? '' : '<div style="color:var(--gray)">No active device bans</div>';
     snap.activeFpBans.forEach(b => {
       const div = document.createElement('div');
       div.style.padding = '8px';
       div.style.marginBottom = '8px';
       div.style.background = 'rgba(239, 68, 68, 0.1)';
       div.style.borderRadius = '6px';
-      div.innerHTML = `<b style="color:var(--danger)">${b.fp}</b><br><small>ينتهي: ${new Date(b.expires).toLocaleString()}</small> `;
+      div.innerHTML = `<b style="color:var(--danger)">${b.fp}</b><br><small>expires: ${new Date(b.expires).toLocaleString()}</small> `;
       const btn = document.createElement('button');
-      btn.textContent = 'إلغاء الحظر'; btn.className = 'unban';
+      btn.textContent = 'Unban'; btn.className = 'unban';
       btn.style.padding = '6px 10px';
       btn.onclick = () => fetch('/unban-fingerprint', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fp:b.fp})});
       div.appendChild(btn);
       fpb.appendChild(div);
     });
-
+    
     // Reported Users
     const rep = document.getElementById('reported-list');
-    rep.innerHTML = snap.reportedUsers.length ? '' : '<div style="color:var(--gray)">لا توجد بلاغات</div>';
+    rep.innerHTML = snap.reportedUsers.length ? '' : '<div style="color:var(--gray)">No reports</div>';
     snap.reportedUsers.forEach(r => {
       const div = document.createElement('div'); div.className = 'rep-card';
+    
       if (r.screenshot) {
         const img = document.createElement('img');
-        img.src = r.screenshot; img.style.maxWidth = '160px'; img.style.marginRight = '16px'; img.style.borderRadius = '8px';
+        img.src = r.screenshot; img.className = 'screenshot-thumb';
+        img.style.maxWidth = '160px'; img.style.marginRight = '16px';
         const showBtn = document.createElement('button');
-        showBtn.textContent = 'عرض الصورة';
+        showBtn.textContent = 'View Screenshot';
         showBtn.style.cssText = 'background:var(--primary);margin-top:8px;padding:6px';
         showBtn.onclick = () => {
           const w = window.open("", "_blank");
-          w.document.write(`<meta charset="utf-8"><title>لقطة شاشة</title><img src="${r.screenshot}" style="max-width:100%;display:block;margin:10px auto;">`);
+          w.document.write(`<meta charset="utf-8"><title>Screenshot</title><img src="${r.screenshot}" style="max-width:100%;display:block;margin:10px auto;">`);
         };
         div.appendChild(img); div.appendChild(showBtn);
-      } else div.innerHTML += '<div style="color:var(--gray);margin-bottom:8px">📷 لا توجد لقطة شاشة</div>';
-      div.innerHTML += `<div style="margin-top:12px"><b>المُبلَّغ عنه:</b> ${r.target}<br><b>عدد البلاغات:</b> <span style="color:var(--danger)">${r.count}</span></div>`;
+      } else div.innerHTML += '<div style="color:var(--gray);margin-bottom:8px">📷 No screenshot</div>';
+    
+      div.innerHTML += `<div style="margin-top:12px"><b>Target:</b> ${r.target}<br><b>Reports:</b> <span style="color:var(--danger)">${r.count}</span></div>`;
+    
       const small = document.createElement('div'); small.style.cssText = 'font-size:12px;color:var(--gray);margin-top:8px';
-      small.textContent = 'المُبلِّغون: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
+      small.textContent = 'Reporters: ' + (r.reporters.length ? r.reporters.join(', ') : '—');
       div.appendChild(small);
       const btnWrap = document.createElement('div'); btnWrap.style.marginTop = '12px'; btnWrap.style.display = 'flex'; btnWrap.style.gap = '8px';
-      const banBtn = document.createElement('button'); banBtn.textContent = 'حظر المستخدم'; banBtn.className = 'ban';
+      const banBtn = document.createElement('button'); banBtn.textContent = 'Ban User'; banBtn.className = 'ban';
       banBtn.onclick = () => {
-        if (!confirm(`حظر المستخدم ${r.target}؟`)) return;
+        if (!confirm(`Ban user ${r.target}?`)) return;
         fetch('/manual-ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
       };
-      const removeBtn = document.createElement('button'); removeBtn.textContent = 'إزالة البلاغ';
+      const removeBtn = document.createElement('button'); removeBtn.textContent = 'Remove Report';
       removeBtn.style.cssText = 'background:var(--gray)';
       removeBtn.onclick = () => {
-        if (!confirm(`إزالة البلاغ عن ${r.target}؟`)) return;
+        if (!confirm(`Remove report for user ${r.target}?`)) return;
         fetch('/remove-report', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target: r.target })}).then(()=>{});
       };
       btnWrap.appendChild(banBtn); btnWrap.appendChild(removeBtn); div.appendChild(btnWrap);
       rep.appendChild(div);
     });
-
-    // Blocked Countries (في الداشبورد)
+    
+    // Recent Visitors
+    const vis = document.getElementById('visitors-list');
+    vis.innerHTML = snap.recentVisitors.length ? '' : '<div style="color:var(--gray)">No visitors yet</div>';
+    snap.recentVisitors.forEach(v => {
+      const d = document.createElement('div');
+      d.style.padding = '8px';
+      d.style.borderBottom = '1px solid #e2e8f0';
+      d.innerHTML = `<small style="color:var(--gray)">${new Date(v.ts).toLocaleString()}</small> —
+                     <b>${v.country || 'Unknown'}</b> — ${v.ip}${v.fp ? ' — ' + v.fp.slice(0,8) : ''}`;
+      vis.appendChild(d);
+    });
+    
+    // Blocked Countries
     const bc = document.getElementById('blocked-countries');
-    if (bc) {
-      bc.innerHTML = snap.bannedCountries.length ? '' : '<div style="color:var(--gray)">لا توجد دول محظورة</div>';
-      snap.bannedCountries.forEach(c => {
-        const d = document.createElement('div');
-        d.style.padding = '8px'; d.style.marginBottom = '6px';
-        d.style.background = 'rgba(239, 68, 68, 0.1)'; d.style.borderRadius = '6px';
-        d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
-        bc.appendChild(d);
-      });
-    }
+    bc.innerHTML = snap.bannedCountries.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
+    snap.bannedCountries.forEach(c => {
+      const d = document.createElement('div');
+      d.style.padding = '8px'; d.style.marginBottom = '6px';
+      d.style.background = 'rgba(239, 68, 68, 0.1)'; d.style.borderRadius = '6px';
+      d.innerHTML = `<b>${c}</b> — ${COUNTRY_NAME(c)}`;
+      bc.appendChild(d);
+    });
   }
+  
+  socket.on('connect', () => socket.emit('admin-join'));
   socket.on('adminUpdate', renderSnapshot);
-
-  // Broadcast
+  
+  // Broadcast form
   document.getElementById('broadcastForm').onsubmit = e => {
     e.preventDefault();
     const msg = document.getElementById('broadcastMsg').value.trim();
@@ -645,8 +755,8 @@
     fetch('/admin-broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message: msg})}).then(()=>{});
     document.getElementById('broadcastMsg').value = '';
   };
-
-  // Country Flags
+  
+  // Helper function to get country flags
   function getCountryFlag(countryCode) {
     const flagMap = {
       'US': '🇺🇸', 'GB': '🇬🇧', 'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹', 'ES': '🇪🇸',
@@ -662,8 +772,8 @@
     };
     return flagMap[countryCode] || '🌍';
   }
-
-  // All Countries List
+  
+  // Countries
   const ALL_COUNTRIES = {
     "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
     "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
@@ -673,7 +783,7 @@
     "BI":"Burundi","CV":"Cabo Verde","KH":"Cambodia","CM":"Cameroon","CA":"Canada","KY":"Cayman Islands","CF":"Central African Republic",
     "TD":"Chad","CL":"Chile","CN":"China","CX":"Christmas Island","CC":"Cocos (Keeling) Islands","CO":"Colombia","KM":"Comoros",
     "CG":"Congo - Brazzaville","CD":"Congo - Kinshasa","CK":"Cook Islands","CR":"Costa Rica","CI":"Côte d'Ivoire","HR":"Croatia",
-    "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Djibouti","DM":"Dominica","DO":"Dominican Republic",
+    "CU":"Cuba","CW":"Curaçao","CY":"Cyprus","CZ":"Czechia","DK":"Denmark","DJ":"Dijbouti","DM":"Dominica","DO":"Dominican Republic",
     "EC":"Ecuador","EG":"Egypt","SV":"El Salvador","GQ":"Equatorial Guinea","ER":"Eritrea","EE":"Estonia","ET":"Ethiopia",
     "FK":"Falkland Islands","FO":"Faroe Islands","FJ":"Fiji","FI":"Finland","FR":"France","GF":"French Guiana","PF":"French Polynesia",
     "GA":"Gabon","GM":"Gambia","GE":"Georgia","DE":"Germany","GH":"Ghana","GI":"Gibraltar","GR":"Greece","GL":"Greenland","GD":"Grenada",
@@ -697,10 +807,9 @@
     "AE":"United Arab Emirates","GB":"United Kingdom","US":"United States","UY":"Uruguay","UZ":"Uzbekistan","VU":"Vanuatu","VA":"Vatican City",
     "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
   };
-
+  
   function COUNTRY_NAME(code){ return ALL_COUNTRIES[code] || code; }
-
-  // Countries Management
+  
   async function loadCountries() {
     const res = await fetch('/admin/countries-list');
     const data = await res.json();
@@ -708,6 +817,7 @@
     const container = document.getElementById('all-countries');
     container.innerHTML = '';
     const codes = Object.keys(ALL_COUNTRIES).sort((a,b)=>ALL_COUNTRIES[a].localeCompare(ALL_COUNTRIES[b]));
+  
     codes.forEach(code => {
       const div = document.createElement('div'); div.className='country-item';
       const left = document.createElement('div'); left.className='flex';
@@ -715,8 +825,9 @@
       checkbox.dataset.code = code;
       const label = document.createElement('div'); label.textContent = code + ' — ' + ALL_COUNTRIES[code];
       left.appendChild(checkbox); left.appendChild(label);
+    
       const action = document.createElement('div');
-      const btn = document.createElement('button'); btn.textContent = checkbox.checked ? '🟢 إلغاء الحظر' : '🔴 حظر';
+      const btn = document.createElement('button'); btn.textContent = checkbox.checked ? '🟢 Unblock' : '🔴 Block';
       btn.style.background = checkbox.checked ? 'var(--success)' : 'var(--danger)'; btn.style.color='#fff';
       btn.onclick = async () => {
         const endpoint = checkbox.checked ? '/admin/unblock-country' : '/admin/block-country';
@@ -727,13 +838,15 @@
       div.appendChild(left); div.appendChild(action);
       container.appendChild(div);
     });
+    
     document.getElementById('clear-blocks').onclick = async () => {
-      if (!confirm('مسح جميع الدول المحظورة؟')) return;
+      if (!confirm('Clear all blocked countries?')) return;
       await fetch('/admin/clear-blocked', {method:'POST'}).then(()=>{});
       loadCountries();
     };
+    
     const bc = document.getElementById('blocked-countries');
-    bc.innerHTML = data.banned.length ? '' : '<div style="color:var(--gray)">لا توجد دول محظورة</div>';
+    bc.innerHTML = data.banned.length ? '' : '<div style="color:var(--gray)">No blocked countries</div>';
     data.banned.forEach(c => {
       const d = document.createElement('div');
       d.style.padding = '8px'; d.style.marginBottom = '6px';
@@ -742,27 +855,32 @@
       bc.appendChild(d);
     });
   }
-
+  
   // Charts
   let visitorsChart = null;
+  
   async function loadStats() {
     const from = document.getElementById('fromDate').value;
     const to = document.getElementById('toDate').value;
     const params = new URLSearchParams();
     if (from) params.append('from', from);
     if (to) params.append('to', to);
+  
     const res = await fetch('/admin/stats-data?' + params.toString());
     const data = await res.json();
+    
+    // Line chart with fixed container
     const ctx = document.getElementById('visitorsChart').getContext('2d');
     const labels = data.daily.map(d=>d.date);
     const values = data.daily.map(d=>d.count);
+    
     if (visitorsChart) visitorsChart.destroy();
     visitorsChart = new Chart(ctx, {
       type:'line',
       data:{
         labels,
         datasets:[{
-          label:'الزوار اليوميون',
+          label:'Daily Visitors',
           data:values,
           fill:true,
           tension:0.4,
@@ -794,125 +912,141 @@
         }
       }
     });
-
+    
+    // Update country list in stats panel
     const countryList = document.getElementById('stats-country-list');
     countryList.innerHTML = '';
     data.countries.forEach((country, index) => {
       const div = document.createElement('div');
       div.className = 'country-item';
+    
       const rank = document.createElement('span');
       rank.className = 'country-rank';
       rank.textContent = `#${index + 1}`;
+    
       const nameDiv = document.createElement('div');
       nameDiv.className = 'country-name';
+    
       const flag = document.createElement('span');
       flag.className = 'country-flag';
       flag.textContent = getCountryFlag(country.country);
+    
       const name = document.createElement('span');
       name.textContent = country.country;
+    
       nameDiv.appendChild(rank);
       nameDiv.appendChild(flag);
       nameDiv.appendChild(name);
+    
       const count = document.createElement('span');
       count.className = 'country-count';
       count.textContent = country.count;
+    
       div.appendChild(nameDiv);
       div.appendChild(count);
       countryList.appendChild(div);
     });
   }
+  
   document.getElementById('refreshStats').onclick = loadStats;
-
-  // Database Visitors (Dashboard)
-  const PAGE_SIZE = 100;
-  let currentPage = 1;
-
-  async function loadDbVisitors(page = 1) {
-    currentPage = page;
-    const res = await fetch(`/admin/db-visitors?page=${page}&limit=${PAGE_SIZE}`);
-    const data = await res.json();
-
-    document.getElementById('stat-totalvisitors').textContent = data.total;
-
-    const tbody = document.getElementById('db-visitors-body');
-    tbody.innerHTML = '';
-    data.visitors.forEach((v, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${(page-1)*PAGE_SIZE + i + 1}</td>
-        <td>${new Date(v.timestamp).toLocaleString('ar-EG')}</td>
-        <td><b>${v.ip}</b></td>
-        <td>${v.country || 'غير معروف'} ${getCountryFlag(v.country || '')}</td>
-        <td>${v.fingerprint ? v.fingerprint.slice(0,12) + '...' : '—'}</td>
+  
+  // Database functions
+  async function loadDatabaseStats() {
+    try {
+      const res = await fetch('/admin/database-stats');
+      const data = await res.json();
+      
+      const statsDiv = document.getElementById('db-stats');
+      statsDiv.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <div class="stat-item">
+            <div class="stat-label">Total Visitors</div>
+            <div class="stat-value">${data.totalVisitors || 0}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Daily Records</div>
+            <div class="stat-value">${data.dailyStats || 0}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Bans History</div>
+            <div class="stat-value">${data.totalBans || 0}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Reports History</div>
+            <div class="stat-value">${data.totalReports || 0}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Database Size</div>
+            <div class="stat-value">${formatBytes(data.dbSize || 0)}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Last Backup</div>
+            <div class="stat-value" style="font-size: 14px;">${data.lastBackup || 'Never'}</div>
+          </div>
+        </div>
       `;
-      tbody.appendChild(tr);
-    });
-
-    document.getElementById('db-page-info').textContent = 
-      `عرض ${data.visitors.length} سجل من أصل ${data.total} (صفحة ${page})`;
+    } catch (error) {
+      console.error('Error loading database stats:', error);
+      document.getElementById('db-stats').innerHTML = 
+        '<div style="color: var(--danger);">Error loading database statistics</div>';
+    }
   }
-
-  // Export current page
-  document.getElementById('export-csv').onclick = async () => {
-    const res = await fetch(`/admin/db-visitors?page=${currentPage}&limit=${PAGE_SIZE}&format=csv`);
-    const blob = await res.blob();
-    downloadFile(blob, `visitors-page-${currentPage}.csv`);
-  };
-  document.getElementById('export-json').onclick = async () => {
-    const res = await fetch(`/admin/db-visitors?page=${currentPage}&limit=${PAGE_SIZE}&format=json`);
-    const blob = await res.blob();
-    downloadFile(blob, `visitors-page-${currentPage}.json`);
-  };
-
-  // Full DB Visitors Tab
-  async function loadAllDbVisitors() {
-    const tbody = document.getElementById('db-all-body');
-    const info = document.getElementById('db-all-info');
-    info.textContent = 'جاري تحميل جميع السجلات من قاعدة البيانات...';
-    tbody.innerHTML = '';
-
-    const res = await fetch('/admin/db-visitors?all=true');
-    const data = await res.json();
-
-    data.visitors.forEach((v, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${i+1}</td>
-        <td>${new Date(v.timestamp).toLocaleString('ar-EG')}</td>
-        <td>${v.ip}</td>
-        <td>${v.country || 'غير معروف'} ${getCountryFlag(v.country || '')}</td>
-        <td>${v.fingerprint || '—'}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-
-    info.textContent = `تم تحميل ${data.visitors.length} زيارة كاملة من قاعدة البيانات`;
+  
+  function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
-
-  document.getElementById('export-all-csv').onclick = async () => {
-    const res = await fetch('/admin/db-visitors?all=true&format=csv');
-    const blob = await res.blob();
-    downloadFile(blob, 'all-visitors-permanent.csv');
-  };
-  document.getElementById('export-all-json').onclick = async () => {
-    const res = await fetch('/admin/db-visitors?all=true&format=json');
-    const blob = await res.blob();
-    downloadFile(blob, 'all-visitors-permanent.json');
-  };
-
-  function downloadFile(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  
+  async function exportData(type) {
+    try {
+      const res = await fetch(`/admin/export-data?type=${type}`);
+      const data = await res.json();
+      
+      // Create download link
+      const jsonString = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Set filename based on type and current date
+      const date = new Date().toISOString().split('T')[0];
+      let filename = '';
+      switch(type) {
+        case 'visitors': filename = `visitors-data-${date}.json`; break;
+        case 'statistics': filename = `daily-stats-${date}.json`; break;
+        case 'bans': filename = `bans-history-${date}.json`; break;
+        case 'reports': filename = `reports-history-${date}.json`; break;
+        default: filename = `database-backup-${date}.json`;
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert(`✅ Data exported successfully as ${filename}`);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      alert('❌ Error exporting data. Please try again.');
+    }
   }
-
-  // Initial loads
-  loadDbVisitors(1);
+  
+  function renderReports(){ /* Handled by adminUpdate */ }
+  function renderBans(){ /* Handled by adminUpdate */ }
+  
+  // Initial load
   loadCountries();
   loadStats();
+  // Load database stats if on database tab
+  if (window.location.hash === '#database') {
+    loadDatabaseStats();
+  }
 </script>
 </body>
 </html>
