@@ -1,4 +1,3 @@
-window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
@@ -23,6 +22,8 @@ window.addEventListener('DOMContentLoaded', () => {
   let isInitiator = false;
   let micEnabled = true;
   let autoReconnect = true;
+  // متغير جديد لتتبع حالة الحظر
+  let isBanned = false;
   // Timer management
   const activeTimers = new Set();
   let searchTimer = null;
@@ -268,7 +269,7 @@ window.addEventListener('DOMContentLoaded', () => {
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
   function sendTyping() {
-    if (!partnerId) return;
+    if (!partnerId || isBanned) return;
     if (!typing) {
       typing = true;
       safeEmit('typing', { to: partnerId });
@@ -280,10 +281,11 @@ window.addEventListener('DOMContentLoaded', () => {
     }, TYPING_PAUSE);
   }
   chatInput.oninput = () => {
-    if (!chatInput.disabled) sendTyping();
+    if (!chatInput.disabled && !isBanned) sendTyping();
   };
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
+    if (isBanned) return;
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
     addMessage(msg, 'you');
@@ -293,15 +295,15 @@ window.addEventListener('DOMContentLoaded', () => {
     safeEmit('stop-typing', { to: partnerId });
   }
   sendBtn.onclick = sendMessage;
-  chatInput.onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+  chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
-    micBtn.disabled = !localStream;
-    micBtn.style.opacity = localStream ? '1' : '0.8';
+    micBtn.disabled = !localStream || isBanned;
+    micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
   micBtn.onclick = () => {
-    if (!localStream) return alert('Microphone not ready yet.');
+    if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
@@ -373,7 +375,7 @@ window.addEventListener('DOMContentLoaded', () => {
           addMessage("Capturing screenshot for admin review...", "system");
           const image = await captureRemoteVideoFrame();
           safeEmit("admin-screenshot", { image, partnerId });
-          addMessage("Screenshot sent to admin.", "system");
+          addMessage("📋 A report about this user has been sent ✉️⚠️. Action is being reviewed 🔍⏳.", "system");
         } catch (err) {
           console.error('Screenshot capture failed', err);
           addMessage("Failed to capture screenshot (no remote frame available).", "system");
@@ -389,8 +391,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
-    chatInput.disabled = false;
-    sendBtn.disabled = false;
+    chatInput.disabled = isBanned;
+    sendBtn.disabled = isBanned;
   }
   function disableChat() {
     chatInput.disabled = true;
@@ -398,6 +400,11 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
+    if (isBanned) {
+      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      showRemoteSpinnerOnly(false);
+      return;
+    }
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
@@ -414,6 +421,11 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
   async function startSearch() {
+    if (isBanned) {
+      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      showRemoteSpinnerOnly(false);
+      return;
+    }
     const mediaReady = await initMedia();
     if (!mediaReady) {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
@@ -427,6 +439,7 @@ window.addEventListener('DOMContentLoaded', () => {
     startSearchLoop();
   }
   skipBtn.onclick = () => {
+    if (isBanned) return;
     safeEmit('skip');
     updateStatusMessage('You skipped.');
     disableChat();
@@ -436,13 +449,21 @@ window.addEventListener('DOMContentLoaded', () => {
     startSearchLoop();
   };
   // ---------------------- SOCKET EVENTS ----------------------
-  socket.on('waiting', msg => { updateStatusMessage(msg); });
-  socket.on('chat-message', ({ message }) => { addMessage(message, 'them'); });
-  socket.on('typing', () => {
-    typingIndicator.style.display = 'block';
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+  socket.on('waiting', msg => {
+    if (!isBanned) updateStatusMessage(msg);
   });
-  socket.on('stop-typing', () => { typingIndicator.style.display = 'none'; });
+  socket.on('chat-message', ({ message }) => {
+    if (!isBanned) addMessage(message, 'them');
+  });
+  socket.on('typing', () => {
+    if (!isBanned) {
+      typingIndicator.style.display = 'block';
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  });
+  socket.on('stop-typing', () => {
+    if (!isBanned) typingIndicator.style.display = 'none';
+  });
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
@@ -450,21 +471,44 @@ window.addEventListener('DOMContentLoaded', () => {
     addMessage('📢 Admin: ' + msg, 'system');
   });
   socket.on('banned', ({ message }) => {
+    isBanned = true;
     addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('Blocked.');
+    updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
     cleanupConnection();
+    disableChat();
+    // إيقاف الكاميرا للمستخدم المحظور
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+    }
+    if (localVideo) localVideo.srcObject = null;
+    updateMicButton();
+  });
+  // حدث جديد لفك الحظر
+  socket.on('unbanned', ({ message }) => {
+    isBanned = false;
+    addMessage(message || 'You have been unbanned.', 'system');
+    updateStatusMessage('You have been unbanned.');
+    // إعادة تشغيل البحث
+    startSearch();
   });
   socket.on('partner-disconnected', () => {
-    updateStatusMessage('Partner disconnected.');
-    disableChat();
-    cleanupConnection();
-    reconnectAttempts = 0;
-    clearSafeTimer(searchTimer);
-    clearSafeTimer(pauseTimer);
-    setSafeTimer(startSearchLoop, 500);
+    if (!isBanned) {
+      updateStatusMessage('Partner disconnected.');
+      disableChat();
+      cleanupConnection();
+      reconnectAttempts = 0;
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      setSafeTimer(startSearchLoop, 500);
+    }
   });
   socket.on('partner-found', async data => {
+    if (isBanned) {
+      safeEmit('skip');
+      return;
+    }
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
       console.error('Invalid partner data received:', data);
@@ -502,6 +546,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
   socket.on('signal', async ({ from, data }) => {
+    if (isBanned) return;
     if (!from || !data) {
       console.error('Invalid signal data:', { from, data });
       return;
@@ -599,14 +644,16 @@ window.addEventListener('DOMContentLoaded', () => {
         console.debug('connectionState:', s);
     
         if (s === 'connected') {
-          updateStatusMessage('You are connected to a stranger right now');
+          updateStatusMessage('Connected');
           reconnectAttempts = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
-          updateStatusMessage('Connection lost.');
-          disableChat();
-          if (autoReconnect) {
-            cleanupConnection();
-            attemptRecovery();
+          if (!isBanned) {
+            updateStatusMessage('Connection lost.');
+            disableChat();
+            if (autoReconnect) {
+              cleanupConnection();
+              attemptRecovery();
+            }
           }
         }
       };
@@ -641,6 +688,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   // Attempt recovery: try ICE-restart a few times, otherwise rematch
   async function attemptRecovery() {
+    if (isBanned) return;
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
       cleanupConnection();
@@ -817,6 +865,10 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
+    if (isBanned) {
+      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      return false;
+    }
     if (localStream) return true;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
@@ -857,7 +909,7 @@ window.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
-    if (autoReconnect && !partnerId) {
+    if (autoReconnect && !partnerId && !isBanned) {
       setSafeTimer(startSearchLoop, 1000);
     }
   });
