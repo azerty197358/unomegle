@@ -645,7 +645,10 @@ window.addEventListener('DOMContentLoaded', () => {
         console.debug('connectionState:', s);
     
         if (s === 'connected') {
-          updateStatusMessage('Connected');
+          updateStatusMessage('Hello 👋
+You've been contacted by a stranger.
+
+Say hello 😊🤝');
           reconnectAttempts = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
