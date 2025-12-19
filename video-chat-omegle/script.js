@@ -1,15 +1,3 @@
-  socket.on('adminMessage', msg => {
-    if (notifyDot) notifyDot.style.display = 'block';
-    notifyBell.classList.add('shake');
-    pushAdminNotification('📢 ' + msg);
-    addMessage('📢 Admin: ' + msg, 'system');
-  });
-  socket.on('banned', ({ message }) => {
-    addMessage(message || 'You are banned.', 'system');
-    showRemoteSpinnerOnly(true);
-    updateStatusMessage('Blocked.');
-    cleanupConnection();
-  });// WebRTC client with enhanced connection management, error handling, and status-only updates
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
