@@ -2,512 +2,433 @@
 <html lang="en" dir="ltr">
 <head>
   <meta name="monetag" content="bf2e01fed11adb68702054bb92e47444">
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SparkChat</title>
-<style>
-:root{
-  --blue:#2ea3ff;
-  --dark:#111;
-  --light:#ffffff;
-  --border:#e6d7c8;
-  --gap:10px;
-  --radius:12px;
-
-  --bg:#ffffff;
-  --text:#000;
-
-  /* 🎨 ألوان رسائل جذابة - نهار */
-  --msgYou:#e3f2fd;
-  --msgStranger:#fff3e0;
-  --msgSystem:#f5f5f5;
-
-  --msgYouBorder:#42a5f5;
-  --msgStrangerBorder:#ff9800;
-}
-
-.dark{
-  --bg:#121212;
-  --text:#e0e0e0;
-
-  /* 🌙 ألوان رسائل مذهلة - ليل (تصحيح) */
-  --msgYou:#0d47a1; /* أزرق داكن جذاب */
-  --msgStranger:#bf360c; /* برتقالي داكن جذاب */
-  --msgSystem:#424242;
-
-  --border:#444;
-
-  --msgYouBorder:#42a5f5; /* حدود زرقاء ساطعة */
-  --msgStrangerBorder:#ff6f00; /* حدود برتقالية ساطعة */
-}
-
-*{margin:0;padding:0;box-sizing:border-box;}
-html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
-
-.logo{
-  font-size:48px;
-  font-weight:bold;
-  color:#ff9a00;
-  display:flex;
-  gap:4px;
-}
-.logo span{
-  color:#3fa0ff;
-}
-
-.flip-char{
-  display:inline-block;
-  transition:transform 0.8s ease;
-  transform-origin: right;
-}
-.flip{
-  transform:rotateY(360deg);
-}
-
-.flip-btn{
-  transition: transform 0.6s ease;
-  transform-origin: center;
-}
-.flip-btn:hover{
-  transform: rotateY(360deg);
-}
-
-.topbar{
-  height:60px;display:flex;justify-content:space-between;align-items:center;
-  padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
-}
-
-#exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
-#darkToggle{
-  background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
-  cursor:pointer;margin-right:10px;
-}
-
-.notify-box{position:relative;margin-right:12px;cursor:pointer;}
-#notifyIcon{font-size:24px;}
-#notifyDot{
-  width:10px;height:10px;background:red;border-radius:50%;
-  position:absolute;top:0;right:0;display:none;
-}
-#notifyMenu{
-  position:absolute;right:0;top:40px;width:220px;
-  background:#fff;border:1px solid #ccc;border-radius:8px;
-  display:none;max-height:250px;overflow-y:auto;z-index:999;
-}
-.notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
-.notify-empty{padding:10px;text-align:center;color:#777;}
-
-.stage{
-  position:absolute;top:60px;bottom:0;left:0;right:0;
-  display:flex;gap:var(--gap);padding:12px;overflow:hidden;
-}
-
-.left-col{
-  width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
-}
-
-.video-frame{
-  position:relative;border-radius:var(--radius);
-  border:6px solid var(--border);overflow:hidden;background:#000;
-  display:flex;justify-content:center;align-items:center;
-}
-
-.video-frame.top{height:360px;}
-.video-frame.bottom{height:360px;}
-
-video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
-
-.video-label{
-  position:absolute;top:8px;left:8px;
-  padding:4px 12px;border-radius:20px;z-index:6;
-  font-weight:600;font-size:12px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-
-.dark .video-label{
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.watermark{
-  position:absolute;bottom:10px;left:10px;font-size:14px;
-  color:#ffffffaa;font-weight:bold;z-index:6;
-}
-
-.spinner{
-  position:absolute;width:60px;height:60px;border-radius:50%;
-  border:6px solid #fff;border-top-color:transparent;
-  animation:spin 1s linear infinite;z-index:20;
-}
-@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
-
-#micBtn{
-  position:absolute;bottom:10px;right:10px;background:var(--blue);
-  color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
-  border:none;z-index:10;min-width:40px;min-height:40px;
-}
-
-#reportBtn{
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  background:red;
-  color:#fff;
-  padding:4px 8px;
-  font-size:10px;
-  border-radius:6px;
-  cursor:pointer;
-  border:none;
-  z-index:10;
-}
-
-.right-col{
-  flex:1;display:flex;flex-direction:column;
-  border:6px solid var(--border);border-radius:10px;
-  background:var(--bg);min-width:240px;height:100%;
-}
-
-.chat-area{
-  flex:1;padding:12px;overflow-y:scroll;
-  display:flex;flex-direction:column;gap:8px;
-}
-
-/* 💬 رسائل مع ألوان جذابة وتباين عالي */
-.msg{
-  padding:12px 16px;max-width:75%;border-radius:12px;font-size:14px;
-  font-weight:500;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  line-height:1.5;
-}
-
-.msg.you{
-  background:var(--msgYou);
-  border:2px solid var(--msgYouBorder);
-  color:#0d47a1;
-  align-self:flex-end;
-}
-
-/* 🔥 تصحيح ألوان الوضع الليلي - نص أبيض لأقصى وضوح */
-.dark .msg.you{
-  color:#ffffff !important; /* أبيض نقي */
-}
-
-.msg.stranger{
-  background:var(--msgStranger);
-  border:2px solid var(--msgStrangerBorder);
-  color:#e65100;
-  align-self:flex-start;
-}
-
-/* 🔥 تصحيح ألوان الوضع الليلي - نص أبيض لأقصى وضوح */
-.dark .msg.stranger{
-  color:#ffffff !important; /* أبيض نقي */
-}
-
-.msg.system{
-  background:var(--msgSystem);
-  align-self:center;
-  border:1px solid var(--border);
-  color:var(--text);
-  font-size:13px;
-  padding:8px 16px;
-}
-
-.chat-input-row{
-  display:flex;flex-direction:column;gap:8px;padding:10px;
-  background:var(--bg); /* تكيف مع الوضع الليلي */
-  border-top:1px solid var(--border);
-  position:sticky;bottom:0;left:0;right:0;z-index:50;
-}
-
-.typing-indicator {
-  display: none;
-  padding: 6px 10px;
-  background: var(--bg);
-  border-radius: 6px;
-  border: 1px solid #ddd;
-  text-align: center;
-  font-size: 13px;
-  color: var(--blue);
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.typing-indicator.active {
-  display: block;
-}
-
-.typing-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: var(--blue);
-  border-radius: 50%;
-  margin-right: 8px;
-  animation: typingPulse 1.5s infinite;
-}
-
-@keyframes typingPulse {
-  0% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 0.3; transform: scale(0.8); }
-}
-
-.dark .typing-indicator {
-  border-color: var(--border);
-}
-
-.input-container{display:flex;gap:8px;}
-
-#skipBtn{
-  background: var(--blue);
-  color:#fff;padding:10px 14px;
-  border-radius:8px;cursor:pointer;border:none;
-}
-
-#sendBtn{
-  width:42px;height:42px;background:var(--blue);
-  color:#fff;border-radius:8px;border:none;cursor:pointer;
-}
-
-#chatInput{
-  flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
-  background:var(--bg);
-  color:var(--text);
-}
-
-@media (max-width: 768px){
-  #exitBtn { display:none !important; }
-  .stage{
-    flex-direction:column;padding:8px;overflow-y:auto;
-  }
-  .left-col{
-    width:100%;min-width:unset;gap:8px;position:relative;
-  }
-  .video-frame.top{
-    height:310px;
-    border-width:4px;
-  }
-  .video-frame.bottom{
-    position:absolute;
-    bottom:12px;
-    right:12px;
-    width:190px;
-    height:150px;
-    border-width:2px;
-    z-index:999;
-  }
-  #reportBtn{
-    left:10px !important;
-    right:auto !important;
-  }
-  #micBtn{
-    bottom:4px;right:4px;
-    transform:scale(0.85);
-  }
-  #toggleMessagesBtn{
-    width:50px;height:50px;border-radius:50%;
-    border:none;background:var(--blue);color:#fff;
-    font-size:20px;align-self:center;margin:10px 0;
-    cursor:pointer;display:flex;justify-content:center;align-items:center;
-  }
-  .messages-hidden .right-col{display:none;}
-  .messages-hidden .video-frame.top{height:360px;}
-  .messages-hidden .video-frame.bottom{height:165px;width:210px;}
-  .chat-area{
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #bbbbbb #f1f1f1;
-  }
-  .chat-area::-webkit-scrollbar{
-    width: 4px;
-  }
-  .chat-area::-webkit-scrollbar-thumb{
-    background: #b5b5b5;
-    border-radius: 10px;
-  }
-  .chat-area::-webkit-scrollbar-track{
-    background: #f1f1f1;
-  }
-}
-
-@media (min-width: 769px){
-  #toggleMessagesBtn{
-    display:none !important;
-  }
-}
-
-#chatInput,
-.msg,
-.msg.you,
-.msg.stranger,
-.msg.system,
-.chat-area,
-.chat-area * {
-  color:#000;
-}
-</style>
-</head>
-
-<body>
-
-<div class="topbar">
-  <div class="logo" id="logo"></div>
-
-  <div style="display:flex;gap:14px;align-items:center;">
-    <div class="notify-box">
-      <div id="notifyIcon">🔔</div>
-      <div id="notifyDot"></div>
-      <div id="notifyMenu">
-        <div class="notify-empty">No notifications</div>
-      </div>
-    </div>
-
-    <button id="darkToggle" class="flip-btn">🌙</button>
-    <button id="exitBtn" class="flip-btn">Exit</button>
-  </div>
-</div>
-
-<div class="stage">
-
-  <div class="left-col">
-
-    <div class="video-frame top">
-      <button id="reportBtn" class="flip-btn">🚨 BORN18+</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">Stranger</div>
-      <div id="remoteSpinner" class="spinner"></div>
-      <video id="remoteVideo" autoplay playsinline></video>
-    </div>
-
-    <div class="video-frame bottom">
-      <button id="micBtn" class="flip-btn">🎤</button>
-      <div class="watermark">SparkChat</div>
-      <div class="video-label">You</div>
-      <div id="localSpinner" class="spinner"></div>
-      <video id="localVideo" autoplay muted playsinline></video>
-    </div>
-
-  </div>
-
-  <button id="toggleMessagesBtn" class="flip-btn">▼</button>
-
-  <div class="right-col">
-
-    <div id="chatMessages" class="chat-area">
-      <div class="msg system">Connecting...</div>
-    </div>
-
-    <div class="chat-input-row">
-      <!-- ❌ تم إزالة شريط الحالة تماماً -->
-      
-      <div class="typing-indicator" id="typingIndicator">
-        <span class="typing-dot"></span>
-        <span id="typingText">Stranger is typing...</span>
-      </div>
-      
-      <div class="input-container">
-        <button id="skipBtn" class="flip-btn">Skip</button>
-        <input id="chatInput" placeholder="Type..." disabled />
-        <button id="sendBtn" class="flip-btn" disabled>➤</button>
-      </div>
-    </div>
-
-  </div>
-
-</div>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
-
-<script>
-/* logo */
-const logoText = "sparkchat"; 
-const logoContainer = document.getElementById("logo");
-
-logoText.split("").forEach((letter, i) => {
-  const span = document.createElement("span");
-  span.className = "flip-char";
-
-  if (i < 5) {
-    span.style.color = "#ff9a00";
-  } else {
-    span.style.color = "#3fa0ff";
-  }
-
-  span.textContent = letter;
-  logoContainer.appendChild(span);
-});
-
-const letters = document.querySelectorAll(".flip-char");
-let index = 0;
-
-setInterval(() => {
-  letters.forEach((l, i) => {
-    if (i === index) {
-      l.classList.add("flip");
-      setTimeout(() => l.classList.remove("flip"), 800);
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SparkChat</title>
+  <style>
+    :root{
+      --blue:#2ea3ff;
+      --dark:#111;
+      --light:#ffffff;
+      --border:#e6d7c8;
+      --gap:10px;
+      --radius:12px;
+      --bg:#ffffff;
+      --text:#000;
+      /* 🎨 ألوان رسائل جذابة - نهار */
+      --msgYou:#e3f2fd;
+      --msgStranger:#fff3e0;
+      --msgSystem:#f5f5f5;
+      --msgYouBorder:#42a5f5;
+      --msgStrangerBorder:#ff9800;
     }
-  });
-  index = (index + 1) % letters.length;
-}, 3000);
+    .dark{
+      --bg:#121212;
+      --text:#e0e0e0;
+      /* 🌙 ألوان رسائل في الوضع الليلي - خلفيات داكنة مع نصوص بيضاء واضحة */
+      --msgYou:#1e88e5;      /* أزرق متوسط جذاب */
+      --msgStranger:#f57c00; /* برتقالي متوسط جذاب */
+      --msgSystem:#424242;
+      --border:#444;
+      --msgYouBorder:#42a5f5;
+      --msgStrangerBorder:#ff9800;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
+    
+    .logo{
+      font-size:48px;
+      font-weight:bold;
+      color:#ff9a00;
+      display:flex;
+      gap:4px;
+      align-items:center;
+    }
+    .logo span{
+      display:inline-block;
+    }
+    .logo .first-letter{
+      color:#ff9a00;
+      position:relative;
+    }
+    
+    /* تأثير "الانتفاخ والانفجار" للحرف الأول فقط كل 5 ثوانٍ */
+    @keyframes puff-explode {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.4); }
+      40% { transform: scale(1.2); }
+      60% { transform: scale(1.6); opacity: 1; }
+      80% { transform: scale(2); opacity: 0; } /* يبدو وكأنه انفجر */
+      100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .puff{
+      animation: puff-explode 1s ease-in-out;
+    }
+    
+    .topbar{
+      height:60px;display:flex;justify-content:space-between;align-items:center;
+      padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
+    }
+    #exitBtn{background:red;color:#fff;padding:8px 12px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+    #darkToggle{
+      background:#444;color:#fff;border:none;padding:8px 12px;border-radius:8px;
+      cursor:pointer;margin-right:10px;
+    }
+    .notify-box{position:relative;margin-right:12px;cursor:pointer;}
+    #notifyIcon{font-size:24px;}
+    #notifyDot{
+      width:10px;height:10px;background:red;border-radius:50%;
+      position:absolute;top:0;right:0;display:none;
+    }
+    #notifyMenu{
+      position:absolute;right:0;top:40px;width:220px;
+      background:#fff;border:1px solid #ccc;border-radius:8px;
+      display:none;max-height:250px;overflow-y:auto;z-index:999;
+    }
+    .notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
+    .notify-empty{padding:10px;text-align:center;color:#777;}
+    
+    .stage{
+      position:absolute;top:60px;bottom:0;left:0;right:0;
+      display:flex;gap:var(--gap);padding:12px;overflow:hidden;
+    }
+    .left-col{
+      width:380px;min-width:260px;display:flex;flex-direction:column;gap:var(--gap);
+    }
+    .video-frame{
+      position:relative;border-radius:var(--radius);
+      border:6px solid var(--border);overflow:hidden;background:#000;
+      display:flex;justify-content:center;align-items:center;
+    }
+    .video-frame.top{height:360px;}
+    .video-frame.bottom{height:360px;}
+    video{width:100%;height:100%;object-fit:cover;position:relative;z-index:0;}
+    .video-label{
+      position:absolute;top:8px;left:8px;
+      padding:4px 12px;border-radius:20px;z-index:6;
+      font-weight:600;font-size:12px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .dark .video-label{
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .watermark{
+      position:absolute;bottom:10px;left:10px;font-size:14px;
+      color:#ffffffaa;font-weight:bold;z-index:6;
+    }
+    .spinner{
+      position:absolute;width:60px;height:60px;border-radius:50%;
+      border:6px solid #fff;border-top-color:transparent;
+      animation:spin 1s linear infinite;z-index:20;
+    }
+    @keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+    #micBtn{
+      position:absolute;bottom:10px;right:10px;background:var(--blue);
+      color:#fff;padding:7px;font-size:16px;border-radius:50%;cursor:pointer;
+      border:none;z-index:10;min-width:40px;min-height:40px;
+    }
+    #reportBtn{
+      position:absolute;
+      bottom:10px;
+      right:10px;
+      background:red;
+      color:#fff;
+      padding:4px 8px;
+      font-size:10px;
+      border-radius:6px;
+      cursor:pointer;
+      border:none;
+      z-index:10;
+    }
+    .right-col{
+      flex:1;display:flex;flex-direction:column;
+      border:6px solid var(--border);border-radius:10px;
+      background:var(--bg);min-width:240px;height:100%;
+    }
+    .chat-area{
+      flex:1;padding:12px;overflow-y:auto;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    
+    /* 💬 رسائل مع تباين عالي في الوضع الليلي */
+    .msg{
+      padding:12px 16px;max-width:75%;border-radius:12px;font-size:14px;
+      font-weight:500;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      line-height:1.5;
+    }
+    .msg.you{
+      background:var(--msgYou);
+      border:2px solid var(--msgYouBorder);
+      color:#ffffff;               /* نص أبيض دائماً للوضوح */
+      align-self:flex-end;
+    }
+    .msg.stranger{
+      background:var(--msgStranger);
+      border:2px solid var(--msgStrangerBorder);
+      color:#ffffff;               /* نص أبيض دائماً للوضوح */
+      align-self:flex-start;
+    }
+    .msg.system{
+      background:var(--msgSystem);
+      align-self:center;
+      border:1px solid var(--border);
+      color:var(--text);
+      font-size:13px;
+      padding:8px 16px;
+    }
+    
+    .chat-input-row{
+      display:flex;flex-direction:column;gap:8px;padding:10px;
+      background:var(--bg);
+      border-top:1px solid var(--border);
+      position:sticky;bottom:0;left:0;right:0;z-index:50;
+    }
+    .typing-indicator {
+      display: none;
+      padding: 6px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      text-align: center;
+      font-size: 13px;
+      color: var(--blue);
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .typing-indicator.active {
+      display: block;
+    }
+    .typing-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--blue);
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: typingPulse 1.5s infinite;
+    }
+    @keyframes typingPulse {
+      0% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.3; transform: scale(0.8); }
+    }
+    .dark .typing-indicator {
+      border-color: var(--border);
+    }
+    .input-container{display:flex;gap:8px;}
+    #skipBtn{
+      background: var(--blue);
+      color:#fff;padding:10px 14px;
+      border-radius:8px;cursor:pointer;border:none;
+    }
+    #sendBtn{
+      width:42px;height:42px;background:var(--blue);
+      color:#fff;border-radius:8px;border:none;cursor:pointer;
+    }
+    #chatInput{
+      flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;
+      background:var(--bg);
+      color:var(--text);
+    }
+    
+    @media (max-width: 768px){
+      #exitBtn { display:none !important; }
+      .stage{
+        flex-direction:column;padding:8px;overflow-y:auto;
+      }
+      .left-col{
+        width:100%;min-width:unset;gap:8px;position:relative;
+      }
+      .video-frame.top{
+        height:310px;
+        border-width:4px;
+      }
+      .video-frame.bottom{
+        position:absolute;
+        bottom:12px;
+        right:12px;
+        width:190px;
+        height:150px;
+        border-width:2px;
+        z-index:999;
+      }
+      #reportBtn{
+        left:10px !important;
+        right:auto !important;
+      }
+      #micBtn{
+        bottom:4px;right:4px;
+        transform:scale(0.85);
+      }
+      #toggleMessagesBtn{
+        width:50px;height:50px;border-radius:50%;
+        border:none;background:var(--blue);color:#fff;
+        font-size:20px;align-self:center;margin:10px 0;
+        cursor:pointer;display:flex;justify-content:center;align-items:center;
+      }
+      .messages-hidden .right-col{display:none;}
+      .messages-hidden .video-frame.top{height:360px;}
+      .messages-hidden .video-frame.bottom{height:165px;width:210px;}
+      .chat-area{
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #bbbbbb #f1f1f1;
+      }
+      .chat-area::-webkit-scrollbar{
+        width: 4px;
+      }
+      .chat-area::-webkit-scrollbar-thumb{
+        background: #b5b5b5;
+        border-radius: 10px;
+      }
+      .chat-area::-webkit-scrollbar-track{
+        background: #f1f1f1;
+      }
+    }
+    @media (min-width: 769px){
+      #toggleMessagesBtn{
+        display:none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo" id="logo"></div>
+    <div style="display:flex;gap:14px;align-items:center;">
+      <div class="notify-box">
+        <div id="notifyIcon">🔔</div>
+        <div id="notifyDot"></div>
+        <div id="notifyMenu">
+          <div class="notify-empty">No notifications</div>
+        </div>
+      </div>
+      <button id="darkToggle">🌙</button>
+      <button id="exitBtn">Exit</button>
+    </div>
+  </div>
+  
+  <div class="stage">
+    <div class="left-col">
+      <div class="video-frame top">
+        <button id="reportBtn">🚨 BORN18+</button>
+        <div class="watermark">SparkChat</div>
+        <div class="video-label">Stranger</div>
+        <div id="remoteSpinner" class="spinner"></div>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+      <div class="video-frame bottom">
+        <button id="micBtn">🎤</button>
+        <div class="watermark">SparkChat</div>
+        <div class="video-label">You</div>
+        <div id="localSpinner" class="spinner"></div>
+        <video id="localVideo" autoplay muted playsinline></video>
+      </div>
+    </div>
+    <button id="toggleMessagesBtn">▼</button>
+    <div class="right-col">
+      <div id="chatMessages" class="chat-area">
+        <div class="msg system">Connecting...</div>
+      </div>
+      <div class="chat-input-row">
+        <div class="typing-indicator" id="typingIndicator">
+          <span class="typing-dot"></span>
+          <span id="typingText">Stranger is typing...</span>
+        </div>
+        
+        <div class="input-container">
+          <button id="skipBtn">Skip</button>
+          <input id="chatInput" placeholder="Type..." disabled />
+          <button id="sendBtn" disabled>➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-/* Dark mode */
-document.getElementById("darkToggle").onclick = () => {
-  document.body.classList.toggle("dark");
-  document.getElementById("darkToggle").innerText =
-    document.body.classList.contains("dark") ? "☀️" : "🌙";
-};
-
-/* Toggle messages (mobile only) */
-document.getElementById("toggleMessagesBtn").onclick = () => {
-  document.body.classList.toggle("messages-hidden");
-  toggleMessagesBtn.innerText =
-    document.body.classList.contains("messages-hidden") ? "▲" : "▼";
-};
-
-/* Report */
-document.getElementById("reportBtn").onclick = () => {
-  if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
-    alert("تم إرسال البلاغ بنجاح.");
-  }
-};
-
-/* دوال التحكم بمؤشر الكتابة */
-function showTypingIndicator() {
-  document.getElementById('typingIndicator').classList.add('active');
-}
-
-function hideTypingIndicator() {
-  document.getElementById('typingIndicator').classList.remove('active');
-}
-
-let typingTimeout;
-const chatInput = document.getElementById('chatInput');
-
-chatInput.addEventListener('input', () => {
-  if (chatInput.value.length > 0) {
-    console.log('Sending typing event...');
-  }
-});
-
-function simulatePartnerTyping() {
-  showTypingIndicator();
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    hideTypingIndicator();
-  }, 3000);
-}
-
-chatInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' && e.shiftKey) {
-    simulatePartnerTyping();
-  }
-});
-</script>
-
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+  <script>
+    /* إنشاء اللوغو مع تمييز الحرف الأول */
+    const logoText = "SparkChat";
+    const logoContainer = document.getElementById("logo");
+    
+    logoText.split("").forEach((letter, i) => {
+      const span = document.createElement("span");
+      if (i === 0) {
+        span.classList.add("first-letter");
+      } else {
+        span.style.color = (i < 5) ? "#ff9a00" : "#3fa0ff";
+      }
+      span.textContent = letter.toUpperCase();
+      logoContainer.appendChild(span);
+    });
+    
+    /* تأثير الانتفاخ والانفجار للحرف الأول فقط كل 5 ثوانٍ */
+    const firstLetter = logoContainer.querySelector(".first-letter");
+    setInterval(() => {
+      firstLetter.classList.add("puff");
+      setTimeout(() => {
+        firstLetter.classList.remove("puff");
+      }, 1000);
+    }, 5000);
+    
+    /* Dark mode toggle */
+    document.getElementById("darkToggle").onclick = () => {
+      document.body.classList.toggle("dark");
+      document.getElementById("darkToggle").innerText =
+        document.body.classList.contains("dark") ? "☀️" : "🌙";
+    };
+    
+    /* Toggle messages on mobile */
+    const toggleMessagesBtn = document.getElementById("toggleMessagesBtn");
+    toggleMessagesBtn.onclick = () => {
+      document.body.classList.toggle("messages-hidden");
+      toggleMessagesBtn.innerText =
+        document.body.classList.contains("messages-hidden") ? "▲" : "▼";
+    };
+    
+    /* Report button */
+    document.getElementById("reportBtn").onclick = () => {
+      if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
+        alert("تم إرسال البلاغ بنجاح.");
+      }
+    };
+    
+    /* دوال مؤشر الكتابة */
+    function showTypingIndicator() {
+      document.getElementById('typingIndicator').classList.add('active');
+    }
+    function hideTypingIndicator() {
+      document.getElementById('typingIndicator').classList.remove('active');
+    }
+    
+    let typingTimeout;
+    const chatInput = document.getElementById('chatInput');
+    chatInput.addEventListener('input', () => {
+      if (chatInput.value.length > 0) {
+        console.log('Sending typing event...');
+      }
+    });
+    
+    function simulatePartnerTyping() {
+      showTypingIndicator();
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        hideTypingIndicator();
+      }, 3000);
+    }
+    
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && e.shiftKey) {
+        simulatePartnerTyping();
+      }
+    });
+  </script>
 </body>
 </html>
