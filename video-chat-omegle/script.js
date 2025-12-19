@@ -1,4 +1,3 @@
-window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
@@ -16,12 +15,13 @@ window.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
-  //// ---------------------- GLOBAL STATE ----------------------
+  // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
   let partnerId = null;
   let isInitiator = false;
   let micEnabled = true;
+  let autoReconnect = true;
   // متغير جديد لتتبع حالة الحظر
   let isBanned = false;
   // Timer management
@@ -31,6 +31,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
+  // Reconnection/backoff state
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 6;
+  const BASE_BACKOFF_MS = 800;
   // Candidate buffering
   const bufferedRemoteCandidates = [];
   // Negotiation guard
@@ -147,7 +151,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-  // Status message handler
+  // Status message handler - replaces old messages instead of adding new ones
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
     if (statusMsg) {
@@ -157,6 +161,7 @@ window.addEventListener('DOMContentLoaded', () => {
       statusMsg.id = 'statusMessage';
       statusMsg.className = 'msg status';
       statusMsg.textContent = msg;
+ 
       const typing = document.querySelector('.msg.system[style*="italic"]');
       if (typing && typing.parentNode === chatMessages) {
         chatMessages.insertBefore(statusMsg, typing);
@@ -182,6 +187,10 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
+  // Exponential backoff (ms)
+  function backoffDelay(attempt) {
+    return Math.min(30000, Math.pow(2, attempt) * BASE_BACKOFF_MS + Math.floor(Math.random() * 500));
+  }
   // Store remote candidates until pc created
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
@@ -190,7 +199,7 @@ window.addEventListener('DOMContentLoaded', () => {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
       try {
-        peerConnection.addIceCandidate(c).catch(() => {});
+        peerConnection.addIceCandidate(c).catch(() => {/* ignore */});
       } catch (e) {}
     }
   }
@@ -213,7 +222,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
+    // Clear all timers
     clearAllTimers();
+    // Close peer connection
     if (peerConnection) {
       try {
         if (keepAliveChannel) {
@@ -226,10 +237,13 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       peerConnection = null;
     }
+    // Clear remote video
     if (remoteVideo) {
       remoteVideo.srcObject = null;
     }
+    // Clear buffers
     bufferedRemoteCandidates.length = 0;
+    // Reset state
     partnerId = null;
     isInitiator = false;
     makingOffer = false;
@@ -341,52 +355,40 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  // ---------------------- REPORT & SKIP BUTTONS ----------------------
+  // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = async () => {
       if (!partnerId) {
-        updateStatusMessage("لا يوجد مستخدم للإبلاغ عنه.");
+        updateStatusMessage("No user to report.");
         return;
       }
       const prev = reportCounts.get(partnerId) || 0;
       const now = prev + 1;
       reportCounts.set(partnerId, now);
       reportedIds.add(partnerId);
-
+ 
       safeEmit("report", { partnerId });
-      // لا نرسل skip هنا، سنقوم بالتخطي مباشرة بعد التنظيف
+      safeEmit("skip");
       if (now === 1) {
         try {
-          addMessage("جاري التقاط لقطة شاشة لمراجعة الإدارة...", "system");
+          addMessage("Capturing screenshot for admin review...", "system");
           const image = await captureRemoteVideoFrame();
           safeEmit("admin-screenshot", { image, partnerId });
-          addMessage("تم إرسال اللقطة إلى الإدارة.", "system");
+          addMessage("Screenshot sent to admin.", "system");
         } catch (err) {
-          console.error('فشل التقاط اللقطة', err);
-          addMessage("فشل التقاط لقطة (لا توجد إطارات متاحة).", "system");
+          console.error('Screenshot capture failed', err);
+          addMessage("Failed to capture screenshot (no remote frame available).", "system");
         }
       }
-
-      // تخطي المستخدم الحالي مباشرة وبدء البحث عن آخر
       cleanupConnection();
       disableChat();
-      updateStatusMessage('تم الإبلاغ عن المستخدم — جاري البحث عن مستخدم آخر...');
+      updateStatusMessage('You reported the user — skipping...');
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
-      startSearchLoop(); // بدء البحث فوراً بدون تأخير
+      searchTimer = setSafeTimer(startSearchLoop, 300);
     };
   }
-
-  skipBtn.onclick = () => {
-    if (isBanned) return;
-    updateStatusMessage('تم التخطي.');
-    disableChat();
-    cleanupConnection();
-    clearSafeTimer(searchTimer);
-    clearSafeTimer(pauseTimer);
-    startSearchLoop();
-  };
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
@@ -399,25 +401,34 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
-      updateStatusMessage('لقد تم حظرك لمدة 24 ساعة بسبب سلوك غير لائق وانتهاك شروط السياسة.');
+      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
       showRemoteSpinnerOnly(false);
       return;
     }
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('جاري البحث عن مستخدم...');
+    updateStatusMessage('Searching...');
     safeEmit('find-partner');
+    clearSafeTimer(searchTimer);
+    searchTimer = setSafeTimer(() => {
+      if (!partnerId) {
+        safeEmit('stop');
+        showRemoteSpinnerOnly(false);
+        updateStatusMessage('Pausing...');
+        clearSafeTimer(pauseTimer);
+        pauseTimer = setSafeTimer(startSearchLoop, 1800);
+      }
+    }, 3500);
   }
-
   async function startSearch() {
     if (isBanned) {
-      updateStatusMessage('لقد تم حظرك لمدة 24 ساعة بسبب سلوك غير لائق وانتهاك شروط السياسة.');
+      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
       showRemoteSpinnerOnly(false);
       return;
     }
     const mediaReady = await initMedia();
     if (!mediaReady) {
-      updateStatusMessage('فشل تهيئة الوسائط. يرجى السماح بالوصول إلى الكاميرا/الميكروفون.');
+      updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
     cleanupConnection();
@@ -427,6 +438,16 @@ window.addEventListener('DOMContentLoaded', () => {
     skipBtn.disabled = false;
     startSearchLoop();
   }
+  skipBtn.onclick = () => {
+    if (isBanned) return;
+    safeEmit('skip');
+    updateStatusMessage('You skipped.');
+    disableChat();
+    cleanupConnection();
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
+    startSearchLoop();
+  };
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
@@ -447,15 +468,16 @@ window.addEventListener('DOMContentLoaded', () => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
-    addMessage('📢 الإدارة: ' + msg, 'system');
+    addMessage('📢 Admin: ' + msg, 'system');
   });
   socket.on('banned', ({ message }) => {
     isBanned = true;
-    addMessage(message || 'تم حظرك.', 'system');
+    addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('لقد تم حظرك لمدة 24 ساعة بسبب سلوك غير لائق وانتهاك شروط السياسة.');
+    updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
     cleanupConnection();
     disableChat();
+    // إيقاف الكاميرا للمستخدم المحظور
     if (localStream) {
       localStream.getTracks().forEach(t => t.stop());
       localStream = null;
@@ -463,41 +485,51 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
+  // حدث جديد لفك الحظر
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
-    addMessage(message || 'تم فك الحظر عنك.', 'system');
+    addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('تم فك الحظر عنك. يمكنك الآن استخدام التطبيق مرة أخرى.');
+    // إعادة تشغيل البحث
     startSearch();
   });
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
-      updateStatusMessage('انقطع اتصال الشريك.');
+      updateStatusMessage('Partner disconnected.');
       disableChat();
       cleanupConnection();
-      startSearchLoop(); // لا إعادة محاولة، بل نبحث عن مستخدم جديد مباشرة
+      reconnectAttempts = 0;
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      setSafeTimer(startSearchLoop, 500);
     }
   });
   socket.on('partner-found', async data => {
-    if (isBanned) return;
+    if (isBanned) {
+      safeEmit('skip');
+      return;
+    }
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
-      console.error('بيانات شريك غير صالحة:', data);
-      updateStatusMessage('بيانات غير صالحة. جاري البحث مجدداً...');
-      startSearchLoop();
+      console.error('Invalid partner data received:', data);
+      updateStatusMessage('Invalid partner data. Retrying...');
+      setSafeTimer(startSearchLoop, 1000);
       return;
     }
     if (reportedIds.has(foundId)) {
-      updateStatusMessage('تم العثور على مستخدم تم الإبلاغ عنه مسبقاً — جاري التخطي...');
+      safeEmit('skip');
+      updateStatusMessage('Found reported user — skipping...');
       cleanupConnection();
-      startSearchLoop();
+      setSafeTimer(startSearchLoop, 200);
       return;
     }
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
-    updateStatusMessage('جاري الاتصال...');
+    updateStatusMessage('Connecting...');
     try {
       createPeerConnection();
+ 
       if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
@@ -505,10 +537,10 @@ window.addEventListener('DOMContentLoaded', () => {
         safeEmit('signal', { to: partnerId, data: offer });
       }
     } catch (e) {
-      console.error('فشل إنشاء الاتصال:', e);
-      updateStatusMessage('فشل إعداد الاتصال. جاري البحث عن مستخدم آخر...');
+      console.error('Failed to create peer connection or offer:', e);
+      updateStatusMessage('Connection setup failed. Retrying...');
       cleanupConnection();
-      startSearchLoop();
+      setSafeTimer(startSearchLoop, 1000);
     } finally {
       makingOffer = false;
     }
@@ -516,21 +548,22 @@ window.addEventListener('DOMContentLoaded', () => {
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
-      console.error('بيانات إشارة غير صالحة:', { from, data });
+      console.error('Invalid signal data:', { from, data });
       return;
     }
     if (partnerId && partnerId !== from) {
-      console.warn('إشارة من شريك غير متوقع:', from, 'متوقع:', partnerId);
+      console.warn('Signal from unexpected partner:', from, 'expected:', partnerId);
       return;
     }
     if (!peerConnection) {
       try {
         createPeerConnection();
       } catch (e) {
-        console.error('فشل إنشاء اتصال للإشارة:', e);
+        console.error('Failed to create peer connection for signal:', e);
         return;
       }
     }
+    // Buffer candidates that arrive before remote description is set
     if (data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
@@ -540,6 +573,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
+   
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -550,10 +584,8 @@ window.addEventListener('DOMContentLoaded', () => {
         await peerConnection.addIceCandidate(data.candidate);
       }
     } catch (e) {
-      console.error('خطأ في معالجة الإشارة:', e);
-      updateStatusMessage('فشل معالجة الإشارة. جاري البحث عن مستخدم آخر...');
-      cleanupConnection();
-      startSearchLoop();
+      console.error('Signal handling error:', e);
+      updateStatusMessage('Signal processing failed.');
     }
   });
   // ---------------------- WEBRTC ----------------------
@@ -566,15 +598,17 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
+      // Add local tracks
       if (localStream) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
+      // Create datachannel when initiator
       if (isInitiator) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
           setupKeepAliveChannel(keepAliveChannel);
         } catch (e) {
-          console.error('فشل إنشاء قناة البيانات:', e);
+          console.error('Failed to create data channel:', e);
           keepAliveChannel = null;
         }
       } else {
@@ -584,12 +618,18 @@ window.addEventListener('DOMContentLoaded', () => {
         };
       }
       peerConnection.ontrack = e => {
-        if (!e.streams || e.streams.length === 0) return;
+        if (!e.streams || e.streams.length === 0) {
+          console.error('No streams in ontrack event');
+          return;
+        }
+   
         remoteVideo.srcObject = e.streams[0];
         enableChat();
-        updateStatusMessage('متصل');
+        // تم حذف رسالة "Connected with a stranger!" هنا
+        updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
+        reconnectAttempts = 0;
         startStatsMonitor();
       };
       peerConnection.onicecandidate = e => {
@@ -599,45 +639,113 @@ window.addEventListener('DOMContentLoaded', () => {
       };
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
+   
         const s = peerConnection.connectionState;
         console.debug('connectionState:', s);
+   
         if (s === 'connected') {
-          updateStatusMessage('متصل');
+          updateStatusMessage('Connected');
+          reconnectAttempts = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
-            updateStatusMessage('انقطع الاتصال.');
+            updateStatusMessage('Connection lost.');
             disableChat();
-            cleanupConnection();
-            startSearchLoop(); // لا إعادة محاولة، بل نبحث عن مستخدم جديد
+            if (autoReconnect) {
+              cleanupConnection();
+              attemptRecovery();
+            }
           }
         }
       };
-      peerConnection.oniceconnectionstatechange = () => {
+      peerConnection.oniceconnectionstatechange = async () => {
         if (!peerConnection) return;
+   
         const s = peerConnection.iceConnectionState;
         console.debug('iceConnectionState:', s);
+   
         if (s === 'failed') {
-          // لا نحاول ICE restart، بل نتخطى مباشرة
-          cleanupConnection();
-          startSearchLoop();
+          await attemptIceRestartWithBackoff();
         }
       };
       peerConnection.onnegotiationneeded = async () => {
         if (!peerConnection || makingOffer || !partnerId) return;
+   
         try {
           makingOffer = true;
           const offer = await peerConnection.createOffer();
           await peerConnection.setLocalDescription(offer);
           safeEmit('signal', { to: partnerId, data: offer });
         } catch (e) {
-          console.error('خطأ في التفاوض:', e);
+          console.error('Negotiation error:', e);
         } finally {
           makingOffer = false;
         }
       };
     } catch (e) {
-      console.error('فشل إنشاء اتصال Peer:', e);
+      console.error('Failed to create peer connection:', e);
       throw e;
+    }
+  }
+  // Attempt recovery: try ICE-restart a few times, otherwise rematch
+  async function attemptRecovery() {
+    if (isBanned) return;
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
+      cleanupConnection();
+      setSafeTimer(startSearchLoop, 1000);
+      return;
+    }
+    reconnectAttempts++;
+    const delay = backoffDelay(reconnectAttempts);
+    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+    setSafeTimer(async () => {
+      try {
+        if (!peerConnection) {
+          createPeerConnection();
+          if (isInitiator && partnerId) {
+            makingOffer = true;
+            const offer = await peerConnection.createOffer({ iceRestart: true });
+            await peerConnection.setLocalDescription(offer);
+            safeEmit('signal', { to: partnerId, data: offer });
+          }
+        } else {
+          await attemptIceRestartWithBackoff();
+        }
+      } catch (e) {
+        console.error('Recovery attempt failed:', e);
+        attemptRecovery();
+      } finally {
+        makingOffer = false;
+      }
+    }, delay);
+  }
+  let lastIceRestartAt = 0;
+  const ICE_RESTART_MIN_INTERVAL = 5000;
+  async function attemptIceRestartWithBackoff() {
+    const now = Date.now();
+    if (now - lastIceRestartAt < ICE_RESTART_MIN_INTERVAL) return;
+    lastIceRestartAt = now;
+    try {
+      await performIceRestart();
+    } catch (e) {
+      console.error('ICE restart failed:', e);
+      if (autoReconnect) attemptRecovery();
+    }
+  }
+  async function performIceRestart() {
+    if (!peerConnection || !partnerId || peerConnection.signalingState !== 'stable') {
+      throw new Error('Cannot perform ICE restart: invalid state');
+    }
+    try {
+      makingOffer = true;
+      const offer = await peerConnection.createOffer({ iceRestart: true });
+      await peerConnection.setLocalDescription(offer);
+      safeEmit('signal', { to: partnerId, data: offer });
+    } catch (e) {
+      console.error('ICE restart error:', e);
+      throw e;
+    } finally {
+      makingOffer = false;
     }
   }
   // ---------------------- KEEPALIVE (datachannel) ----------------------
@@ -658,15 +766,15 @@ window.addEventListener('DOMContentLoaded', () => {
           lastPong = Date.now();
         }
       } catch (e) {
-        console.error('خطأ في تحليل رسالة KeepAlive:', e);
+        console.error('KeepAlive message parse error:', e);
       }
     };
     dc.onclose = () => {
-      console.debug('قناة keepAlive مغلقة');
+      console.debug('keepAlive channel closed');
       stopPingLoop();
     };
     dc.onerror = (err) => {
-      console.error('خطأ في قناة keepAlive:', err);
+      console.error('keepAlive channel error:', err);
     };
   }
   function startPingLoop() {
@@ -676,17 +784,18 @@ window.addEventListener('DOMContentLoaded', () => {
         stopPingLoop();
         return;
       }
+ 
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {
-        console.error('خطأ في إرسال ping:', e);
+        console.error('Ping send error:', e);
         stopPingLoop();
       }
+ 
       if (Date.now() - lastPong > PONG_TIMEOUT) {
-        console.warn('انتهت مهلة PONG -> تخطي الاتصال');
+        console.warn('PONG timeout -> triggering recovery');
         stopPingLoop();
-        cleanupConnection();
-        startSearchLoop();
+        if (autoReconnect) attemptRecovery();
       }
     }, PING_INTERVAL);
   }
@@ -736,7 +845,7 @@ window.addEventListener('DOMContentLoaded', () => {
           await setSenderMaxBitrate(BITRATE_HIGH);
         }
       } catch (e) {
-        console.debug('خطأ في مراقب الإحصائيات:', e);
+        console.debug('Stats monitor error:', e);
       }
     }, STATS_POLL_MS);
   }
@@ -770,8 +879,8 @@ window.addEventListener('DOMContentLoaded', () => {
       updateMicButton();
       return true;
     } catch (e) {
-      console.error('خطأ في تهيئة الوسائط:', e);
-      updateStatusMessage('تم رفض الوصول إلى الكاميرا/الميكروفون. يرجى التحقق من الأذونات.');
+      console.error('Media initialization error:', e);
+      updateStatusMessage('Camera/Mic access denied. Please check permissions.');
       localStream = null;
       updateMicButton();
       return false;
@@ -781,26 +890,28 @@ window.addEventListener('DOMContentLoaded', () => {
   async function initialize() {
     ensureNotifyEmpty();
     updateMicButton();
+    // Generate and send fingerprint for device ban system
     try {
       const fingerprint = await generateFingerprint();
       safeEmit('identify', { fingerprint });
     } catch (e) {
-      console.error('فشل إرسال البصمة:', e);
+      console.error('Failed to send fingerprint:', e);
     }
     startSearch();
   }
   initialize();
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
-    console.error('خطأ عام:', e.error);
-    updateStatusMessage('حدث خطأ غير متوقع. جاري إعادة التحميل...');
+    console.error('Global error:', e.error);
+    updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
   window.addEventListener('unhandledrejection', (e) => {
-    console.error('رفض وعد غير معالج:', e.reason);
-    updateStatusMessage('تم اكتشاف خطأ في الاتصال. جاري البحث عن مستخدم جديد...');
-    cleanupConnection();
-    startSearchLoop();
+    console.error('Unhandled promise rejection:', e.reason);
+    updateStatusMessage('Connection error detected. Recovering...');
+    if (autoReconnect && !partnerId && !isBanned) {
+      setSafeTimer(startSearchLoop, 1000);
+    }
   });
   window.onbeforeunload = () => {
     safeEmit('stop');
