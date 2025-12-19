@@ -22,7 +22,6 @@ window.addEventListener('DOMContentLoaded', () => {
   let partnerId = null;
   let isInitiator = false;
   let micEnabled = true;
-  let autoReconnect = true;
   // متغير جديد لتتبع حالة الحظر
   let isBanned = false;
   // Timer management
@@ -32,10 +31,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
-  // Reconnection/backoff state
-  let reconnectAttempts = 0;
-  const MAX_RECONNECT_ATTEMPTS = 6;
-  const BASE_BACKOFF_MS = 800;
   // Candidate buffering
   const bufferedRemoteCandidates = [];
   // Negotiation guard
@@ -53,57 +48,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-  // ---------------------- FINGERPRINT GENERATION ----------------------
-  async function generateFingerprint() {
-    try {
-      const components = [
-        navigator.userAgent,
-        navigator.language,
-        screen.colorDepth,
-        screen.width,
-        screen.height,
-        navigator.hardwareConcurrency || 0,
-        new Date().getTimezoneOffset(),
-        Intl.DateTimeFormat().resolvedOptions().timeZone || ''
-      ];
-      // Canvas fingerprint
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      ctx.textBaseline = 'top';
-      ctx.font = '14px Arial';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = '#f60';
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = '#069';
-      ctx.fillText('fingerprint', 2, 15);
-      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('fingerprint', 4, 17);
-      components.push(canvas.toDataURL());
-      // Audio fingerprint
-      const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
-      const oscillator = audioCtx.createOscillator();
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(10000, audioCtx.currentTime);
-      oscillator.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop();
-      components.push('audio-supported');
-      // Hash function
-      const hashCode = (str) => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          const char = str.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash;
-        }
-        return hash.toString(16);
-      };
-      return hashCode(components.join('||'));
-    } catch (e) {
-      console.error('Fingerprint generation failed:', e);
-      return 'default-fp-' + Math.random().toString(36).substr(2, 9);
-    }
-  }
+
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -125,20 +70,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
-  // ---------------------- SAFE EMIT ----------------------
-  function safeEmit(event, data) {
-    try {
-      if (socket.connected) {
-        socket.emit(event, data);
-        return true;
-      }
-      console.warn(`Socket not connected, cannot emit ${event}`);
-      return false;
-    } catch (e) {
-      console.error(`Error emitting ${event}:`, e);
-      return false;
-    }
-  }
+
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -152,10 +84,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-  // Status message handler - replaces old messages instead of adding new ones
+  
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
- 
     if (statusMsg) {
       statusMsg.textContent = msg;
     } else {
@@ -163,7 +94,6 @@ window.addEventListener('DOMContentLoaded', () => {
       statusMsg.id = 'statusMessage';
       statusMsg.className = 'msg status';
       statusMsg.textContent = msg;
-   
       const typing = document.querySelector('.msg.system[style*="italic"]');
       if (typing && typing.parentNode === chatMessages) {
         chatMessages.insertBefore(statusMsg, typing);
@@ -171,9 +101,9 @@ window.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(statusMsg);
       }
     }
- 
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -182,6 +112,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
+  
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -190,14 +121,11 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
-  // Exponential backoff (ms)
-  function backoffDelay(attempt) {
-    return Math.min(30000, Math.pow(2, attempt) * BASE_BACKOFF_MS + Math.floor(Math.random() * 500));
-  }
-  // Store remote candidates until pc created
-  function bufferRemoteCandidate(candidateObj) {
+  
+  function storeRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
+  
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -206,7 +134,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
   }
-  // Set max bitrate for outbound video sender
+  
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -222,14 +150,11 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
+
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
- 
-    // Clear all timers
     clearAllTimers();
- 
-    // Close peer connection
     if (peerConnection) {
       try {
         if (keepAliveChannel) {
@@ -242,21 +167,27 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       peerConnection = null;
     }
- 
-    // Clear remote video
-    if (remoteVideo) {
-      remoteVideo.srcObject = null;
-    }
- 
-    // Clear buffers
+    if (remoteVideo) remoteVideo.srcObject = null;
     bufferedRemoteCandidates.length = 0;
- 
-    // Reset state
     partnerId = null;
     isInitiator = false;
     makingOffer = false;
     ignoreOffer = false;
   }
+
+  // ---------------------- NEW: SKIP AND SEARCH LOGIC ----------------------
+  function skipCurrentAndSearch() {
+    if (isBanned) return;
+    console.log('Skipping current user and searching for new one...');
+    safeEmit('skip');
+    updateStatusMessage('Searching for another user...');
+    disableChat();
+    cleanupConnection();
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
+    startSearchLoop();
+  }
+
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -266,6 +197,7 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
+
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -276,58 +208,68 @@ window.addEventListener('DOMContentLoaded', () => {
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
+  
   function sendTyping() {
     if (!partnerId || isBanned) return;
     if (!typing) {
       typing = true;
-      safeEmit('typing', { to: partnerId });
+      socket.emit('typing', { to: partnerId });
     }
     clearSafeTimer(typingTimer);
     typingTimer = setSafeTimer(() => {
       typing = false;
-      safeEmit('stop-typing', { to: partnerId });
+      socket.emit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
+  
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
+
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
     const msg = chatInput.value.trim();
     if (!msg || !partnerId) return;
     addMessage(msg, 'you');
-    safeEmit('chat-message', { to: partnerId, message: msg });
+    socket.emit('chat-message', { to: partnerId, message: msg });
     chatInput.value = '';
     typing = false;
-    safeEmit('stop-typing', { to: partnerId });
+    socket.emit('stop-typing', { to: partnerId });
   }
+  
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
+
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
     micBtn.disabled = !localStream || isBanned;
     micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
+  
   micBtn.onclick = () => {
     if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
+
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
+  
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
+  
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
+
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -363,65 +305,62 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   // ---------------------- REPORT BUTTON ----------------------
-  if (reportBtn) {
-    reportBtn.style.display = 'flex';
-    reportBtn.onclick = async () => {
-      if (!partnerId) {
-        updateStatusMessage("No user to report.");
-        return;
+  reportBtn.onclick = async () => {
+    if (!partnerId) {
+      updateStatusMessage("No user to report.");
+      return;
+    }
+    const prev = reportCounts.get(partnerId) || 0;
+    const now = prev + 1;
+    reportCounts.set(partnerId, now);
+    reportedIds.add(partnerId);
+
+    socket.emit('report', { partnerId });
+    
+    // Skip current user and search immediately
+    skipCurrentAndSearch();
+    
+    if (now === 1) {
+      try {
+        addMessage("Capturing screenshot for admin review...", "system");
+        const image = await captureRemoteVideoFrame();
+        socket.emit('admin-screenshot', { image, partnerId });
+        addMessage("Screenshot sent to admin.", "system");
+      } catch (err) {
+        console.error('Screenshot capture failed', err);
+        addMessage("Failed to capture screenshot.", "system");
       }
-      const prev = reportCounts.get(partnerId) || 0;
-      const now = prev + 1;
-      reportCounts.set(partnerId, now);
-      reportedIds.add(partnerId);
-   
-      safeEmit("report", { partnerId });
-      safeEmit("skip");
-      if (now === 1) {
-        try {
-          addMessage("Capturing screenshot for admin review...", "system");
-          const image = await captureRemoteVideoFrame();
-          safeEmit("admin-screenshot", { image, partnerId });
-          addMessage("Screenshot sent to admin.", "system");
-        } catch (err) {
-          console.error('Screenshot capture failed', err);
-          addMessage("Failed to capture screenshot (no remote frame available).", "system");
-        }
-      }
-      cleanupConnection();
-      disableChat();
-      updateStatusMessage('You reported the user — skipping...');
-      clearSafeTimer(searchTimer);
-      clearSafeTimer(pauseTimer);
-      searchTimer = setSafeTimer(startSearchLoop, 300);
-    };
-  }
+    }
+  };
+
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
     sendBtn.disabled = isBanned;
   }
+  
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
+
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
-      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
+      updateStatusMessage('لقد تم حظرك. يرجى الاتصال بالإدارة للحصول على المساعدة.');
       showRemoteSpinnerOnly(false);
       return;
     }
     if (partnerId) return;
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
-    safeEmit('find-partner');
- 
+    socket.emit('find-partner');
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
-        safeEmit('stop');
+        socket.emit('stop');
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
         clearSafeTimer(pauseTimer);
@@ -429,9 +368,10 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, 3500);
   }
+  
   async function startSearch() {
     if (isBanned) {
-      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
+      updateStatusMessage('لقد تم حظرك. يرجى الاتصال بالإدارة للحصول على المساعدة.');
       showRemoteSpinnerOnly(false);
       return;
     }
@@ -440,7 +380,6 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
- 
     cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
@@ -448,46 +387,46 @@ window.addEventListener('DOMContentLoaded', () => {
     skipBtn.disabled = false;
     startSearchLoop();
   }
+  
   skipBtn.onclick = () => {
     if (isBanned) return;
-    safeEmit('skip');
-    updateStatusMessage('You skipped.');
-    disableChat();
-    cleanupConnection();
-    clearSafeTimer(searchTimer);
-    clearSafeTimer(pauseTimer);
-    startSearchLoop();
+    skipCurrentAndSearch();
   };
+
   // ---------------------- SOCKET EVENTS ----------------------
-  socket.on('waiting', msg => { 
-    if (!isBanned) updateStatusMessage(msg); 
+  socket.on('waiting', msg => {
+    if (!isBanned) updateStatusMessage(msg);
   });
-  socket.on('chat-message', ({ message }) => { 
-    if (!isBanned) addMessage(message, 'them'); 
+  
+  socket.on('chat-message', ({ message }) => {
+    if (!isBanned) addMessage(message, 'them');
   });
+  
   socket.on('typing', () => {
     if (!isBanned) {
       typingIndicator.style.display = 'block';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
-  socket.on('stop-typing', () => { 
-    if (!isBanned) typingIndicator.style.display = 'none'; 
+  
+  socket.on('stop-typing', () => {
+    if (!isBanned) typingIndicator.style.display = 'none';
   });
+  
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
+  
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
+    updateStatusMessage('لقد تم حظرك. يرجى الاتصال بالإدارة للحصول على المساعدة.');
     cleanupConnection();
     disableChat();
-    // إيقاف الكاميرا للمستخدم المحظور
     if (localStream) {
       localStream.getTracks().forEach(t => t.stop());
       localStream = null;
@@ -495,28 +434,26 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
-  // حدث جديد لفك الحظر
+  
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
     addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('تم فك الحظر عنك. يمكنك الآن استخدام التطبيق مرة أخرى.');
-    // إعادة تشغيل البحث
     startSearch();
   });
+  
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
       updateStatusMessage('Partner disconnected.');
       disableChat();
       cleanupConnection();
-      reconnectAttempts = 0;
-      clearSafeTimer(searchTimer);
-      clearSafeTimer(pauseTimer);
       setSafeTimer(startSearchLoop, 500);
     }
   });
+  
   socket.on('partner-found', async data => {
     if (isBanned) {
-      safeEmit('skip');
+      socket.emit('skip');
       return;
     }
     const foundId = data?.id || data?.partnerId;
@@ -527,36 +464,33 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (reportedIds.has(foundId)) {
-      safeEmit('skip');
+      socket.emit('skip');
       updateStatusMessage('Found reported user — skipping...');
       cleanupConnection();
       setSafeTimer(startSearchLoop, 200);
       return;
     }
- 
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
- 
     try {
       createPeerConnection();
-   
       if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        safeEmit('signal', { to: partnerId, data: offer });
+        socket.emit('signal', { to: partnerId, data: offer });
       }
     } catch (e) {
       console.error('Failed to create peer connection or offer:', e);
-      updateStatusMessage('Connection setup failed. Retrying...');
-      cleanupConnection();
-      setSafeTimer(startSearchLoop, 1000);
+      updateStatusMessage('Connection setup failed. Searching for new user...');
+      skipCurrentAndSearch();
     } finally {
       makingOffer = false;
     }
   });
+  
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
@@ -575,9 +509,8 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
     }
-    // Buffer candidates that arrive before remote description is set
     if (data.candidate && !peerConnection.remoteDescription) {
-      bufferRemoteCandidate(data.candidate);
+      storeRemoteCandidate(data.candidate);
       return;
     }
     try {
@@ -585,11 +518,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
-     
+        
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        safeEmit('signal', { to: from, data: answer });
+        socket.emit('signal', { to: from, data: answer });
       } else if (data.type === 'answer') {
         await peerConnection.setRemoteDescription(data);
       } else if (data.candidate) {
@@ -597,9 +530,11 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       console.error('Signal handling error:', e);
-      updateStatusMessage('Signal processing failed.');
+      updateStatusMessage('Signal processing failed - searching for new user...');
+      skipCurrentAndSearch();
     }
   });
+
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
@@ -610,11 +545,11 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
-      // Add local tracks
+      
       if (localStream) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
-      // Create datachannel when initiator
+      
       if (isInitiator) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -629,64 +564,61 @@ window.addEventListener('DOMContentLoaded', () => {
           setupKeepAliveChannel(keepAliveChannel);
         };
       }
+      
       peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) {
           console.error('No streams in ontrack event');
           return;
         }
-     
+        
         remoteVideo.srcObject = e.streams[0];
         enableChat();
-        // تم حذف رسالة "Connected with a stranger!" هنا
         updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
-        reconnectAttempts = 0;
         startStatsMonitor();
       };
+      
       peerConnection.onicecandidate = e => {
         if (e.candidate && partnerId) {
-          safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
+          socket.emit('signal', { to: partnerId, data: { candidate: e.candidate } });
         }
       };
+      
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
-     
         const s = peerConnection.connectionState;
         console.debug('connectionState:', s);
-     
+        
         if (s === 'connected') {
           updateStatusMessage('Connected');
-          reconnectAttempts = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
-            updateStatusMessage('Connection lost.');
-            disableChat();
-            if (autoReconnect) {
-              cleanupConnection();
-              attemptRecovery();
-            }
+            updateStatusMessage('Connection lost - searching for new user...');
+            skipCurrentAndSearch();
           }
         }
       };
-      peerConnection.oniceconnectionstatechange = async () => {
+      
+      peerConnection.oniceconnectionstatechange = () => {
         if (!peerConnection) return;
-     
         const s = peerConnection.iceConnectionState;
         console.debug('iceConnectionState:', s);
-     
+        
         if (s === 'failed') {
-          await attemptIceRestartWithBackoff();
+          updateStatusMessage('Connection failed - searching for new user...');
+          skipCurrentAndSearch();
         }
       };
+      
       peerConnection.onnegotiationneeded = async () => {
         if (!peerConnection || makingOffer || !partnerId) return;
-     
+        
         try {
           makingOffer = true;
           const offer = await peerConnection.createOffer();
           await peerConnection.setLocalDescription(offer);
-          safeEmit('signal', { to: partnerId, data: offer });
+          socket.emit('signal', { to: partnerId, data: offer });
         } catch (e) {
           console.error('Negotiation error:', e);
         } finally {
@@ -698,77 +630,12 @@ window.addEventListener('DOMContentLoaded', () => {
       throw e;
     }
   }
-  // Attempt recovery: try ICE-restart a few times, otherwise rematch
-  async function attemptRecovery() {
-    if (isBanned) return;
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      updateStatusMessage('Max reconnection attempts reached. Finding new partner...');
-      cleanupConnection();
-      setSafeTimer(startSearchLoop, 1000);
-      return;
-    }
- 
-    reconnectAttempts++;
-    const delay = backoffDelay(reconnectAttempts);
-    updateStatusMessage(`Reconnecting... attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
- 
-    setSafeTimer(async () => {
-      try {
-        if (!peerConnection) {
-          createPeerConnection();
-          if (isInitiator && partnerId) {
-            makingOffer = true;
-            const offer = await peerConnection.createOffer({ iceRestart: true });
-            await peerConnection.setLocalDescription(offer);
-            safeEmit('signal', { to: partnerId, data: offer });
-          }
-        } else {
-          await attemptIceRestartWithBackoff();
-        }
-      } catch (e) {
-        console.error('Recovery attempt failed:', e);
-        attemptRecovery();
-      } finally {
-        makingOffer = false;
-      }
-    }, delay);
-  }
-  let lastIceRestartAt = 0;
-  const ICE_RESTART_MIN_INTERVAL = 5000;
-  async function attemptIceRestartWithBackoff() {
-    const now = Date.now();
-    if (now - lastIceRestartAt < ICE_RESTART_MIN_INTERVAL) return;
- 
-    lastIceRestartAt = now;
-    try {
-      await performIceRestart();
-    } catch (e) {
-      console.error('ICE restart failed:', e);
-      if (autoReconnect) attemptRecovery();
-    }
-  }
-  async function performIceRestart() {
-    if (!peerConnection || !partnerId || peerConnection.signalingState !== 'stable') {
-      throw new Error('Cannot perform ICE restart: invalid state');
-    }
- 
-    try {
-      makingOffer = true;
-      const offer = await peerConnection.createOffer({ iceRestart: true });
-      await peerConnection.setLocalDescription(offer);
-      safeEmit('signal', { to: partnerId, data: offer });
-    } catch (e) {
-      console.error('ICE restart error:', e);
-      throw e;
-    } finally {
-      makingOffer = false;
-    }
-  }
-  // ---------------------- KEEPALIVE (datachannel) ----------------------
+
+  // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
+  
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
- 
     dc.onopen = () => {
       lastPong = Date.now();
       startPingLoop();
@@ -794,6 +661,7 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('keepAlive channel error:', err);
     };
   }
+  
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
@@ -801,28 +669,30 @@ window.addEventListener('DOMContentLoaded', () => {
         stopPingLoop();
         return;
       }
-   
+      
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {
         console.error('Ping send error:', e);
         stopPingLoop();
       }
-   
+      
       if (Date.now() - lastPong > PONG_TIMEOUT) {
-        console.warn('PONG timeout -> triggering recovery');
+        console.warn('PONG timeout -> searching for new user');
         stopPingLoop();
-        if (autoReconnect) attemptRecovery();
+        skipCurrentAndSearch();
       }
     }, PING_INTERVAL);
   }
+  
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
   }
-  // ---------------------- STATS MONITOR (adaptive bitrate) ----------------------
+
+  // ---------------------- STATS MONITOR ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
     statsInterval = setInterval(async () => {
@@ -866,12 +736,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, STATS_POLL_MS);
   }
+  
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
       statsInterval = null;
     }
   }
+
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -880,6 +752,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     location.href = 'index.html';
   };
+
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (isBanned) {
@@ -887,7 +760,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
     if (localStream) return true;
- 
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -904,37 +776,33 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
+
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
     updateMicButton();
- 
-    // Generate and send fingerprint for device ban system
-    try {
-      const fingerprint = await generateFingerprint();
-      safeEmit('identify', { fingerprint });
-    } catch (e) {
-      console.error('Failed to send fingerprint:', e);
-    }
- 
     startSearch();
   }
+  
   initialize();
+
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
+  
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
-    updateStatusMessage('Connection error detected. Recovering...');
-    if (autoReconnect && !partnerId && !isBanned) {
-      setSafeTimer(startSearchLoop, 1000);
+    updateStatusMessage('Connection error - searching for new user...');
+    if (!isBanned) {
+      setSafeTimer(skipCurrentAndSearch, 500);
     }
   });
+  
   window.onbeforeunload = () => {
-    safeEmit('stop');
+    socket.emit('stop');
     cleanupConnection();
     if (localStream) {
       localStream.getTracks().forEach(t => t.stop());
