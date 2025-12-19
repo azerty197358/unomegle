@@ -1,17 +1,3 @@
-اجعل بدل كلمه banned اجعل جماه لقدتم حظرك لمده 24 ساعه مع عرض توقيت الذي حظر فيه واجعل هذه الجمله تظهر لشخص المحظور حتى لو قام بعمل تحديث للصفحه او دخل وخرج مره اخرى الا اذا تم فك الحظر عنه من قبل الدمن فستزال الجمله واجعل الشخص المحظور لاتفتح كاميرته ولا يتم البحث له عن شريك عدل كل هذا عدل لي هذا الملف فقط واعطني اياه جاهزا });
-  socket.on('stop-typing', () => { typingIndicator.style.display = 'none'; });
-  socket.on('adminMessage', msg => {
-    if (notifyDot) notifyDot.style.display = 'block';
-    notifyBell.classList.add('shake');
-    pushAdminNotification('📢 ' + msg);
-    addMessage('📢 Admin: ' + msg, 'system');
-  });
-  socket.on('banned', ({ message }) => {
-    addMessage(message || 'You are banned.', 'system');
-    showRemoteSpinnerOnly(true);
-    updateStatusMessage('Blocked.');
-    cleanupConnection();
-  });// WebRTC client with enhanced connection management, error handling, and status-only updates
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
