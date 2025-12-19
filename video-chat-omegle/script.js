@@ -409,8 +409,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
-      updateStatusMessage('لقد تم حظرك. يرجى الاتصال بالإدارة للحصول على المساعدة.');
-      showRemoteSpinnerOnly(true);
+      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
+      showRemoteSpinnerOnly(false);
       return;
     }
     if (partnerId) return;
