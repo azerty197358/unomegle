@@ -431,8 +431,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   async function startSearch() {
     if (isBanned) {
-      updateStatusMessage('لقد تم حظرك. يرجى الاتصال بالإدارة للحصول على المساعدة.');
-      showRemoteSpinnerOnly(true);
+      updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
+      showRemoteSpinnerOnly(false);
       return;
     }
     const mediaReady = await initMedia();
@@ -484,7 +484,7 @@ window.addEventListener('DOMContentLoaded', () => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
     showRemoteSpinnerOnly(true);
-    updateStatusMessage('لقد تم حظرك لمدة 24 ساعة بسبب السلوك غير اللائق وانتهاك شروط الخدمة.');
+    updateStatusMessage('You have been banned for 24 hours for engaging in inappropriate behavior and violating our policy terms.');
     cleanupConnection();
     disableChat();
     // إيقاف الكاميرا للمستخدم المحظور
