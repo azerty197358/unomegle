@@ -18,7 +18,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
 
-  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب
+  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب كل 3 pause متتالية
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
   adVideo.autoplay = true;
@@ -33,8 +33,8 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
-  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك (محلي أو رابط خارجي)
-  adVideo.src = 'ads/ad1.mp4'; // مثال: يمكنك وضع عدة فيديوهات واختيار عشوائي لاحقًا
+  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك
+  adVideo.src = 'ads/ad1.mp4'; // مثال
   remoteVideo.parentNode.appendChild(adVideo);
 
   // ---------------------- GLOBAL STATE ----------------------
@@ -45,11 +45,12 @@ window.addEventListener('DOMContentLoaded', () => {
   let micEnabled = true;
   let isBanned = false;
 
-  // عداد عدد الـ Skip المتتالية لعرض الإعلان كل 3 مرات
-  let consecutiveSkips = 0;
+  // عداد عدد الـ Pause المتتالية (أي عدد المرات التي لم يتم فيها العثور على شريك خلال 3.5 ثواني)
+  let consecutivePauses = 0;
 
   const activeTimers = new Set();
   let searchTimer = null;
+  let pauseTimer = null; // أُعيد إضافة pauseTimer كما كان سابقًا
 
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
@@ -241,8 +242,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---------------------- دالة عرض الإعلان ثم التخطي ----------------------
-  function playAdAndSkip() {
+  // ---------------------- دالة عرض الإعلان ثم استئناف البحث ----------------------
+  function playAdAndResumeSearch() {
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
     adVideo.currentTime = 0;
@@ -251,15 +252,12 @@ window.addEventListener('DOMContentLoaded', () => {
     adVideo.onended = () => {
       adVideo.style.display = 'none';
       remoteVideo.style.display = 'block';
-      safeEmit('skip');
-      cleanupConnection();
-      disableChat();
-      updateStatusMessage('Searching for new partner...');
-      consecutiveSkips = 0;
-      startSearchLoop();
+      consecutivePauses = 0; // تصفير العداد بعد عرض الإعلان
+      updateStatusMessage('Searching...');
+      startSearchLoop(); // استئناف البحث فورًا بعد الإعلان
     };
 
-    // في حالة عدم وجود onended (بعض المتصفحات)
+    // احتياطي للمتصفحات التي لا تدعم onended
     adVideo.ontimeupdate = () => {
       if (adVideo.duration && adVideo.currentTime >= adVideo.duration - 0.2) {
         adVideo.onended();
@@ -444,12 +442,10 @@ window.addEventListener('DOMContentLoaded', () => {
       cleanupConnection();
       disableChat();
       updateStatusMessage('You reported the user — skipping...');
-      consecutiveSkips++;
-      if (consecutiveSkips >= 3) {
-        playAdAndSkip();
-      } else {
-        startSearchLoop();
-      }
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      consecutivePauses = 0;
+      startSearchLoop();
     };
   }
 
@@ -464,7 +460,7 @@ window.addEventListener('DOMContentLoaded', () => {
     sendBtn.disabled = true;
   }
 
-  // ---------------------- MATCHMAKING ----------------------
+  // ---------------------- MATCHMAKING (مع إعادة نظام الـ Pause الأصلي) ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -480,9 +476,25 @@ window.addEventListener('DOMContentLoaded', () => {
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
-        safeEmit('find-partner');
+        safeEmit('stop');
+        showRemoteSpinnerOnly(false);
+        updateStatusMessage('Pausing...');
+
+        consecutivePauses++;
+
+        // كل 3 pause متتالية → عرض الفيديو الإعلاني
+        if (consecutivePauses >= 3) {
+          playAdAndResumeSearch();
+          return;
+        }
+
+        clearSafeTimer(pauseTimer);
+        pauseTimer = setSafeTimer(() => {
+          consecutivePauses = 0; // تصفير العداد عند استئناف البحث بعد الـ pause العادي
+          startSearchLoop();
+        }, 1800);
       }
-    }, 2000);
+    }, 3500);
   }
 
   async function startSearch() {
@@ -501,25 +513,21 @@ window.addEventListener('DOMContentLoaded', () => {
     chatMessages.appendChild(typingIndicator);
     showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
-    consecutiveSkips = 0;
+    consecutivePauses = 0;
     startSearchLoop();
   }
 
   skipBtn.onclick = () => {
     if (isBanned) return;
 
-    consecutiveSkips++;
     safeEmit('skip');
     updateStatusMessage('You skipped.');
     disableChat();
     cleanupConnection();
-
-    if (consecutiveSkips >= 3) {
-      playAdAndSkip();
-    } else {
-      updateStatusMessage('Searching...');
-      startSearchLoop();
-    }
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
+    consecutivePauses = 0;
+    startSearchLoop();
   };
 
   // ---------------------- SOCKET EVENTS ----------------------
@@ -573,16 +581,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
-      consecutiveSkips++;
       updateStatusMessage('Partner disconnected.');
       disableChat();
       cleanupConnection();
-
-      if (consecutiveSkips >= 3) {
-        playAdAndSkip();
-      } else {
-        startSearchLoop();
-      }
+      clearSafeTimer(searchTimer);
+      clearSafeTimer(pauseTimer);
+      consecutivePauses = 0;
+      setSafeTimer(startSearchLoop, 500);
     }
   });
 
@@ -609,6 +614,7 @@ window.addEventListener('DOMContentLoaded', () => {
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
+    consecutivePauses = 0; // تصفير العداد عند العثور على شريك
     try {
       createPeerConnection();
 
@@ -711,7 +717,7 @@ window.addEventListener('DOMContentLoaded', () => {
         updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
-        consecutiveSkips = 0;
+        consecutivePauses = 0;
         startStatsMonitor();
       };
 
@@ -728,24 +734,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
         if (s === 'connected') {
           updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-          consecutiveSkips = 0;
+          consecutivePauses = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
             updateStatusMessage('Connection lost.');
             disableChat();
             cleanupConnection();
-            consecutiveSkips++;
-            if (consecutiveSkips >= 3) {
-              playAdAndSkip();
-            } else {
-              startSearchLoop();
-            }
+            clearSafeTimer(searchTimer);
+            clearSafeTimer(pauseTimer);
+            consecutivePauses = 0;
+            setSafeTimer(startSearchLoop, 500);
           }
         }
-      };
-
-      peerConnection.oniceconnectionstatechange = () => {
-        // لم نعد نستخدم ICE restart هنا لأننا حذفنا نظام الـ recovery
       };
 
       peerConnection.onnegotiationneeded = async () => {
@@ -815,12 +815,10 @@ window.addEventListener('DOMContentLoaded', () => {
         console.warn('PONG timeout -> treating as disconnect');
         stopPingLoop();
         cleanupConnection();
-        consecutiveSkips++;
-        if (consecutiveSkips >= 3) {
-          playAdAndSkip();
-        } else {
-          startSearchLoop();
-        }
+        clearSafeTimer(searchTimer);
+        clearSafeTimer(pauseTimer);
+        consecutivePauses = 0;
+        setSafeTimer(startSearchLoop, 500);
       }
     }, PING_INTERVAL);
   }
