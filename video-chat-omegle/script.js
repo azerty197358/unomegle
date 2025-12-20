@@ -1,4 +1,4 @@
-window.addEventListener('DOMContentLoaded', () => {
+ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
@@ -16,19 +16,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
-
-  // ---------------------- نظام الإعلانات المتعددة ----------------------
-  // قائمة روابط فيديوهات الإعلانات (أضف روابطك هنا)
-  const adVideos = [
-    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
-    'https://example.com/ads/ad2.mp4', // استبدل بروابط إعلانات حقيقية
-    'https://example.com/ads/ad3.mp4',
-    'https://example.com/ads/ad4.mp4',
-    'https://example.com/ads/ad5.mp4'
-    // أضف المزيد إذا أردت
-  ];
-
-  // عنصر الفيديو الإعلاني
+  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب بعد 3 محاولات بحث فاشلة
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
   adVideo.autoplay = true;
@@ -43,55 +31,9 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
+  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
+adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4';
   remoteVideo.parentNode.appendChild(adVideo);
-
-  // متغيرات إدارة الإعلانات
-  let lastAdIndex = -1;          // آخر إعلان تم عرضه
-  let lastAdTime = 0;            // وقت آخر عرض إعلان (timestamp)
-
-  // دالة اختيار الإعلان التالي مع تطبيق قاعدة 15 دقيقة
-  function getNextAdSrc() {
-    const now = Date.now();
-    const fifteenMinutes = 15 * 60 * 1000; // 15 دقيقة بالملي ثانية
-
-    // إذا لم تمر 15 دقيقة منذ آخر عرض إعلان → نعيد نفس الإعلان السابق
-    if (lastAdIndex !== -1 && now - lastAdTime < fifteenMinutes) {
-      return adVideos[lastAdIndex];
-    }
-
-    // مرّت 15 دقيقة أو أكثر → نختار إعلانًا جديدًا (مختلفًا عن السابق إن أمكن)
-    let newIndex;
-    do {
-      newIndex = Math.floor(Math.random() * adVideos.length);
-    } while (adVideos.length > 1 && newIndex === lastAdIndex);
-
-    lastAdIndex = newIndex;
-    lastAdTime = now;
-    return adVideos[newIndex];
-  }
-
-  // دالة عرض الإعلان لمدة 5 ثواني
-  function playAdVideo() {
-    const adSrc = getNextAdSrc();
-    adVideo.src = adSrc;
-    adVideo.style.display = 'block';
-    remoteVideo.style.display = 'none';
-    adVideo.currentTime = 0;
-    adVideo.play().catch(() => {});
-
-    setTimeout(() => {
-      adVideo.style.display = 'none';
-      remoteVideo.style.display = 'block';
-      adVideo.pause();
-
-      // إعادة تصفير العدادات واستئناف البحث
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000;
-      updateStatusMessage('Searching...');
-      startSearchLoop();
-    }, 5000);
-  }
-
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
@@ -99,10 +41,12 @@ window.addEventListener('DOMContentLoaded', () => {
   let isInitiator = false;
   let micEnabled = true;
   let isBanned = false;
+  // عداد عدد المحاولات البحث الفاشلة المتتالية (كل محاولة = 3.5 ثواني بدون شريك)
   let consecutiveSearchFails = 0;
   const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
+  // مدة الـ pause العادية (بالملي ثانية)
   let normalPauseDuration = 3000; // 3 ثواني افتراضياً
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
@@ -119,7 +63,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -168,7 +111,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
-
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -190,7 +132,6 @@ window.addEventListener('DOMContentLoaded', () => {
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
-
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
@@ -205,7 +146,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
-
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -279,7 +219,24 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
-
+  // ---------------------- دالة عرض الإعلان لمدة 5 ثواني ----------------------
+  function playAdVideo() {
+    adVideo.style.display = 'block';
+    remoteVideo.style.display = 'none';
+    adVideo.currentTime = 0;
+    adVideo.play().catch(() => {});
+    // إخفاء الإعلان بعد 5 ثواني بالضبط (بغض النظر عن طول الفيديو)
+    setTimeout(() => {
+      adVideo.style.display = 'none';
+      remoteVideo.style.display = 'block';
+      adVideo.pause();
+      // تصفير العداد واستئناف البحث العادي
+      consecutiveSearchFails = 0;
+      normalPauseDuration = 3000; // إعادة الـ pause إلى 3 ثواني
+      updateStatusMessage('Searching...');
+      startSearchLoop();
+    }, 5000);
+  }
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
@@ -305,7 +262,6 @@ window.addEventListener('DOMContentLoaded', () => {
     makingOffer = false;
     ignoreOffer = false;
   }
-
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -315,7 +271,6 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
-
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -341,7 +296,6 @@ window.addEventListener('DOMContentLoaded', () => {
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
-
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
@@ -355,7 +309,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
-
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
@@ -368,7 +321,6 @@ window.addEventListener('DOMContentLoaded', () => {
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
-
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
   function showRemoteSpinnerOnly(show) {
@@ -381,7 +333,6 @@ window.addEventListener('DOMContentLoaded', () => {
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -417,7 +368,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
@@ -453,7 +403,6 @@ window.addEventListener('DOMContentLoaded', () => {
       startSearchLoop();
     };
   }
-
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
@@ -463,8 +412,7 @@ window.addEventListener('DOMContentLoaded', () => {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
-
-  // ---------------------- MATCHMAKING ----------------------
+  // ---------------------- MATCHMAKING (مع التعديل المطلوب) ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -482,20 +430,24 @@ window.addEventListener('DOMContentLoaded', () => {
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
         consecutiveSearchFails++;
+        // بعد 3 محاولات بحث فاشلة متتالية → عرض الفيديو الإعلاني لمدة 5 ثواني
         if (consecutiveSearchFails >= 3) {
+          // تمديد الـ pause مؤقتاً إلى 5 ثواني (لكن العمل الفعلي يتم عبر setTimeout داخل playAdVideo)
           normalPauseDuration = 5000;
           playAdVideo();
           return;
         }
+        // pause عادي
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
+          // لا نصفر العداد هنا، لأننا نريد حساب المحاولات المتتالية
+          // لكن نعيد الـ pause إلى 3 ثواني إذا كان معدلاً سابقاً (احتياطي)
           if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
           startSearchLoop();
         }, normalPauseDuration);
       }
     }, 3500);
   }
-
   async function startSearch() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -516,7 +468,6 @@ window.addEventListener('DOMContentLoaded', () => {
     normalPauseDuration = 3000;
     startSearchLoop();
   }
-
   skipBtn.onclick = () => {
     if (isBanned) return;
     safeEmit('skip');
@@ -529,7 +480,6 @@ window.addEventListener('DOMContentLoaded', () => {
     normalPauseDuration = 3000;
     startSearchLoop();
   };
-
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
@@ -667,7 +617,6 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Signal processing failed.');
     }
   });
-
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
@@ -752,7 +701,6 @@ window.addEventListener('DOMContentLoaded', () => {
       throw e;
     }
   }
-
   // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
   function setupKeepAliveChannel(dc) {
@@ -813,7 +761,6 @@ window.addEventListener('DOMContentLoaded', () => {
       pingTimer = null;
     }
   }
-
   // ---------------------- STATS MONITOR ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
@@ -864,7 +811,6 @@ window.addEventListener('DOMContentLoaded', () => {
       statsInterval = null;
     }
   }
-
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -873,7 +819,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     location.href = 'index.html';
   };
-
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (isBanned) {
@@ -897,7 +842,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
-
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
@@ -911,7 +855,6 @@ window.addEventListener('DOMContentLoaded', () => {
     startSearch();
   }
   initialize();
-
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
