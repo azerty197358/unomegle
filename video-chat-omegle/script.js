@@ -34,8 +34,8 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
   // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك
-  adVideo.src = 'ads/ad1.mp4'; // مثال
-  remoteVideo.parentNode.appendChild(adVideo);
+adVideo.src = 'https://cdn-cf-east.streamable.com/video/mp4/0t3exb.mp4';
+remoteVideo.parentNode.appendChild(adVideo);
 
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
