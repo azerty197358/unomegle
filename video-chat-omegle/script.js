@@ -18,7 +18,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
 
-  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب كل 3 pause متتالية
+  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب بعد 3 محاولات بحث فاشلة
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
   adVideo.autoplay = true;
@@ -33,9 +33,11 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
-  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك
-adVideo.src = 'https://cdn-cf-east.streamable.com/video/mp4/0t3exb.mp4';
-remoteVideo.parentNode.appendChild(adVideo);
+
+  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
+  adVideo.src = 'https://cdn-cf-east.streamable.com/video/mp4/0t3exb.mp4';
+
+  remoteVideo.parentNode.appendChild(adVideo);
 
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
@@ -45,29 +47,28 @@ remoteVideo.parentNode.appendChild(adVideo);
   let micEnabled = true;
   let isBanned = false;
 
-  // عداد عدد الـ Pause المتتالية (أي عدد المرات التي لم يتم فيها العثور على شريك خلال 3.5 ثواني)
-  let consecutivePauses = 0;
+  // عداد عدد المحاولات البحث الفاشلة المتتالية (كل محاولة = 3.5 ثواني بدون شريك)
+  let consecutiveSearchFails = 0;
 
   const activeTimers = new Set();
   let searchTimer = null;
-  let pauseTimer = null; // أُعيد إضافة pauseTimer كما كان سابقًا
+  let pauseTimer = null;
+
+  // مدة الـ pause العادية (بالملي ثانية)
+  let normalPauseDuration = 3000; // 3 ثواني افتراضياً
 
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
-
   const bufferedRemoteCandidates = [];
   let makingOffer = false;
   let ignoreOffer = false;
-
   let keepAliveChannel = null;
   let lastPong = Date.now();
   const PING_INTERVAL = 4000;
   const PONG_TIMEOUT = 11000;
-
   let statsInterval = null;
   const STATS_POLL_MS = 3000;
-
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
@@ -97,7 +98,6 @@ remoteVideo.parentNode.appendChild(adVideo);
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
-
       const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
       const oscillator = audioCtx.createOscillator();
       oscillator.type = 'triangle';
@@ -106,7 +106,6 @@ remoteVideo.parentNode.appendChild(adVideo);
       oscillator.start();
       oscillator.stop();
       components.push('audio-supported');
-
       const hashCode = (str) => {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -132,14 +131,12 @@ remoteVideo.parentNode.appendChild(adVideo);
     activeTimers.add(timerId);
     return timerId;
   }
-
   function clearSafeTimer(timerId) {
     if (timerId) {
       clearTimeout(timerId);
       activeTimers.delete(timerId);
     }
   }
-
   function clearAllTimers() {
     activeTimers.forEach(timerId => clearTimeout(timerId));
     activeTimers.clear();
@@ -242,34 +239,31 @@ remoteVideo.parentNode.appendChild(adVideo);
     }
   }
 
-  // ---------------------- دالة عرض الإعلان ثم استئناف البحث ----------------------
-  function playAdAndResumeSearch() {
+  // ---------------------- دالة عرض الإعلان لمدة 5 ثواني ----------------------
+  function playAdVideo() {
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
     adVideo.currentTime = 0;
     adVideo.play().catch(() => {});
 
-    adVideo.onended = () => {
+    // إخفاء الإعلان بعد 5 ثواني بالضبط (بغض النظر عن طول الفيديو)
+    setTimeout(() => {
       adVideo.style.display = 'none';
       remoteVideo.style.display = 'block';
-      consecutivePauses = 0; // تصفير العداد بعد عرض الإعلان
-      updateStatusMessage('Searching...');
-      startSearchLoop(); // استئناف البحث فورًا بعد الإعلان
-    };
+      adVideo.pause();
 
-    // احتياطي للمتصفحات التي لا تدعم onended
-    adVideo.ontimeupdate = () => {
-      if (adVideo.duration && adVideo.currentTime >= adVideo.duration - 0.2) {
-        adVideo.onended();
-      }
-    };
+      // تصفير العداد واستئناف البحث العادي
+      consecutiveSearchFails = 0;
+      normalPauseDuration = 3000; // إعادة الـ pause إلى 3 ثواني
+      updateStatusMessage('Searching...');
+      startSearchLoop();
+    }, 5000);
   }
 
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
     clearAllTimers();
-
     if (peerConnection) {
       try {
         if (keepAliveChannel) {
@@ -282,11 +276,9 @@ remoteVideo.parentNode.appendChild(adVideo);
       }
       peerConnection = null;
     }
-
     if (remoteVideo) {
       remoteVideo.srcObject = null;
     }
-
     bufferedRemoteCandidates.length = 0;
     partnerId = null;
     isInitiator = false;
@@ -425,7 +417,6 @@ remoteVideo.parentNode.appendChild(adVideo);
       const now = prev + 1;
       reportCounts.set(partnerId, now);
       reportedIds.add(partnerId);
-
       safeEmit("report", { partnerId });
       safeEmit("skip");
       if (now === 1) {
@@ -444,7 +435,8 @@ remoteVideo.parentNode.appendChild(adVideo);
       updateStatusMessage('You reported the user — skipping...');
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
-      consecutivePauses = 0;
+      consecutiveSearchFails = 0;
+      normalPauseDuration = 3000;
       startSearchLoop();
     };
   }
@@ -460,7 +452,7 @@ remoteVideo.parentNode.appendChild(adVideo);
     sendBtn.disabled = true;
   }
 
-  // ---------------------- MATCHMAKING (مع إعادة نظام الـ Pause الأصلي) ----------------------
+  // ---------------------- MATCHMAKING (مع التعديل المطلوب) ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -480,19 +472,24 @@ remoteVideo.parentNode.appendChild(adVideo);
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
 
-        consecutivePauses++;
+        consecutiveSearchFails++;
 
-        // كل 3 pause متتالية → عرض الفيديو الإعلاني
-        if (consecutivePauses >= 3) {
-          playAdAndResumeSearch();
+        // بعد 3 محاولات بحث فاشلة متتالية → عرض الفيديو الإعلاني لمدة 5 ثواني
+        if (consecutiveSearchFails >= 3) {
+          // تمديد الـ pause مؤقتاً إلى 5 ثواني (لكن العمل الفعلي يتم عبر setTimeout داخل playAdVideo)
+          normalPauseDuration = 5000;
+          playAdVideo();
           return;
         }
 
+        // pause عادي
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
-          consecutivePauses = 0; // تصفير العداد عند استئناف البحث بعد الـ pause العادي
+          // لا نصفر العداد هنا، لأننا نريد حساب المحاولات المتتالية
+          // لكن نعيد الـ pause إلى 3 ثواني إذا كان معدلاً سابقاً (احتياطي)
+          if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
           startSearchLoop();
-        }, 1800);
+        }, normalPauseDuration);
       }
     }, 3500);
   }
@@ -513,20 +510,21 @@ remoteVideo.parentNode.appendChild(adVideo);
     chatMessages.appendChild(typingIndicator);
     showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
-    consecutivePauses = 0;
+    consecutiveSearchFails = 0;
+    normalPauseDuration = 3000;
     startSearchLoop();
   }
 
   skipBtn.onclick = () => {
     if (isBanned) return;
-
     safeEmit('skip');
     updateStatusMessage('You skipped.');
     disableChat();
     cleanupConnection();
     clearSafeTimer(searchTimer);
     clearSafeTimer(pauseTimer);
-    consecutivePauses = 0;
+    consecutiveSearchFails = 0;
+    normalPauseDuration = 3000;
     startSearchLoop();
   };
 
@@ -586,7 +584,8 @@ remoteVideo.parentNode.appendChild(adVideo);
       cleanupConnection();
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
-      consecutivePauses = 0;
+      consecutiveSearchFails = 0;
+      normalPauseDuration = 3000;
       setSafeTimer(startSearchLoop, 500);
     }
   });
@@ -614,10 +613,10 @@ remoteVideo.parentNode.appendChild(adVideo);
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
-    consecutivePauses = 0; // تصفير العداد عند العثور على شريك
+    consecutiveSearchFails = 0;
+    normalPauseDuration = 3000;
     try {
       createPeerConnection();
-
       if (isInitiator) {
         makingOffer = true;
         const offer = await peerConnection.createOffer();
@@ -661,7 +660,6 @@ remoteVideo.parentNode.appendChild(adVideo);
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
         ignoreOffer = !isInitiator && offerCollision;
         if (ignoreOffer) return;
-
         await peerConnection.setRemoteDescription(data);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -687,11 +685,9 @@ remoteVideo.parentNode.appendChild(adVideo);
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
-
       if (localStream) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
-
       if (isInitiator) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -706,7 +702,6 @@ remoteVideo.parentNode.appendChild(adVideo);
           setupKeepAliveChannel(keepAliveChannel);
         };
       }
-
       peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) {
           console.error('No streams in ontrack event');
@@ -717,24 +712,22 @@ remoteVideo.parentNode.appendChild(adVideo);
         updateStatusMessage('Connected');
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
-        consecutivePauses = 0;
+        consecutiveSearchFails = 0;
+        normalPauseDuration = 3000;
         startStatsMonitor();
       };
-
       peerConnection.onicecandidate = e => {
         if (e.candidate && partnerId) {
           safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
         }
       };
-
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
         const s = peerConnection.connectionState;
         console.debug('connectionState:', s);
-
         if (s === 'connected') {
           updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-          consecutivePauses = 0;
+          consecutiveSearchFails = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
             updateStatusMessage('Connection lost.');
@@ -742,12 +735,12 @@ remoteVideo.parentNode.appendChild(adVideo);
             cleanupConnection();
             clearSafeTimer(searchTimer);
             clearSafeTimer(pauseTimer);
-            consecutivePauses = 0;
+            consecutiveSearchFails = 0;
+            normalPauseDuration = 3000;
             setSafeTimer(startSearchLoop, 500);
           }
         }
       };
-
       peerConnection.onnegotiationneeded = async () => {
         if (!peerConnection || makingOffer || !partnerId) return;
         try {
@@ -817,7 +810,8 @@ remoteVideo.parentNode.appendChild(adVideo);
         cleanupConnection();
         clearSafeTimer(searchTimer);
         clearSafeTimer(pauseTimer);
-        consecutivePauses = 0;
+        consecutiveSearchFails = 0;
+        normalPauseDuration = 3000;
         setSafeTimer(startSearchLoop, 500);
       }
     }, PING_INTERVAL);
