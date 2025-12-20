@@ -35,8 +35,7 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.backgroundColor = '#000';
 
   // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
-  adVideo.src = 'https://cdn-cf-east.streamable.com/video/mp4/0t3exb.mp4';
-
+adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4';
   remoteVideo.parentNode.appendChild(adVideo);
 
   // ---------------------- GLOBAL STATE ----------------------
