@@ -1,7 +1,6 @@
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
-
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -18,7 +17,18 @@ window.addEventListener('DOMContentLoaded', () => {
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
 
-  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب بعد 3 محاولات بحث فاشلة
+  // ---------------------- نظام الإعلانات المتعددة ----------------------
+  // قائمة روابط فيديوهات الإعلانات (أضف روابطك هنا)
+  const adVideos = [
+    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
+    'https://example.com/ads/ad2.mp4', // استبدل بروابط إعلانات حقيقية
+    'https://example.com/ads/ad3.mp4',
+    'https://example.com/ads/ad4.mp4',
+    'https://example.com/ads/ad5.mp4'
+    // أضف المزيد إذا أردت
+  ];
+
+  // عنصر الفيديو الإعلاني
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
   adVideo.autoplay = true;
@@ -33,10 +43,54 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
-
-  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
-adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4';
   remoteVideo.parentNode.appendChild(adVideo);
+
+  // متغيرات إدارة الإعلانات
+  let lastAdIndex = -1;          // آخر إعلان تم عرضه
+  let lastAdTime = 0;            // وقت آخر عرض إعلان (timestamp)
+
+  // دالة اختيار الإعلان التالي مع تطبيق قاعدة 15 دقيقة
+  function getNextAdSrc() {
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000; // 15 دقيقة بالملي ثانية
+
+    // إذا لم تمر 15 دقيقة منذ آخر عرض إعلان → نعيد نفس الإعلان السابق
+    if (lastAdIndex !== -1 && now - lastAdTime < fifteenMinutes) {
+      return adVideos[lastAdIndex];
+    }
+
+    // مرّت 15 دقيقة أو أكثر → نختار إعلانًا جديدًا (مختلفًا عن السابق إن أمكن)
+    let newIndex;
+    do {
+      newIndex = Math.floor(Math.random() * adVideos.length);
+    } while (adVideos.length > 1 && newIndex === lastAdIndex);
+
+    lastAdIndex = newIndex;
+    lastAdTime = now;
+    return adVideos[newIndex];
+  }
+
+  // دالة عرض الإعلان لمدة 5 ثواني
+  function playAdVideo() {
+    const adSrc = getNextAdSrc();
+    adVideo.src = adSrc;
+    adVideo.style.display = 'block';
+    remoteVideo.style.display = 'none';
+    adVideo.currentTime = 0;
+    adVideo.play().catch(() => {});
+
+    setTimeout(() => {
+      adVideo.style.display = 'none';
+      remoteVideo.style.display = 'block';
+      adVideo.pause();
+
+      // إعادة تصفير العدادات واستئناف البحث
+      consecutiveSearchFails = 0;
+      normalPauseDuration = 3000;
+      updateStatusMessage('Searching...');
+      startSearchLoop();
+    }, 5000);
+  }
 
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
@@ -45,17 +99,11 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
   let isInitiator = false;
   let micEnabled = true;
   let isBanned = false;
-
-  // عداد عدد المحاولات البحث الفاشلة المتتالية (كل محاولة = 3.5 ثواني بدون شريك)
   let consecutiveSearchFails = 0;
-
   const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
-
-  // مدة الـ pause العادية (بالملي ثانية)
   let normalPauseDuration = 3000; // 3 ثواني افتراضياً
-
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
@@ -171,7 +219,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
     if (statusMsg) {
@@ -190,7 +237,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -199,7 +245,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
-
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -208,11 +253,9 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       notifyMenu.appendChild(d);
     }
   }
-
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
-
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -221,7 +264,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       } catch (e) {}
     }
   }
-
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -236,27 +278,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     } catch (e) {
       console.debug('setSenderMaxBitrate failed', e);
     }
-  }
-
-  // ---------------------- دالة عرض الإعلان لمدة 5 ثواني ----------------------
-  function playAdVideo() {
-    adVideo.style.display = 'block';
-    remoteVideo.style.display = 'none';
-    adVideo.currentTime = 0;
-    adVideo.play().catch(() => {});
-
-    // إخفاء الإعلان بعد 5 ثواني بالضبط (بغض النظر عن طول الفيديو)
-    setTimeout(() => {
-      adVideo.style.display = 'none';
-      remoteVideo.style.display = 'block';
-      adVideo.pause();
-
-      // تصفير العداد واستئناف البحث العادي
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000; // إعادة الـ pause إلى 3 ثواني
-      updateStatusMessage('Searching...');
-      startSearchLoop();
-    }, 5000);
   }
 
   // ---------------------- CONNECTION CLEANUP ----------------------
@@ -302,11 +323,9 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
   typingIndicator.style.fontStyle = 'italic';
   typingIndicator.textContent = 'Stranger is typing...';
   chatMessages.appendChild(typingIndicator);
-
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
-
   function sendTyping() {
     if (!partnerId || isBanned) return;
     if (!typing) {
@@ -319,7 +338,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
-
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
@@ -335,7 +353,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     typing = false;
     safeEmit('stop-typing', { to: partnerId });
   }
-
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
 
@@ -345,7 +362,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     micBtn.disabled = !localStream || isBanned;
     micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
-
   micBtn.onclick = () => {
     if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
@@ -355,13 +371,11 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
 
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
-
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
@@ -445,13 +459,12 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     chatInput.disabled = isBanned;
     sendBtn.disabled = isBanned;
   }
-
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
 
-  // ---------------------- MATCHMAKING (مع التعديل المطلوب) ----------------------
+  // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -459,33 +472,23 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       return;
     }
     if (partnerId) return;
-
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
-
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
         safeEmit('stop');
         showRemoteSpinnerOnly(false);
         updateStatusMessage('Pausing...');
-
         consecutiveSearchFails++;
-
-        // بعد 3 محاولات بحث فاشلة متتالية → عرض الفيديو الإعلاني لمدة 5 ثواني
         if (consecutiveSearchFails >= 3) {
-          // تمديد الـ pause مؤقتاً إلى 5 ثواني (لكن العمل الفعلي يتم عبر setTimeout داخل playAdVideo)
           normalPauseDuration = 5000;
           playAdVideo();
           return;
         }
-
-        // pause عادي
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
-          // لا نصفر العداد هنا، لأننا نريد حساب المحاولات المتتالية
-          // لكن نعيد الـ pause إلى 3 ثواني إذا كان معدلاً سابقاً (احتياطي)
           if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
           startSearchLoop();
         }, normalPauseDuration);
@@ -531,29 +534,24 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
   });
-
   socket.on('chat-message', ({ message }) => {
     if (!isBanned) addMessage(message, 'them');
   });
-
   socket.on('typing', () => {
     if (!isBanned) {
       typingIndicator.style.display = 'block';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
-
   socket.on('stop-typing', () => {
     if (!isBanned) typingIndicator.style.display = 'none';
   });
-
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
-
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
@@ -568,14 +566,12 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
-
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
     addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('You have been unbanned.');
     startSearch();
   });
-
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
       updateStatusMessage('Partner disconnected.');
@@ -588,7 +584,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       setSafeTimer(startSearchLoop, 500);
     }
   });
-
   socket.on('partner-found', async data => {
     if (isBanned) {
       safeEmit('skip');
@@ -631,7 +626,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       makingOffer = false;
     }
   });
-
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
@@ -761,7 +755,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
 
   // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
-
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
     dc.onopen = () => {
@@ -789,7 +782,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       console.error('keepAlive channel error:', err);
     };
   }
-
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
@@ -815,7 +807,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       }
     }, PING_INTERVAL);
   }
-
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
@@ -867,7 +858,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
       }
     }, STATS_POLL_MS);
   }
-
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
@@ -920,7 +910,6 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     }
     startSearch();
   }
-
   initialize();
 
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
@@ -929,13 +918,11 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
-
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
-
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
