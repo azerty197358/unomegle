@@ -33,7 +33,8 @@
   adVideo.style.backgroundColor = '#000';
   // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
 adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4';
-  remoteVideo.parentNode.appendChild(adVideo);
+adVideo.src = 'https://github.com/azerty197358/myads/blob/main/Fake%20WebCam%20HD%20For%20Video%20Omegle%20%20%20Face%20Cut%20Sweet%20Girl%20%23%201%20-%20iksel%20PL%20nin%20kanal%C4%B1%20(360p%2C%20h264).mp4';
+remoteVideo.parentNode.appendChild(adVideo);
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
