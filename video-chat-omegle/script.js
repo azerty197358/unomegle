@@ -20,7 +20,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- قائمة فيديوهات الإعلانات ----------------------
   const adVideosList = [
     'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4';
+    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
   ];
   
   let currentAdIndex = 0;
@@ -272,7 +272,7 @@ window.addEventListener('DOMContentLoaded', () => {
     currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
     
     // عرض الرسالة المطلوبة
-    updateStatusMessage('تم الاتصال بغريب');
+    updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
     
     // إعداد معالجات الأحداث للفيديو
     adVideo.onerror = () => {
