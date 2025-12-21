@@ -1,79 +1,6 @@
-// CSS المضمن للمؤشر والدوران
-const spinnerStyle = document.createElement('style');
-spinnerStyle.textContent = `
-  /* مؤشر البحث الرئيسي */
-  .searching-spinner {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10;
-  }
-  
-  .searching-spinner .spinner {
-    width: 60px;
-    height: 60px;
-    border: 3px solid rgba(60, 60, 60, 0.3);
-    border-radius: 50%;
-    border-top-color: #808080;
-    animation: spin 1s linear infinite;
-    margin: 0 auto;
-  }
-  
-  /* مؤشر مصغر للفيديو */
-  .video-spinner {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 5;
-  }
-  
-  .video-spinner .spinner {
-    width: 40px;
-    height: 40px;
-    border: 2px solid rgba(60, 60, 60, 0.3);
-    border-radius: 50%;
-    border-top-color: #808080;
-    animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  /* رسالة الحالة */
-  .status-message {
-    color: #808080;
-    text-align: center;
-    margin-top: 15px;
-    font-size: 14px;
-    font-weight: normal;
-    letter-spacing: 0.5px;
-  }
-  
-  /* خلفية سوداء عند البحث */
-  .searching-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #000000;
-    z-index: 8;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-  }
-`;
-document.head.appendChild(spinnerStyle);
-
-window.addEventListener('DOMContentLoaded', () => {
+اجعل الموشر الذي يدور اثناء البحث شبيه تمام يموقع اوميجل ابحث عليه اظن لونه رمادي وكذك الخلفيه السوداء   window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
-  
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -90,36 +17,12 @@ window.addEventListener('DOMContentLoaded', () => {
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
   
-  // إنشاء عناصر المؤشر
-  const searchingOverlay = document.createElement('div');
-  searchingOverlay.className = 'searching-overlay';
-  searchingOverlay.style.display = 'none';
-  
-  const mainSpinner = document.createElement('div');
-  mainSpinner.className = 'searching-spinner';
-  
-  const spinnerElement = document.createElement('div');
-  spinnerElement.className = 'spinner';
-  mainSpinner.appendChild(spinnerElement);
-  
-  const statusMessage = document.createElement('div');
-  statusMessage.className = 'status-message';
-  statusMessage.textContent = 'Searching for someone you can talk to';
-  
-  searchingOverlay.appendChild(mainSpinner);
-  searchingOverlay.appendChild(statusMessage);
-  
-  // إضافة العناصر إلى الصفحة
-  const videoContainer = document.querySelector('.video-container') || remoteVideo.parentNode;
-  videoContainer.style.position = 'relative';
-  videoContainer.appendChild(searchingOverlay);
-  
   // ---------------------- قائمة فيديوهات الإعلانات ----------------------
-  const adVideosList = [
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
-    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
-  ];
+ const adVideosList = [
+  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
+  'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
+  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
+];
   
   let currentAdIndex = 0;
   let isAdPlaying = false;
@@ -288,7 +191,22 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   
   function updateStatusMessage(msg) {
-    statusMessage.textContent = msg;
+    let statusMsg = document.getElementById('statusMessage');
+    if (statusMsg) {
+      statusMsg.textContent = msg;
+    } else {
+      statusMsg = document.createElement('div');
+      statusMsg.id = 'statusMessage';
+      statusMsg.className = 'msg status';
+      statusMsg.textContent = msg;
+      const typing = document.querySelector('.msg.system[style*="italic"]');
+      if (typing && typing.parentNode === chatMessages) {
+        chatMessages.insertBefore(statusMsg, typing);
+      } else {
+        chatMessages.appendChild(statusMsg);
+      }
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
   }
   
   function pushAdminNotification(text) {
@@ -338,24 +256,12 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // ---------------------- إدارة واجهة البحث ----------------------
-  function showSearchingOverlay() {
-    searchingOverlay.style.display = 'flex';
-    remoteVideo.style.display = 'none';
-  }
-  
-  function hideSearchingOverlay() {
-    searchingOverlay.style.display = 'none';
-    remoteVideo.style.display = 'block';
-  }
-  
   // ---------------------- دالة عرض الإعلان ----------------------
   function playAdVideo() {
     if (isAdPlaying || adVideosList.length === 0) {
       consecutiveSearchFails = 0;
       normalPauseDuration = 3000;
-      showSearchingOverlay();
-      updateStatusMessage('Searching for someone you can talk to');
+      updateStatusMessage('Searching...');
       startSearchLoop();
       return;
     }
@@ -389,7 +295,6 @@ window.addEventListener('DOMContentLoaded', () => {
     adVideo.src = adUrl;
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
-    searchingOverlay.style.display = 'none';
     
     // إخفاء الإعلان بعد 5 ثواني في حالة عدم اكتمال التشغيل
     const adTimeout = setSafeTimer(hideAdVideo, 5000);
@@ -414,8 +319,7 @@ window.addEventListener('DOMContentLoaded', () => {
       isAdPlaying = false;
       consecutiveSearchFails = 0;
       normalPauseDuration = 3000;
-      showSearchingOverlay();
-      updateStatusMessage('Searching for someone you can talk to');
+      updateStatusMessage('Searching...');
       startSearchLoop();
     }
   }
@@ -515,6 +419,21 @@ window.addEventListener('DOMContentLoaded', () => {
     updateMicButton();
   };
   
+  // ---------------------- SPINNER BEHAVIOR ----------------------
+  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
+  
+  function showRemoteSpinnerOnly(show) {
+    if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
+    if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
+    if (localVideo) localVideo.style.display = 'block';
+  }
+  
+  function hideAllSpinners() {
+    if (remoteSpinner) remoteSpinner.style.display = 'none';
+    if (remoteVideo) remoteVideo.style.display = 'block';
+    if (localVideo) localVideo.style.display = 'block';
+  }
+  
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -578,7 +497,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       cleanupConnection();
       disableChat();
-      showSearchingOverlay();
       updateStatusMessage('You reported the user — skipping...');
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
@@ -602,19 +520,19 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
-      hideSearchingOverlay();
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      showRemoteSpinnerOnly(false);
       return;
     }
     if (partnerId) return;
-    showSearchingOverlay();
-    updateStatusMessage('Searching for someone you can talk to');
+    showRemoteSpinnerOnly(true);
+    updateStatusMessage('Searching...');
     safeEmit('find-partner');
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
         safeEmit('stop');
-        hideSearchingOverlay();
+        showRemoteSpinnerOnly(false);
         consecutiveSearchFails++;
         
         // بعد 3 محاولات فاشلة متتالية → عرض إعلان
@@ -635,8 +553,8 @@ window.addEventListener('DOMContentLoaded', () => {
   
   async function startSearch() {
     if (isBanned) {
-      hideSearchingOverlay();
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      showRemoteSpinnerOnly(false);
       return;
     }
     const mediaReady = await initMedia();
@@ -647,7 +565,7 @@ window.addEventListener('DOMContentLoaded', () => {
     cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
-    showSearchingOverlay();
+    showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
     consecutiveSearchFails = 0;
     normalPauseDuration = 3000;
@@ -697,7 +615,7 @@ window.addEventListener('DOMContentLoaded', () => {
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
-    hideSearchingOverlay();
+    showRemoteSpinnerOnly(true);
     updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
     cleanupConnection();
     disableChat();
@@ -750,7 +668,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     partnerId = foundId;
     isInitiator = !!data.initiator;
-    hideSearchingOverlay();
+    hideAllSpinners();
     updateStatusMessage('Connecting...');
     consecutiveSearchFails = 0;
     normalPauseDuration = 3000;
@@ -848,8 +766,8 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         remoteVideo.srcObject = e.streams[0];
         enableChat();
-        hideSearchingOverlay();
         updateStatusMessage('Connected');
+        showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
         consecutiveSearchFails = 0;
         normalPauseDuration = 3000;
@@ -1026,7 +944,6 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (isBanned) {
-      hideSearchingOverlay();
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
       return false;
     }
@@ -1041,7 +958,6 @@ window.addEventListener('DOMContentLoaded', () => {
       return true;
     } catch (e) {
       console.error('Media initialization error:', e);
-      hideSearchingOverlay();
       updateStatusMessage('Camera/Mic access denied. Please check permissions.');
       localStream = null;
       updateMicButton();
@@ -1067,14 +983,12 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
-    hideSearchingOverlay();
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
   
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
-    hideSearchingOverlay();
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
