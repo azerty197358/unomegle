@@ -1,6 +1,7 @@
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
+  
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -16,6 +17,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
+  
   // ---------------------- قائمة فيديوهات الإعلانات ----------------------
   const adVideosList = [
     'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
@@ -23,7 +25,8 @@ window.addEventListener('DOMContentLoaded', () => {
     'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4',
   ];
   let currentAdIndex = 0;
-  let adPauseCount = 0; // عدد مرات الـ pause منذ آخر إعلان
+  let searchAttemptCounter = 0; // عداد محاولات البحث
+  
   // عنصر الفيديو الإعلاني
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
@@ -37,66 +40,104 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.width = '100%';
   adVideo.style.height = '100%';
   adVideo.style.objectFit = 'cover';
-  adVideo.style.zIndex = '10';
+  adVideo.style.zIndex = '1000';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
-  // معالجة أخطاء الإعلان
+  
+  // معالجة أخطاء تحميل أو تشغيل الفيديو الإعلاني
   adVideo.addEventListener('error', (e) => {
-    console.error('فشل تحميل/تشغيل فيديو الإعلان:', adVideo.src, e);
-    loadNextAdAndPlay();
+    console.error('فشل تحميل فيديو الإعلان:', adVideo.src, e);
+    skipToNextAd();
   });
-  adVideo.addEventListener('stalled', () => {
-    console.warn('توقف تحميل الإعلان:', adVideo.src);
-    loadNextAdAndPlay();
-  });
+  
   adVideo.addEventListener('abort', () => {
-    console.warn('تم إيقاف تحميل الإعلان:', adVideo.src);
-    loadNextAdAndPlay();
+    console.warn('تم إيقاف تحميل فيديو الإعلان:', adVideo.src);
+    skipToNextAd();
   });
-  // دالة تحميل وتشغيل الإعلان التالي عند الفشل
-  function loadNextAdAndPlay() {
+  
+  adVideo.addEventListener('stalled', () => {
+    console.warn('توقف تحميل فيديو الإعلان:', adVideo.src);
+    skipToNextAd();
+  });
+  
+  // دالة لتخطي الفيديو الحالي الفاشل والانتقال للتالي
+  function skipToNextAd() {
     currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
-    adVideo.src = adVideosList[currentAdIndex];
-    adVideo.load();
-    adVideo.play().catch(() => {
-      loadNextAdAndPlay();
-    });
+    console.log('تخطي إلى الإعلان التالي:', adVideosList[currentAdIndex]);
+    playAdVideo(); // إعادة تشغيل الإعلان التالي
   }
-  // عند انتهاء الإعلان بشكل طبيعي
-  adVideo.addEventListener('ended', () => {
-    hideAdAndResumeSearch();
-  });
-  // دالة إخفاء الإعلان واستئناف البحث
-  function hideAdAndResumeSearch() {
+  
+  // دالة لإخفاء الإعلان واستئناف البحث
+  function hideAdAndContinue() {
     adVideo.style.display = 'none';
+    remoteVideo.style.display = 'block';
     adVideo.pause();
     adVideo.src = '';
-    remoteVideo.style.display = 'block';
-    adPauseCount = 0;
     updateStatusMessage('Searching...');
-    startSearchLoop();
+    // إعادة تعيين عداد محاولات البحث بعد عرض الإعلان
+    searchAttemptCounter = 0;
+    // زيادة وقت الانتظار قبل بدء البحث التالي لتوفير الوقت لفتح الكاميرا والميكروفون
+    setSafeTimer(() => {
+      startSearchLoop();
+    }, 1500); // 1.5 ثانية وقت إضافي
   }
-  // دالة تشغيل الإعلان (بالترتيب الدوري)
+  
+  remoteVideo.parentNode.appendChild(adVideo);
+  
+  // ---------------------- دالة عرض الإعلان ----------------------
   function playAdVideo() {
     if (adVideosList.length === 0) {
-      hideAdAndResumeSearch();
+      hideAdAndContinue();
       return;
     }
+    
     const nextSrc = adVideosList[currentAdIndex];
+    if (!nextSrc || typeof nextSrc !== 'string' || nextSrc.trim() === '') {
+      console.warn('رابط إعلان غير صالح، تخطي...');
+      currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
+      playAdVideo();
+      return;
+    }
+    
     adVideo.src = nextSrc;
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
+    remoteVideo.parentNode.style.zIndex = '1000';
+    
     adVideo.currentTime = 0;
-    adVideo.play().then(() => {
-      console.log('جاري تشغيل الإعلان:', nextSrc);
-      updateStatusMessage('تم الاتصال بغريب');
-    }).catch((err) => {
-      console.error('فشل تشغيل الإعلان:', err);
-      loadNextAdAndPlay();
-    });
-    currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
+    
+    // محاولة تشغيل الفيديو مع إعادة المحاولة عند الفشل
+    const playWithRetry = (retryCount = 0) => {
+      adVideo.play().then(() => {
+        console.log('جاري تشغيل الإعلان:', nextSrc);
+        updateStatusMessage('تم الاتصال بغريب');
+        
+        // إخفاء الإعلان بعد 5 ثواني
+        setSafeTimer(() => {
+          hideAdAndContinue();
+        }, 5000);
+        
+        // الانتقال إلى الفيديو التالي في القائمة للمرة القادمة
+        currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
+        
+      }).catch((err) => {
+        console.error(`فشل تشغيل الإعلان (المحاولة ${retryCount + 1}):`, err);
+        
+        if (retryCount < 2) { // محاولة 3 مرات كحد أقصى
+          console.log(`إعادة المحاولة بعد ثانية...`);
+          setSafeTimer(() => {
+            playWithRetry(retryCount + 1);
+          }, 1000);
+        } else {
+          console.log('فشل جميع محاولات التشغيل، تخطي إلى الإعلان التالي');
+          skipToNextAd();
+        }
+      });
+    };
+    
+    playWithRetry();
   }
-  remoteVideo.parentNode.appendChild(adVideo);
+  
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
@@ -124,6 +165,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
+  
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -137,6 +179,7 @@ window.addEventListener('DOMContentLoaded', () => {
         new Date().getTimezoneOffset(),
         Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
+      
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -149,6 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
+      
       const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
       const oscillator = audioCtx.createOscillator();
       oscillator.type = 'triangle';
@@ -157,6 +201,7 @@ window.addEventListener('DOMContentLoaded', () => {
       oscillator.start();
       oscillator.stop();
       components.push('audio-supported');
+      
       const hashCode = (str) => {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -166,12 +211,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         return hash.toString(16);
       };
+      
       return hashCode(components.join('||'));
     } catch (e) {
       console.error('Fingerprint generation failed:', e);
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
+  
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -181,18 +228,21 @@ window.addEventListener('DOMContentLoaded', () => {
     activeTimers.add(timerId);
     return timerId;
   }
+  
   function clearSafeTimer(timerId) {
     if (timerId) {
       clearTimeout(timerId);
       activeTimers.delete(timerId);
     }
   }
+  
   function clearAllTimers() {
     activeTimers.forEach(timerId => clearTimeout(timerId));
     activeTimers.clear();
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
+  
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
@@ -207,6 +257,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
+  
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -220,6 +271,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
     if (statusMsg) {
@@ -238,6 +290,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -246,6 +299,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
+  
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -254,9 +308,11 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
+  
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
+  
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -265,6 +321,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
   }
+  
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -280,6 +337,7 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
+  
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
@@ -305,6 +363,7 @@ window.addEventListener('DOMContentLoaded', () => {
     makingOffer = false;
     ignoreOffer = false;
   }
+  
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -312,8 +371,10 @@ window.addEventListener('DOMContentLoaded', () => {
     notifyBell.classList.remove('shake');
     notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
   };
+  
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
+  
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -321,9 +382,11 @@ window.addEventListener('DOMContentLoaded', () => {
   typingIndicator.style.fontStyle = 'italic';
   typingIndicator.textContent = 'Stranger is typing...';
   chatMessages.appendChild(typingIndicator);
+  
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
+  
   function sendTyping() {
     if (!partnerId || isBanned) return;
     if (!typing) {
@@ -336,9 +399,11 @@ window.addEventListener('DOMContentLoaded', () => {
       safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
+  
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
+  
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
@@ -350,32 +415,39 @@ window.addEventListener('DOMContentLoaded', () => {
     typing = false;
     safeEmit('stop-typing', { to: partnerId });
   }
+  
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
+  
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
     micBtn.disabled = !localStream || isBanned;
     micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
+  
   micBtn.onclick = () => {
     if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
+  
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
+  
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
+  
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
+  
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -411,6 +483,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
@@ -441,105 +514,95 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('You reported the user — skipping...');
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
-      consecutiveSearchFails = 0;
-      adPauseCount = 0;
-      normalPauseDuration = 3000;
+      searchAttemptCounter = 0; // إعادة تعيين العداد
       startSearchLoop();
     };
   }
+  
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
     sendBtn.disabled = isBanned;
   }
+  
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
-  // ---------------------- MEDIA INIT مع إعادة محاولة ----------------------
-  async function initMedia() {
-    if (isBanned) {
-      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
-      return false;
-    }
-    if (localStream) return true;
-    const maxAttempts = 5;
-    let attempt = 0;
-    while (attempt < maxAttempts) {
-      attempt++;
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: true
-        });
-        localVideo.srcObject = localStream;
-        updateMicButton();
-        console.log('تم الحصول على الكاميرا والميكروفون بنجاح في المحاولة', attempt);
-        return true;
-      } catch (e) {
-        console.warn(`محاولة ${attempt}/${maxAttempts} فشلت في الوصول إلى الوسائط:`, e);
-        if (attempt < maxAttempts) {
-          updateStatusMessage(`جاري محاولة الوصول إلى الكاميرا والميكروفون... (${attempt}/${maxAttempts})`);
-          await new Promise(resolve => setTimeout(resolve, 2500));
-        }
-      }
-    }
-    updateStatusMessage('فشل الوصول إلى الكاميرا أو الميكروفون بعد 5 محاولات. تأكد من منح الصلاحيات.');
-    localStream = null;
-    updateMicButton();
-    return false;
-  }
-  // ---------------------- MATCHMAKING مع إعلان كل 3 pause ----------------------
+  
+  // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
       showRemoteSpinnerOnly(false);
       return;
     }
+    
     if (partnerId) return;
+    
+    // زيادة عداد محاولات البحث
+    searchAttemptCounter++;
+    
+    // التحقق إذا وصلنا إلى 3 محاولات لعرض الإعلان
+    if (searchAttemptCounter >= 3) {
+      searchAttemptCounter = 0; // إعادة تعيين العداد
+      playAdVideo();
+      return;
+    }
+    
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
+    
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
         safeEmit('stop');
         showRemoteSpinnerOnly(false);
         consecutiveSearchFails++;
-        adPauseCount++;
-        if (adPauseCount >= 3) {
-          adPauseCount = 0;
-          playAdVideo();
-          return;
-        }
+        
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
-          startSearchLoop();
+          // زيادة وقت الانتظار قبل البحث التالي لتوفير الوقت لفتح الكاميرا والميكروفون
+          const waitTime = 1500; // 1.5 ثانية وقت إضافي
+          updateStatusMessage(`Preparing for next search...`);
+          setSafeTimer(() => {
+            startSearchLoop();
+          }, waitTime);
         }, normalPauseDuration);
       }
-    }, 3500);
+    }, 3500); // وقت البحث
   }
+  
   async function startSearch() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
       showRemoteSpinnerOnly(false);
       return;
     }
+    
+    // التأكد من تهيئة الكاميرا والميكروفون أولاً
     const mediaReady = await initMedia();
     if (!mediaReady) {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
+    
     cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
     showRemoteSpinnerOnly(true);
     skipBtn.disabled = false;
     consecutiveSearchFails = 0;
-    adPauseCount = 0;
+    searchAttemptCounter = 0; // إعادة تعيين عداد المحاولات
     normalPauseDuration = 3000;
-    startSearchLoop();
+    
+    // إعطاء وقت إضافي لتهيئة الوسائط قبل بدء البحث
+    setSafeTimer(() => {
+      startSearchLoop();
+    }, 1000);
   }
+  
   skipBtn.onclick = () => {
     if (isBanned) return;
     safeEmit('skip');
@@ -548,33 +611,37 @@ window.addEventListener('DOMContentLoaded', () => {
     cleanupConnection();
     clearSafeTimer(searchTimer);
     clearSafeTimer(pauseTimer);
-    consecutiveSearchFails = 0;
-    adPauseCount = 0;
-    normalPauseDuration = 3000;
+    searchAttemptCounter = 0; // إعادة تعيين العداد
     startSearchLoop();
   };
+  
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
   });
+  
   socket.on('chat-message', ({ message }) => {
     if (!isBanned) addMessage(message, 'them');
   });
+  
   socket.on('typing', () => {
     if (!isBanned) {
       typingIndicator.style.display = 'block';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
+  
   socket.on('stop-typing', () => {
     if (!isBanned) typingIndicator.style.display = 'none';
   });
+  
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
+  
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
@@ -589,12 +656,14 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
+  
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
     addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('You have been unbanned.');
     startSearch();
   });
+  
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
       updateStatusMessage('Partner disconnected.');
@@ -602,38 +671,42 @@ window.addEventListener('DOMContentLoaded', () => {
       cleanupConnection();
       clearSafeTimer(searchTimer);
       clearSafeTimer(pauseTimer);
-      consecutiveSearchFails = 0;
-      adPauseCount = 0;
-      normalPauseDuration = 3000;
+      searchAttemptCounter++; // زيادة العداد عند انقطاع الشريك
       setSafeTimer(startSearchLoop, 500);
     }
   });
+  
   socket.on('partner-found', async data => {
     if (isBanned) {
       safeEmit('skip');
       return;
     }
+    
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
       console.error('Invalid partner data received:', data);
       updateStatusMessage('Invalid partner data. Retrying...');
+      searchAttemptCounter++; // زيادة العداد في حالة الفشل
       setSafeTimer(startSearchLoop, 1000);
       return;
     }
+    
     if (reportedIds.has(foundId)) {
       safeEmit('skip');
       updateStatusMessage('Found reported user — skipping...');
       cleanupConnection();
+      searchAttemptCounter++; // زيادة العداد عند تخطي مستخدم تم الإبلاغ عنه
       setSafeTimer(startSearchLoop, 200);
       return;
     }
+    
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
     consecutiveSearchFails = 0;
-    adPauseCount = 0;
-    normalPauseDuration = 3000;
+    searchAttemptCounter = 0; // إعادة تعيين العداد عند العثور على شريك
+    
     try {
       createPeerConnection();
       if (isInitiator) {
@@ -646,11 +719,13 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to create peer connection or offer:', e);
       updateStatusMessage('Connection setup failed. Retrying...');
       cleanupConnection();
+      searchAttemptCounter++; // زيادة العداد في حالة فشل الاتصال
       setSafeTimer(startSearchLoop, 1000);
     } finally {
       makingOffer = false;
     }
   });
+  
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
@@ -661,6 +736,7 @@ window.addEventListener('DOMContentLoaded', () => {
       console.warn('Signal from unexpected partner:', from, 'expected:', partnerId);
       return;
     }
+    
     if (!peerConnection) {
       try {
         createPeerConnection();
@@ -669,10 +745,12 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
     }
+    
     if (data.candidate && !peerConnection.remoteDescription) {
       bufferRemoteCandidate(data.candidate);
       return;
     }
+    
     try {
       if (data.type === 'offer') {
         const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
@@ -692,19 +770,23 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Signal processing failed.');
     }
   });
+  
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
       try { peerConnection.close(); } catch (e) {}
       peerConnection = null;
     }
+    
     try {
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
+      
       if (localStream) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
+      
       if (isInitiator) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -719,6 +801,7 @@ window.addEventListener('DOMContentLoaded', () => {
           setupKeepAliveChannel(keepAliveChannel);
         };
       }
+      
       peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) {
           console.error('No streams in ontrack event');
@@ -730,14 +813,16 @@ window.addEventListener('DOMContentLoaded', () => {
         showRemoteSpinnerOnly(false);
         flushBufferedCandidates();
         consecutiveSearchFails = 0;
-        normalPauseDuration = 3000;
+        searchAttemptCounter = 0; // إعادة تعيين العداد عند الاتصال الناجح
         startStatsMonitor();
       };
+      
       peerConnection.onicecandidate = e => {
         if (e.candidate && partnerId) {
           safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
         }
       };
+      
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
         const s = peerConnection.connectionState;
@@ -745,6 +830,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (s === 'connected') {
           updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
           consecutiveSearchFails = 0;
+          searchAttemptCounter = 0;
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
           if (!isBanned) {
             updateStatusMessage('Connection lost.');
@@ -752,13 +838,12 @@ window.addEventListener('DOMContentLoaded', () => {
             cleanupConnection();
             clearSafeTimer(searchTimer);
             clearSafeTimer(pauseTimer);
-            consecutiveSearchFails = 0;
-            adPauseCount = 0;
-            normalPauseDuration = 3000;
+            searchAttemptCounter++; // زيادة العداد عند فقدان الاتصال
             setSafeTimer(startSearchLoop, 500);
           }
         }
       };
+      
       peerConnection.onnegotiationneeded = async () => {
         if (!peerConnection || makingOffer || !partnerId) return;
         try {
@@ -772,19 +857,24 @@ window.addEventListener('DOMContentLoaded', () => {
           makingOffer = false;
         }
       };
+      
     } catch (e) {
       console.error('Failed to create peer connection:', e);
       throw e;
     }
   }
+  
   // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
+  
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
+    
     dc.onopen = () => {
       lastPong = Date.now();
       startPingLoop();
     };
+    
     dc.onmessage = (ev) => {
       if (!ev.data) return;
       try {
@@ -798,14 +888,17 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('KeepAlive message parse error:', e);
       }
     };
+    
     dc.onclose = () => {
       console.debug('keepAlive channel closed');
       stopPingLoop();
     };
+    
     dc.onerror = (err) => {
       console.error('keepAlive channel error:', err);
     };
   }
+  
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
@@ -819,25 +912,26 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error('Ping send error:', e);
         stopPingLoop();
       }
+      
       if (Date.now() - lastPong > PONG_TIMEOUT) {
         console.warn('PONG timeout -> treating as disconnect');
         stopPingLoop();
         cleanupConnection();
         clearSafeTimer(searchTimer);
         clearSafeTimer(pauseTimer);
-        consecutiveSearchFails = 0;
-        adPauseCount = 0;
-        normalPauseDuration = 3000;
+        searchAttemptCounter++; // زيادة العداد عند انتهاء المهلة
         setSafeTimer(startSearchLoop, 500);
       }
     }, PING_INTERVAL);
   }
+  
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
   }
+  
   // ---------------------- STATS MONITOR ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
@@ -858,6 +952,7 @@ window.addEventListener('DOMContentLoaded', () => {
             remoteInboundRtp = report;
           }
         });
+        
         let lossRatio = 0;
         if (outboundVideoReport?.packetsSent > 0) {
           if (remoteInboundRtp?.packetsLost >= 0) {
@@ -868,8 +963,10 @@ window.addEventListener('DOMContentLoaded', () => {
             lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
           }
         }
+        
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
+        
         if (lossRatio > 0.08 || rtt > 0.5) {
           await setSenderMaxBitrate(BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
@@ -882,12 +979,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, STATS_POLL_MS);
   }
+  
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
       statsInterval = null;
     }
   }
+  
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -896,6 +995,33 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     location.href = 'index.html';
   };
+  
+  // ---------------------- MEDIA INIT ----------------------
+  async function initMedia() {
+    if (isBanned) {
+      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
+      return false;
+    }
+    
+    if (localStream) return true;
+    
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      localVideo.srcObject = localStream;
+      updateMicButton();
+      return true;
+    } catch (e) {
+      console.error('Media initialization error:', e);
+      updateStatusMessage('Camera/Mic access denied. Please check permissions.');
+      localStream = null;
+      updateMicButton();
+      return false;
+    }
+  }
+  
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
@@ -906,20 +1032,28 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('Failed to send fingerprint:', e);
     }
-    startSearch();
+    
+    // إعطاء وقت إضافي لتحميل الصفحة قبل بدء البحث
+    setSafeTimer(() => {
+      startSearch();
+    }, 1000);
   }
+  
   initialize();
+  
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
+  
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
+  
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
