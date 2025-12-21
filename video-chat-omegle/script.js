@@ -1,4 +1,4 @@
- window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
@@ -16,7 +16,17 @@
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
-  // عنصر الفيديو الإعلاني الذي سيغطي شاشة الغريب بعد 3 محاولات بحث فاشلة
+
+  // ---------------------- قائمة فيديوهات الإعلانات (أضف المزيد إذا أردت) ----------------------
+  const adVideosList = [
+    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
+    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
+    // أضف روابط فيديوهات إعلانية أخرى هنا لتظهر بالترتيب
+  ];
+
+  let currentAdIndex = 0; // سيبدأ من الأول ثم ينتقل للتالي في كل مرة
+
+  // عنصر الفيديو الإعلاني
   const adVideo = document.createElement('video');
   adVideo.id = 'adVideo';
   adVideo.autoplay = true;
@@ -31,10 +41,11 @@
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
-  // غيّر هذا المسار إلى الفيديو الإعلاني الخاص بك إذا أردت
-adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4';
-adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4';
+
+  // تحميل الفيديو الأول افتراضياً
+  adVideo.src = adVideosList[currentAdIndex];
   remoteVideo.parentNode.appendChild(adVideo);
+
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
@@ -42,13 +53,13 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
   let isInitiator = false;
   let micEnabled = true;
   let isBanned = false;
-  // عداد عدد المحاولات البحث الفاشلة المتتالية (كل محاولة = 3.5 ثواني بدون شريك)
+
   let consecutiveSearchFails = 0;
   const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
-  // مدة الـ pause العادية (بالملي ثانية)
   let normalPauseDuration = 3000; // 3 ثواني افتراضياً
+
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
@@ -64,6 +75,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
+
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -112,6 +124,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
+
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -133,6 +146,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
+
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
@@ -147,6 +161,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       return false;
     }
   }
+
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -220,24 +235,35 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
-  // ---------------------- دالة عرض الإعلان لمدة 5 ثواني ----------------------
+
+  // ---------------------- دالة عرض الإعلان التالي في الترتيب ----------------------
   function playAdVideo() {
+    // تغيير مصدر الفيديو إلى التالي في القائمة (دوري)
+    adVideo.src = adVideosList[currentAdIndex];
+    currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
+
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
     adVideo.currentTime = 0;
     adVideo.play().catch(() => {});
-    // إخفاء الإعلان بعد 5 ثواني بالضبط (بغض النظر عن طول الفيديو)
+
+    // عرض الرسالة المطلوبة بدلاً من "Pausing..."
+    updateStatusMessage('تم الاتصال بغريب');
+
+    // إخفاء الإعلان بعد 5 ثواني بالضبط
     setTimeout(() => {
       adVideo.style.display = 'none';
       remoteVideo.style.display = 'block';
       adVideo.pause();
-      // تصفير العداد واستئناف البحث العادي
+
+      // تصفير العداد واستئناف البحث
       consecutiveSearchFails = 0;
-      normalPauseDuration = 3000; // إعادة الـ pause إلى 3 ثواني
+      normalPauseDuration = 3000;
       updateStatusMessage('Searching...');
       startSearchLoop();
     }, 5000);
   }
+
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
@@ -263,6 +289,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     makingOffer = false;
     ignoreOffer = false;
   }
+
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -272,6 +299,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
   };
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
+
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -297,6 +325,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
+
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
@@ -310,6 +339,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
   }
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
+
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
@@ -322,6 +352,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
+
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
   function showRemoteSpinnerOnly(show) {
@@ -334,6 +365,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
+
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -369,6 +401,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       }
     });
   }
+
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
@@ -404,6 +437,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       startSearchLoop();
     };
   }
+
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
@@ -413,7 +447,8 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
-  // ---------------------- MATCHMAKING (مع التعديل المطلوب) ----------------------
+
+  // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -429,26 +464,24 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       if (!partnerId) {
         safeEmit('stop');
         showRemoteSpinnerOnly(false);
-        updateStatusMessage('Pausing...');
         consecutiveSearchFails++;
-        // بعد 3 محاولات بحث فاشلة متتالية → عرض الفيديو الإعلاني لمدة 5 ثواني
+
+        // بعد 3 محاولات فاشلة متتالية → عرض إعلان
         if (consecutiveSearchFails >= 3) {
-          // تمديد الـ pause مؤقتاً إلى 5 ثواني (لكن العمل الفعلي يتم عبر setTimeout داخل playAdVideo)
-          normalPauseDuration = 5000;
           playAdVideo();
           return;
         }
-        // pause عادي
+
+        // pause عادي (لا نعرض "Pausing..." الآن لأننا سنعرض الإعلان أو نبحث مباشرة)
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
-          // لا نصفر العداد هنا، لأننا نريد حساب المحاولات المتتالية
-          // لكن نعيد الـ pause إلى 3 ثواني إذا كان معدلاً سابقاً (احتياطي)
           if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
           startSearchLoop();
         }, normalPauseDuration);
       }
     }, 3500);
   }
+
   async function startSearch() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -469,6 +502,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     normalPauseDuration = 3000;
     startSearchLoop();
   }
+
   skipBtn.onclick = () => {
     if (isBanned) return;
     safeEmit('skip');
@@ -481,6 +515,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     normalPauseDuration = 3000;
     startSearchLoop();
   };
+
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
@@ -618,6 +653,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       updateStatusMessage('Signal processing failed.');
     }
   });
+
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
@@ -702,6 +738,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       throw e;
     }
   }
+
   // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
   function setupKeepAliveChannel(dc) {
@@ -762,6 +799,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       pingTimer = null;
     }
   }
+
   // ---------------------- STATS MONITOR ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
@@ -812,6 +850,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       statsInterval = null;
     }
   }
+
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -820,6 +859,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     }
     location.href = 'index.html';
   };
+
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (isBanned) {
@@ -843,6 +883,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
       return false;
     }
   }
+
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
@@ -856,6 +897,7 @@ adVideo.src = 'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_
     startSearch();
   }
   initialize();
+
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
