@@ -1,4 +1,4 @@
-اجعل الموشر الذي يدور اثناء البحث شبيه تمام يموقع اوميجل ابحث عليه اظن لونه رمادي وكذك الخلفيه السوداء   window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
