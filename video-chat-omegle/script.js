@@ -1,4 +1,3 @@
-<script>
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
@@ -929,4 +928,3 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   };
 });
-</script>
