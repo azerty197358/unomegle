@@ -248,7 +248,7 @@ window.addEventListener('DOMContentLoaded', () => {
     adVideo.play().catch(() => {});
 
     // عرض الرسالة المطلوبة بدلاً من "Pausing..."
-    updateStatusMessage('تم الاتصال بغريب');
+    updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
 
     // إخفاء الإعلان بعد 5 ثواني بالضبط
     setTimeout(() => {
