@@ -1,8 +1,6 @@
-<script>
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
-
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -21,12 +19,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------- قائمة فيديوهات الإعلانات (أضف المزيد إذا أردت) ----------------------
   const adVideosList = [
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4',
     'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p%2C%20h264).mp4',
     'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
     // أضف روابط فيديوهات إعلانية أخرى هنا لتظهر بالترتيب
   ];
-  let currentAdIndex = 0;
+
+  let currentAdIndex = 0; // سيبدأ من الأول ثم ينتقل للتالي في كل مرة
 
   // عنصر الفيديو الإعلاني
   const adVideo = document.createElement('video');
@@ -43,6 +41,8 @@ window.addEventListener('DOMContentLoaded', () => {
   adVideo.style.zIndex = '10';
   adVideo.style.display = 'none';
   adVideo.style.backgroundColor = '#000';
+
+  // تحميل الفيديو الأول افتراضياً
   adVideo.src = adVideosList[currentAdIndex];
   remoteVideo.parentNode.appendChild(adVideo);
 
@@ -53,11 +53,13 @@ window.addEventListener('DOMContentLoaded', () => {
   let isInitiator = false;
   let micEnabled = true;
   let isBanned = false;
+
   let consecutiveSearchFails = 0;
   const activeTimers = new Set();
   let searchTimer = null;
   let pauseTimer = null;
-  let normalPauseDuration = 3000;
+  let normalPauseDuration = 3000; // 3 ثواني افتراضياً
+
   const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
   const reportedIds = new Set();
   const reportCounts = new Map();
@@ -73,22 +75,20 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-  let pingTimer = null; // أضفنا المتغير هنا ليكون في النطاق الصحيح
 
-  // ---------------------- FINGERPRINT GENERATION (تم إصلاح جزء الـ Audio تمامًا وتبسيطه) ----------------------
+  // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
       const components = [
         navigator.userAgent,
-        navigator.language || navigator.languages[0] || '',
-        screen.width + 'x' + screen.height,
+        navigator.language,
         screen.colorDepth,
-        navigator.hardwareConcurrency || 4,
+        screen.width,
+        screen.height,
+        navigator.hardwareConcurrency || 0,
         new Date().getTimezoneOffset(),
-        Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+        Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
-
-      // Canvas fingerprint
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -97,23 +97,31 @@ window.addEventListener('DOMContentLoaded', () => {
       ctx.fillStyle = '#f60';
       ctx.fillRect(125, 1, 62, 20);
       ctx.fillStyle = '#069';
-      ctx.fillText('fingerprint test 🦄', 2, 15);
+      ctx.fillText('fingerprint', 2, 15);
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('fingerprint test 🦄', 4, 17);
+      ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
-
-      // تجزئة بسيطة وموثوقة
-      let hash = 0;
-      const str = components.join('|||');
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-      }
-      return Math.abs(hash).toString(16);
+      const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(10000, audioCtx.currentTime);
+      oscillator.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop();
+      components.push('audio-supported');
+      const hashCode = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          const char = str.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        return hash.toString(16);
+      };
+      return hashCode(components.join('||'));
     } catch (e) {
       console.error('Fingerprint generation failed:', e);
-      return 'fp-' + Math.random().toString(36).substr(2, 9);
+      return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
 
@@ -126,20 +134,17 @@ window.addEventListener('DOMContentLoaded', () => {
     activeTimers.add(timerId);
     return timerId;
   }
-
   function clearSafeTimer(timerId) {
     if (timerId) {
       clearTimeout(timerId);
       activeTimers.delete(timerId);
     }
   }
-
   function clearAllTimers() {
     activeTimers.forEach(timerId => clearTimeout(timerId));
     activeTimers.clear();
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
-    pingTimer = null;
   }
 
   // ---------------------- SAFE EMIT ----------------------
@@ -170,7 +175,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
     if (statusMsg) {
@@ -189,7 +193,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -198,7 +201,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
-
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -207,11 +209,9 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
-
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
-
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -220,7 +220,6 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
   }
-
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -239,18 +238,25 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------- دالة عرض الإعلان التالي في الترتيب ----------------------
   function playAdVideo() {
+    // تغيير مصدر الفيديو إلى التالي في القائمة (دوري)
     adVideo.src = adVideosList[currentAdIndex];
     currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
+
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
     adVideo.currentTime = 0;
     adVideo.play().catch(() => {});
-    updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
 
+    // عرض الرسالة المطلوبة بدلاً من "Pausing..."
+    updateStatusMessage('تم الاتصال بغريب');
+
+    // إخفاء الإعلان بعد 5 ثواني بالضبط
     setTimeout(() => {
       adVideo.style.display = 'none';
       remoteVideo.style.display = 'block';
       adVideo.pause();
+
+      // تصفير العداد واستئناف البحث
       consecutiveSearchFails = 0;
       normalPauseDuration = 3000;
       updateStatusMessage('Searching...');
@@ -301,11 +307,9 @@ window.addEventListener('DOMContentLoaded', () => {
   typingIndicator.style.fontStyle = 'italic';
   typingIndicator.textContent = 'Stranger is typing...';
   chatMessages.appendChild(typingIndicator);
-
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
-
   function sendTyping() {
     if (!partnerId || isBanned) return;
     if (!typing) {
@@ -318,7 +322,6 @@ window.addEventListener('DOMContentLoaded', () => {
       safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
-
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
@@ -334,7 +337,6 @@ window.addEventListener('DOMContentLoaded', () => {
     typing = false;
     safeEmit('stop-typing', { to: partnerId });
   }
-
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
 
@@ -344,7 +346,6 @@ window.addEventListener('DOMContentLoaded', () => {
     micBtn.disabled = !localStream || isBanned;
     micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
-
   micBtn.onclick = () => {
     if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
@@ -354,13 +355,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
-
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
@@ -417,7 +416,6 @@ window.addEventListener('DOMContentLoaded', () => {
       reportedIds.add(partnerId);
       safeEmit("report", { partnerId });
       safeEmit("skip");
-
       if (now === 1) {
         try {
           addMessage("Capturing screenshot for admin review...", "system");
@@ -429,7 +427,6 @@ window.addEventListener('DOMContentLoaded', () => {
           addMessage("Failed to capture screenshot (no remote frame available).", "system");
         }
       }
-
       cleanupConnection();
       disableChat();
       updateStatusMessage('You reported the user — skipping...');
@@ -446,7 +443,6 @@ window.addEventListener('DOMContentLoaded', () => {
     chatInput.disabled = isBanned;
     sendBtn.disabled = isBanned;
   }
-
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
@@ -460,11 +456,9 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (partnerId) return;
-
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
-
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
       if (!partnerId) {
@@ -472,11 +466,13 @@ window.addEventListener('DOMContentLoaded', () => {
         showRemoteSpinnerOnly(false);
         consecutiveSearchFails++;
 
-        if (consecutiveSearchFails >= 2) {
+        // بعد 3 محاولات فاشلة متتالية → عرض إعلان
+        if (consecutiveSearchFails >= 3) {
           playAdVideo();
           return;
         }
 
+        // pause عادي (لا نعرض "Pausing..." الآن لأننا سنعرض الإعلان أو نبحث مباشرة)
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
           if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
@@ -492,13 +488,11 @@ window.addEventListener('DOMContentLoaded', () => {
       showRemoteSpinnerOnly(false);
       return;
     }
-
     const mediaReady = await initMedia();
     if (!mediaReady) {
       updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
       return;
     }
-
     cleanupConnection();
     chatMessages.innerHTML = '';
     chatMessages.appendChild(typingIndicator);
@@ -526,29 +520,24 @@ window.addEventListener('DOMContentLoaded', () => {
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
   });
-
   socket.on('chat-message', ({ message }) => {
     if (!isBanned) addMessage(message, 'them');
   });
-
   socket.on('typing', () => {
     if (!isBanned) {
       typingIndicator.style.display = 'block';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
-
   socket.on('stop-typing', () => {
     if (!isBanned) typingIndicator.style.display = 'none';
   });
-
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
-
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
@@ -563,14 +552,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
-
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
     addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('You have been unbanned.');
     startSearch();
   });
-
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
       updateStatusMessage('Partner disconnected.');
@@ -583,7 +570,6 @@ window.addEventListener('DOMContentLoaded', () => {
       setSafeTimer(startSearchLoop, 500);
     }
   });
-
   socket.on('partner-found', async data => {
     if (isBanned) {
       safeEmit('skip');
@@ -603,14 +589,12 @@ window.addEventListener('DOMContentLoaded', () => {
       setSafeTimer(startSearchLoop, 200);
       return;
     }
-
     partnerId = foundId;
     isInitiator = !!data.initiator;
     hideAllSpinners();
     updateStatusMessage('Connecting...');
     consecutiveSearchFails = 0;
     normalPauseDuration = 3000;
-
     try {
       createPeerConnection();
       if (isInitiator) {
@@ -628,7 +612,6 @@ window.addEventListener('DOMContentLoaded', () => {
       makingOffer = false;
     }
   });
-
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
@@ -681,11 +664,9 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection = new RTCPeerConnection(servers);
       makingOffer = false;
       ignoreOffer = false;
-
       if (localStream) {
         localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
       }
-
       if (isInitiator) {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -700,7 +681,6 @@ window.addEventListener('DOMContentLoaded', () => {
           setupKeepAliveChannel(keepAliveChannel);
         };
       }
-
       peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) {
           console.error('No streams in ontrack event');
@@ -715,13 +695,11 @@ window.addEventListener('DOMContentLoaded', () => {
         normalPauseDuration = 3000;
         startStatsMonitor();
       };
-
       peerConnection.onicecandidate = e => {
         if (e.candidate && partnerId) {
           safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
         }
       };
-
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
         const s = peerConnection.connectionState;
@@ -742,7 +720,6 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
       };
-
       peerConnection.onnegotiationneeded = async () => {
         if (!peerConnection || makingOffer || !partnerId) return;
         try {
@@ -763,6 +740,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------- KEEPALIVE ----------------------
+  let pingTimer = null;
   function setupKeepAliveChannel(dc) {
     if (!dc) return;
     dc.onopen = () => {
@@ -790,7 +768,6 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('keepAlive channel error:', err);
     };
   }
-
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
@@ -816,7 +793,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, PING_INTERVAL);
   }
-
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
@@ -856,7 +832,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
-
         if (lossRatio > 0.08 || rtt > 0.5) {
           await setSenderMaxBitrate(BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
@@ -869,7 +844,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, STATS_POLL_MS);
   }
-
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
@@ -922,7 +896,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     startSearch();
   }
-
   initialize();
 
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
@@ -931,13 +904,11 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
-
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
-
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
@@ -946,4 +917,3 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   };
 });
-</script>
