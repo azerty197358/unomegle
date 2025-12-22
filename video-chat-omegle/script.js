@@ -1,1003 +1,931 @@
-  window.addEventListener('DOMContentLoaded', () => {
-  // ---------------------- SOCKET ----------------------
-  const socket = io();
-  // ---------------------- DOM ELEMENTS ----------------------
-  const notifyBell = document.getElementById('notifyIcon');
-  const notifyDot = document.getElementById('notifyDot');
-  const notifyMenu = document.getElementById('notifyMenu');
-  const localVideo = document.getElementById('localVideo');
-  const remoteVideo = document.getElementById('remoteVideo');
-  const localSpinner = document.getElementById('localSpinner');
-  const remoteSpinner = document.getElementById('remoteSpinner');
-  const reportBtn = document.getElementById('reportBtn');
-  const micBtn = document.getElementById('micBtn');
-  const chatMessages = document.getElementById('chatMessages');
-  const chatInput = document.getElementById('chatInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const skipBtn = document.getElementById('skipBtn');
-  const exitBtn = document.getElementById('exitBtn');
-  
-  // ---------------------- قائمة فيديوهات الإعلانات ----------------------
- const adVideosList = [
-  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
-  'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
-  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
-];
-  
-  let currentAdIndex = 0;
-  let isAdPlaying = false;
-  let adVideo = null;
-  
-  // دالة لإنشاء وإعداد عنصر الفيديو الإعلاني
-  function createAdVideoElement() {
-    if (adVideo) {
-      adVideo.remove();
-    }
-    
-    adVideo = document.createElement('video');
-    adVideo.id = 'adVideo';
-    adVideo.autoplay = false;
-    adVideo.muted = true;
-    adVideo.playsInline = true;
-    adVideo.preload = 'auto';
-    adVideo.style.position = 'absolute';
-    adVideo.style.top = '0';
-    adVideo.style.left = '0';
-    adVideo.style.width = '100%';
-    adVideo.style.height = '100%';
-    adVideo.style.objectFit = 'cover';
-    adVideo.style.zIndex = '100';
-    adVideo.style.display = 'none';
-    adVideo.style.backgroundColor = '#000';
-    
-    // إضافة عناصر تحكم للفيديو للتصحيح
-    adVideo.controls = false;
-    
-    remoteVideo.parentNode.appendChild(adVideo);
-    return adVideo;
-  }
-  
-  // إنشاء عنصر الفيديو الإعلاني
-  createAdVideoElement();
-  
-  // ---------------------- GLOBAL STATE ----------------------
-  let localStream = null;
-  let peerConnection = null;
-  let partnerId = null;
-  let isInitiator = false;
-  let micEnabled = true;
-  let isBanned = false;
-  let consecutiveSearchFails = 0;
-  const activeTimers = new Set();
-  let searchTimer = null;
-  let pauseTimer = null;
-  let normalPauseDuration = 3000;
-  const servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
-  const reportedIds = new Set();
-  const reportCounts = new Map();
-  const bufferedRemoteCandidates = [];
-  let makingOffer = false;
-  let ignoreOffer = false;
-  let keepAliveChannel = null;
-  let lastPong = Date.now();
-  const PING_INTERVAL = 4000;
-  const PONG_TIMEOUT = 11000;
-  let statsInterval = null;
-  const STATS_POLL_MS = 3000;
-  const BITRATE_HIGH = 800_000;
-  const BITRATE_MEDIUM = 400_000;
-  const BITRATE_LOW = 160_000;
-  
-  // ---------------------- FINGERPRINT GENERATION ----------------------
-  async function generateFingerprint() {
-    try {
-      const components = [
-        navigator.userAgent,
-        navigator.language,
-        screen.colorDepth,
-        screen.width,
-        screen.height,
-        navigator.hardwareConcurrency || 0,
-        new Date().getTimezoneOffset(),
-        Intl.DateTimeFormat().resolvedOptions().timeZone || ''
-      ];
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      ctx.textBaseline = 'top';
-      ctx.font = '14px Arial';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = '#f60';
-      ctx.fillRect(125, 1, 62, 20);
-      ctx.fillStyle = '#069';
-      ctx.fillText('fingerprint', 2, 15);
-      ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-      ctx.fillText('fingerprint', 4, 17);
-      components.push(canvas.toDataURL());
-      const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
-      const oscillator = audioCtx.createOscillator();
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(10000, audioCtx.currentTime);
-      oscillator.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop();
-      components.push('audio-supported');
-      const hashCode = (str) => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          const char = str.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash;
-        }
-        return hash.toString(16);
-      };
-      return hashCode(components.join('||'));
-    } catch (e) {
-      console.error('Fingerprint generation failed:', e);
-      return 'default-fp-' + Math.random().toString(36).substr(2, 9);
-    }
-  }
-  
-  // ---------------------- TIMER MANAGEMENT ----------------------
-  function setSafeTimer(callback, delay) {
-    const timerId = setTimeout(() => {
-      activeTimers.delete(timerId);
-      callback();
-    }, delay);
-    activeTimers.add(timerId);
-    return timerId;
-  }
-  
-  function clearSafeTimer(timerId) {
-    if (timerId) {
-      clearTimeout(timerId);
-      activeTimers.delete(timerId);
-    }
-  }
-  
-  function clearAllTimers() {
-    activeTimers.forEach(timerId => clearTimeout(timerId));
-    activeTimers.clear();
-    if (statsInterval) clearInterval(statsInterval);
-    if (pingTimer) clearInterval(pingTimer);
-  }
-  
-  // ---------------------- SAFE EMIT ----------------------
-  function safeEmit(event, data) {
-    try {
-      if (socket.connected) {
-        socket.emit(event, data);
-        return true;
-      }
-      console.warn(`Socket not connected, cannot emit ${event}`);
-      return false;
-    } catch (e) {
-      console.error(`Error emitting ${event}:`, e);
-      return false;
-    }
-  }
-  
-  // ---------------------- HELPERS ----------------------
-  function addMessage(msg, type = 'system') {
-    const d = document.createElement('div');
-    d.className = `msg ${type}`;
-    d.textContent = msg;
-    const typing = document.querySelector('.msg.system[style*="italic"]');
-    if (typing && typing.parentNode === chatMessages) {
-      chatMessages.insertBefore(d, typing);
-    } else {
-      chatMessages.appendChild(d);
-    }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-  
-  function updateStatusMessage(msg) {
-    let statusMsg = document.getElementById('statusMessage');
-    if (statusMsg) {
-      statusMsg.textContent = msg;
-    } else {
-      statusMsg = document.createElement('div');
-      statusMsg.id = 'statusMessage';
-      statusMsg.className = 'msg status';
-      statusMsg.textContent = msg;
-      const typing = document.querySelector('.msg.system[style*="italic"]');
-      if (typing && typing.parentNode === chatMessages) {
-        chatMessages.insertBefore(statusMsg, typing);
-      } else {
-        chatMessages.appendChild(statusMsg);
-      }
-    }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-  
-  function pushAdminNotification(text) {
-    const item = document.createElement('div');
-    item.className = 'notify-item';
-    item.textContent = text;
-    notifyMenu.prepend(item);
-    const empty = notifyMenu.querySelector('.notify-empty');
-    if (empty) empty.remove();
-  }
-  
-  function ensureNotifyEmpty() {
-    if (notifyMenu.children.length === 0) {
-      const d = document.createElement('div');
-      d.textContent = 'No notifications';
-      d.className = 'notify-empty';
-      notifyMenu.appendChild(d);
-    }
-  }
-  
-  function bufferRemoteCandidate(candidateObj) {
-    bufferedRemoteCandidates.push(candidateObj);
-  }
-  
-  function flushBufferedCandidates() {
-    while (bufferedRemoteCandidates.length && peerConnection) {
-      const c = bufferedRemoteCandidates.shift();
-      try {
-        peerConnection.addIceCandidate(c).catch(() => {});
-      } catch (e) {}
-    }
-  }
-  
-  async function setSenderMaxBitrate(targetBps) {
-    if (!peerConnection) return;
-    try {
-      const senders = peerConnection.getSenders();
-      for (const sender of senders) {
-        if (!sender.track || sender.track.kind !== 'video') continue;
-        const params = sender.getParameters();
-        if (!params.encodings) params.encodings = [{}];
-        params.encodings = params.encodings.map(enc => ({ ...enc, maxBitrate: targetBps }));
-        await sender.setParameters(params);
-      }
-    } catch (e) {
-      console.debug('setSenderMaxBitrate failed', e);
-    }
-  }
-  
-  // ---------------------- دالة عرض الإعلان ----------------------
-  function playAdVideo() {
-    if (isAdPlaying || adVideosList.length === 0) {
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000;
-      updateStatusMessage('Searching...');
-      startSearchLoop();
-      return;
-    }
-    
-    isAdPlaying = true;
-    
-    // تحديث مؤشر الفيديو الحالي
-    const adUrl = adVideosList[currentAdIndex];
-    currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
-    
-    // عرض الرسالة المطلوبة
-    updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-    
-    // إعداد معالجات الأحداث للفيديو
-    adVideo.onerror = () => {
-      console.error('Error loading ad video:', adUrl);
-      hideAdVideo();
-    };
-    
-    adVideo.oncanplay = () => {
-      adVideo.play().catch(e => {
-        console.warn('Auto-play prevented:', e);
-        // محاولة التشغيل بالتفاعل مع المستخدم
-        document.addEventListener('click', tryPlayAdOnClick, { once: true });
-      });
-    };
-    
-    adVideo.onended = hideAdVideo;
-    
-    // ضبط المصدر وعرض الفيديو
-    adVideo.src = adUrl;
-    adVideo.style.display = 'block';
-    remoteVideo.style.display = 'none';
-    
-    // إخفاء الإعلان بعد 5 ثواني في حالة عدم اكتمال التشغيل
-    const adTimeout = setSafeTimer(hideAdVideo, 5000);
-    
-    // دالة محاولة التشغيل عند النقر
-    function tryPlayAdOnClick() {
-      adVideo.play().catch(console.warn);
-    }
-    
-    // دالة إخفاء الفيديو
-    function hideAdVideo() {
-      if (!isAdPlaying) return;
-      
-      clearSafeTimer(adTimeout);
-      document.removeEventListener('click', tryPlayAdOnClick);
-      
-      adVideo.pause();
-      adVideo.style.display = 'none';
-      remoteVideo.style.display = 'block';
-      adVideo.src = '';
-      
-      isAdPlaying = false;
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000;
-      updateStatusMessage('Searching...');
-      startSearchLoop();
-    }
-  }
-  
-  // ---------------------- CONNECTION CLEANUP ----------------------
-  function cleanupConnection() {
-    console.log('Cleaning up connection...');
-    clearAllTimers();
-    if (peerConnection) {
-      try {
-        if (keepAliveChannel) {
-          keepAliveChannel.close();
-          keepAliveChannel = null;
-        }
-        peerConnection.close();
-      } catch (e) {
-        console.error('Error closing peer connection:', e);
-      }
-      peerConnection = null;
-    }
-    if (remoteVideo) {
-      remoteVideo.srcObject = null;
-    }
-    bufferedRemoteCandidates.length = 0;
-    partnerId = null;
-    isInitiator = false;
-    makingOffer = false;
-    ignoreOffer = false;
-  }
-  
-  // ---------------------- NOTIFICATION MENU ----------------------
-  notifyBell.onclick = (e) => {
-    e.stopPropagation();
-    if (notifyDot) notifyDot.style.display = 'none';
-    notifyBell.classList.remove('shake');
-    notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
-  };
-  
-  document.onclick = () => { notifyMenu.style.display = 'none'; };
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
-  
-  // ---------------------- TYPING INDICATOR ----------------------
-  const typingIndicator = document.createElement('div');
-  typingIndicator.className = 'msg system';
-  typingIndicator.style.display = 'none';
-  typingIndicator.style.fontStyle = 'italic';
-  typingIndicator.textContent = 'Stranger is typing...';
-  chatMessages.appendChild(typingIndicator);
-  
-  let typing = false;
-  let typingTimer = null;
-  const TYPING_PAUSE = 1500;
-  
-  function sendTyping() {
-    if (!partnerId || isBanned) return;
-    if (!typing) {
-      typing = true;
-      safeEmit('typing', { to: partnerId });
-    }
-    clearSafeTimer(typingTimer);
-    typingTimer = setSafeTimer(() => {
-      typing = false;
-      safeEmit('stop-typing', { to: partnerId });
-    }, TYPING_PAUSE);
-  }
-  
-  chatInput.oninput = () => {
-    if (!chatInput.disabled && !isBanned) sendTyping();
-  };
-  
-  // ---------------------- SEND CHAT ----------------------
-  function sendMessage() {
-    if (isBanned) return;
-    const msg = chatInput.value.trim();
-    if (!msg || !partnerId) return;
-    addMessage(msg, 'you');
-    safeEmit('chat-message', { to: partnerId, message: msg });
-    chatInput.value = '';
-    typing = false;
-    safeEmit('stop-typing', { to: partnerId });
-  }
-  
-  sendBtn.onclick = sendMessage;
-  chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
-  
-  // ---------------------- MIC CONTROL ----------------------
-  function updateMicButton() {
-    micBtn.textContent = micEnabled ? '🎤' : '🔇';
-    micBtn.disabled = !localStream || isBanned;
-    micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
-  }
-  
-  micBtn.onclick = () => {
-    if (!localStream || isBanned) return;
-    micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-    updateMicButton();
-  };
-  
-  // ---------------------- SPINNER BEHAVIOR ----------------------
-  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
-  
-  function showRemoteSpinnerOnly(show) {
-    if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
-    if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
-    if (localVideo) localVideo.style.display = 'block';
-  }
-  
-  function hideAllSpinners() {
-    if (remoteSpinner) remoteSpinner.style.display = 'none';
-    if (remoteVideo) remoteVideo.style.display = 'block';
-    if (localVideo) localVideo.style.display = 'block';
-  }
-  
-  // ---------------------- SCREENSHOT UTIL ----------------------
-  function captureRemoteVideoFrame() {
-    return new Promise((resolve, reject) => {
-      try {
-        const v = remoteVideo;
-        if (!v || !v.srcObject) {
-          return reject(new Error('Remote video not available'));
-        }
-        const width = v.videoWidth || v.clientWidth || 640;
-        const height = v.videoHeight || v.clientHeight || 480;
-        if (width === 0 || height === 0) {
-          setTimeout(() => {
-            const w2 = v.videoWidth || v.clientWidth || 640;
-            const h2 = v.videoHeight || v.clientHeight || 480;
-            if (w2 === 0 || h2 === 0) return reject(new Error('Remote video has no frames yet'));
-            const canvas2 = document.createElement('canvas');
-            canvas2.width = w2;
-            canvas2.height = h2;
-            const ctx2 = canvas2.getContext('2d');
-            ctx2.drawImage(v, 0, 0, w2, h2);
-            resolve(canvas2.toDataURL('image/png'));
-          }, 250);
-          return;
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(v, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/png'));
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-  
-  // ---------------------- REPORT BUTTON ----------------------
-  if (reportBtn) {
-    reportBtn.style.display = 'flex';
-    reportBtn.onclick = async () => {
-      if (!partnerId) {
-        updateStatusMessage("No user to report.");
-        return;
-      }
-      const prev = reportCounts.get(partnerId) || 0;
-      const now = prev + 1;
-      reportCounts.set(partnerId, now);
-      reportedIds.add(partnerId);
-      safeEmit("report", { partnerId });
-      safeEmit("skip");
-      if (now === 1) {
-        try {
-          addMessage("Capturing screenshot for admin review...", "system");
-          const image = await captureRemoteVideoFrame();
-          safeEmit("admin-screenshot", { image, partnerId });
-          addMessage("📋 A report about this user has been sent ✉️⚠️. Action is being reviewed 🔍⏳.", "system");
-        } catch (err) {
-          console.error('Screenshot capture failed', err);
-          addMessage("Failed to capture screenshot (no remote frame available).", "system");
-        }
-      }
-      cleanupConnection();
-      disableChat();
-      updateStatusMessage('You reported the user — skipping...');
-      clearSafeTimer(searchTimer);
-      clearSafeTimer(pauseTimer);
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000;
-      startSearchLoop();
-    };
-  }
-  
-  // ---------------------- UI CONTROLS ----------------------
-  function enableChat() {
-    chatInput.disabled = isBanned;
-    sendBtn.disabled = isBanned;
-  }
-  
-  function disableChat() {
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
-  }
-  
-  // ---------------------- MATCHMAKING ----------------------
-  function startSearchLoop() {
-    if (isBanned) {
-      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
-      showRemoteSpinnerOnly(false);
-      return;
-    }
-    if (partnerId) return;
-    showRemoteSpinnerOnly(true);
-    updateStatusMessage('Searching...');
-    safeEmit('find-partner');
-    clearSafeTimer(searchTimer);
-    searchTimer = setSafeTimer(() => {
-      if (!partnerId) {
-        safeEmit('stop');
-        showRemoteSpinnerOnly(false);
-        consecutiveSearchFails++;
+// ملف main.js - كود كامل منظم ومستقر
+class VideoChatApp {
+    constructor() {
+        // تهيئة جميع المتغيرات
+        this.socket = null;
+        this.peerConnection = null;
+        this.localStream = null;
+        this.remoteStream = null;
+        this.partnerId = null;
+        this.isInitiator = false;
+        this.isConnected = false;
+        this.isSearching = false;
+        this.isBanned = false;
+        this.reconnectionAttempts = 0;
+        this.maxReconnectionAttempts = 3;
         
-        // بعد 3 محاولات فاشلة متتالية → عرض إعلان
-        if (consecutiveSearchFails >= 3) {
-          playAdVideo();
-          return;
-        }
+        // عناصر DOM
+        this.elements = {};
         
-        // pause عادي
-        clearSafeTimer(pauseTimer);
-        pauseTimer = setSafeTimer(() => {
-          if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
-          startSearchLoop();
-        }, normalPauseDuration);
-      }
-    }, 3500);
-  }
-  
-  async function startSearch() {
-    if (isBanned) {
-      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
-      showRemoteSpinnerOnly(false);
-      return;
-    }
-    const mediaReady = await initMedia();
-    if (!mediaReady) {
-      updateStatusMessage('Media initialization failed. Please allow camera/mic access.');
-      return;
-    }
-    cleanupConnection();
-    chatMessages.innerHTML = '';
-    chatMessages.appendChild(typingIndicator);
-    showRemoteSpinnerOnly(true);
-    skipBtn.disabled = false;
-    consecutiveSearchFails = 0;
-    normalPauseDuration = 3000;
-    startSearchLoop();
-  }
-  
-  skipBtn.onclick = () => {
-    if (isBanned) return;
-    safeEmit('skip');
-    updateStatusMessage('You skipped.');
-    disableChat();
-    cleanupConnection();
-    clearSafeTimer(searchTimer);
-    clearSafeTimer(pauseTimer);
-    consecutiveSearchFails = 0;
-    normalPauseDuration = 3000;
-    startSearchLoop();
-  };
-  
-  // ---------------------- SOCKET EVENTS ----------------------
-  socket.on('waiting', msg => {
-    if (!isBanned) updateStatusMessage(msg);
-  });
-  
-  socket.on('chat-message', ({ message }) => {
-    if (!isBanned) addMessage(message, 'them');
-  });
-  
-  socket.on('typing', () => {
-    if (!isBanned) {
-      typingIndicator.style.display = 'block';
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  });
-  
-  socket.on('stop-typing', () => {
-    if (!isBanned) typingIndicator.style.display = 'none';
-  });
-  
-  socket.on('adminMessage', msg => {
-    if (notifyDot) notifyDot.style.display = 'block';
-    notifyBell.classList.add('shake');
-    pushAdminNotification('📢 ' + msg);
-    addMessage('📢 Admin: ' + msg, 'system');
-  });
-  
-  socket.on('banned', ({ message }) => {
-    isBanned = true;
-    addMessage(message || 'You are banned.', 'system');
-    showRemoteSpinnerOnly(true);
-    updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
-    cleanupConnection();
-    disableChat();
-    if (localStream) {
-      localStream.getTracks().forEach(t => t.stop());
-      localStream = null;
-    }
-    if (localVideo) localVideo.srcObject = null;
-    updateMicButton();
-  });
-  
-  socket.on('unbanned', ({ message }) => {
-    isBanned = false;
-    addMessage(message || 'You have been unbanned.', 'system');
-    updateStatusMessage('You have been unbanned.');
-    startSearch();
-  });
-  
-  socket.on('partner-disconnected', () => {
-    if (!isBanned) {
-      updateStatusMessage('Partner disconnected.');
-      disableChat();
-      cleanupConnection();
-      clearSafeTimer(searchTimer);
-      clearSafeTimer(pauseTimer);
-      consecutiveSearchFails = 0;
-      normalPauseDuration = 3000;
-      setSafeTimer(startSearchLoop, 500);
-    }
-  });
-  
-  socket.on('partner-found', async data => {
-    if (isBanned) {
-      safeEmit('skip');
-      return;
-    }
-    const foundId = data?.id || data?.partnerId;
-    if (!foundId) {
-      console.error('Invalid partner data received:', data);
-      updateStatusMessage('Invalid partner data. Retrying...');
-      setSafeTimer(startSearchLoop, 1000);
-      return;
-    }
-    if (reportedIds.has(foundId)) {
-      safeEmit('skip');
-      updateStatusMessage('Found reported user — skipping...');
-      cleanupConnection();
-      setSafeTimer(startSearchLoop, 200);
-      return;
-    }
-    partnerId = foundId;
-    isInitiator = !!data.initiator;
-    hideAllSpinners();
-    updateStatusMessage('Connecting...');
-    consecutiveSearchFails = 0;
-    normalPauseDuration = 3000;
-    try {
-      createPeerConnection();
-      if (isInitiator) {
-        makingOffer = true;
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        safeEmit('signal', { to: partnerId, data: offer });
-      }
-    } catch (e) {
-      console.error('Failed to create peer connection or offer:', e);
-      updateStatusMessage('Connection setup failed. Retrying...');
-      cleanupConnection();
-      setSafeTimer(startSearchLoop, 1000);
-    } finally {
-      makingOffer = false;
-    }
-  });
-  
-  socket.on('signal', async ({ from, data }) => {
-    if (isBanned) return;
-    if (!from || !data) {
-      console.error('Invalid signal data:', { from, data });
-      return;
-    }
-    if (partnerId && partnerId !== from) {
-      console.warn('Signal from unexpected partner:', from, 'expected:', partnerId);
-      return;
-    }
-    if (!peerConnection) {
-      try {
-        createPeerConnection();
-      } catch (e) {
-        console.error('Failed to create peer connection for signal:', e);
-        return;
-      }
-    }
-    if (data.candidate && !peerConnection.remoteDescription) {
-      bufferRemoteCandidate(data.candidate);
-      return;
-    }
-    try {
-      if (data.type === 'offer') {
-        const offerCollision = (makingOffer || peerConnection.signalingState !== 'stable');
-        ignoreOffer = !isInitiator && offerCollision;
-        if (ignoreOffer) return;
-        await peerConnection.setRemoteDescription(data);
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        safeEmit('signal', { to: from, data: answer });
-      } else if (data.type === 'answer') {
-        await peerConnection.setRemoteDescription(data);
-      } else if (data.candidate) {
-        await peerConnection.addIceCandidate(data.candidate);
-      }
-    } catch (e) {
-      console.error('Signal handling error:', e);
-      updateStatusMessage('Signal processing failed.');
-    }
-  });
-  
-  // ---------------------- WEBRTC ----------------------
-  function createPeerConnection() {
-    if (peerConnection) {
-      try { peerConnection.close(); } catch (e) {}
-      peerConnection = null;
-    }
-    try {
-      peerConnection = new RTCPeerConnection(servers);
-      makingOffer = false;
-      ignoreOffer = false;
-      if (localStream) {
-        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
-      }
-      if (isInitiator) {
-        try {
-          keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
-          setupKeepAliveChannel(keepAliveChannel);
-        } catch (e) {
-          console.error('Failed to create data channel:', e);
-          keepAliveChannel = null;
-        }
-      } else {
-        peerConnection.ondatachannel = (ev) => {
-          keepAliveChannel = ev.channel;
-          setupKeepAliveChannel(keepAliveChannel);
+        // تتبع الوقت
+        this.connectionStartTime = null;
+        this.searchStartTime = null;
+        
+        // الإعدادات
+        this.config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' }
+            ],
+            reconnectDelay: 1000,
+            searchTimeout: 10000,
+            connectionTimeout: 15000,
+            keepAliveInterval: 5000
         };
-      }
-      peerConnection.ontrack = e => {
-        if (!e.streams || e.streams.length === 0) {
-          console.error('No streams in ontrack event');
-          return;
-        }
-        remoteVideo.srcObject = e.streams[0];
-        enableChat();
-        updateStatusMessage('Connected');
-        showRemoteSpinnerOnly(false);
-        flushBufferedCandidates();
-        consecutiveSearchFails = 0;
-        normalPauseDuration = 3000;
-        startStatsMonitor();
-      };
-      peerConnection.onicecandidate = e => {
-        if (e.candidate && partnerId) {
-          safeEmit('signal', { to: partnerId, data: { candidate: e.candidate } });
-        }
-      };
-      peerConnection.onconnectionstatechange = () => {
-        if (!peerConnection) return;
-        const s = peerConnection.connectionState;
-        console.debug('connectionState:', s);
-        if (s === 'connected') {
-          updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-          consecutiveSearchFails = 0;
-        } else if (['disconnected', 'failed', 'closed'].includes(s)) {
-          if (!isBanned) {
-            updateStatusMessage('Connection lost.');
-            disableChat();
-            cleanupConnection();
-            clearSafeTimer(searchTimer);
-            clearSafeTimer(pauseTimer);
-            consecutiveSearchFails = 0;
-            normalPauseDuration = 3000;
-            setSafeTimer(startSearchLoop, 500);
-          }
-        }
-      };
-      peerConnection.onnegotiationneeded = async () => {
-        if (!peerConnection || makingOffer || !partnerId) return;
+        
+        // الإعلانات
+        this.adVideos = [
+            'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
+            'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
+            'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
+        ];
+        
+        this.initialize();
+    }
+
+    async initialize() {
         try {
-          makingOffer = true;
-          const offer = await peerConnection.createOffer();
-          await peerConnection.setLocalDescription(offer);
-          safeEmit('signal', { to: partnerId, data: offer });
-        } catch (e) {
-          console.error('Negotiation error:', e);
-        } finally {
-          makingOffer = false;
+            await this.initializeDOM();
+            await this.initializeSocket();
+            await this.initializeMedia();
+            this.setupEventListeners();
+            this.startApplication();
+        } catch (error) {
+            console.error('Initialization failed:', error);
+            this.showError('Failed to initialize application');
         }
-      };
-    } catch (e) {
-      console.error('Failed to create peer connection:', e);
-      throw e;
     }
-  }
-  
-  // ---------------------- KEEPALIVE ----------------------
-  let pingTimer = null;
-  function setupKeepAliveChannel(dc) {
-    if (!dc) return;
-    dc.onopen = () => {
-      lastPong = Date.now();
-      startPingLoop();
-    };
-    dc.onmessage = (ev) => {
-      if (!ev.data) return;
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === 'ping') {
-          dc.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
-        } else if (msg.type === 'pong') {
-          lastPong = Date.now();
-        }
-      } catch (e) {
-        console.error('KeepAlive message parse error:', e);
-      }
-    };
-    dc.onclose = () => {
-      console.debug('keepAlive channel closed');
-      stopPingLoop();
-    };
-    dc.onerror = (err) => {
-      console.error('keepAlive channel error:', err);
-    };
-  }
-  
-  function startPingLoop() {
-    stopPingLoop();
-    pingTimer = setInterval(() => {
-      if (!keepAliveChannel || keepAliveChannel.readyState !== 'open') {
-        stopPingLoop();
-        return;
-      }
-      try {
-        keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
-      } catch (e) {
-        console.error('Ping send error:', e);
-        stopPingLoop();
-      }
-      if (Date.now() - lastPong > PONG_TIMEOUT) {
-        console.warn('PONG timeout -> treating as disconnect');
-        stopPingLoop();
-        cleanupConnection();
-        clearSafeTimer(searchTimer);
-        clearSafeTimer(pauseTimer);
-        consecutiveSearchFails = 0;
-        normalPauseDuration = 3000;
-        setSafeTimer(startSearchLoop, 500);
-      }
-    }, PING_INTERVAL);
-  }
-  
-  function stopPingLoop() {
-    if (pingTimer) {
-      clearInterval(pingTimer);
-      pingTimer = null;
+
+    async initializeDOM() {
+        // جمع جميع عناصر DOM
+        this.elements = {
+            // الفيديو
+            localVideo: document.getElementById('localVideo'),
+            remoteVideo: document.getElementById('remoteVideo'),
+            localSpinner: document.getElementById('localSpinner'),
+            remoteSpinner: document.getElementById('remoteSpinner'),
+            
+            // الأزرار
+            micBtn: document.getElementById('micBtn'),
+            reportBtn: document.getElementById('reportBtn'),
+            skipBtn: document.getElementById('skipBtn'),
+            exitBtn: document.getElementById('exitBtn'),
+            sendBtn: document.getElementById('sendBtn'),
+            
+            // الدردشة
+            chatMessages: document.getElementById('chatMessages'),
+            chatInput: document.getElementById('chatInput'),
+            
+            // التنبيهات
+            notifyIcon: document.getElementById('notifyIcon'),
+            notifyDot: document.getElementById('notifyDot'),
+            notifyMenu: document.getElementById('notifyMenu'),
+            
+            // الحالة
+            statusMessage: document.getElementById('statusMessage') || this.createStatusElement()
+        };
+
+        // إنشاء مؤشر الكتابة
+        this.createTypingIndicator();
+        
+        // إنشاء عنصر الفيديو الإعلاني
+        this.createAdVideoElement();
     }
-  }
-  
-  // ---------------------- STATS MONITOR ----------------------
-  function startStatsMonitor() {
-    stopStatsMonitor();
-    statsInterval = setInterval(async () => {
-      if (!peerConnection || peerConnection.connectionState !== 'connected') {
-        stopStatsMonitor();
-        return;
-      }
-      try {
-        const stats = await peerConnection.getStats(null);
-        let outboundVideoReport = null;
-        let remoteInboundRtp = null;
-        stats.forEach(report => {
-          if (report.type === 'outbound-rtp' && report.kind === 'video') {
-            outboundVideoReport = report;
-          }
-          if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
-            remoteInboundRtp = report;
-          }
+
+    createStatusElement() {
+        const statusEl = document.createElement('div');
+        statusEl.id = 'statusMessage';
+        statusEl.className = 'status-message';
+        document.querySelector('.video-container').appendChild(statusEl);
+        return statusEl;
+    }
+
+    createTypingIndicator() {
+        this.typingIndicator = document.createElement('div');
+        this.typingIndicator.className = 'typing-indicator';
+        this.typingIndicator.style.display = 'none';
+        this.typingIndicator.textContent = 'Stranger is typing...';
+        this.elements.chatMessages.appendChild(this.typingIndicator);
+    }
+
+    createAdVideoElement() {
+        this.adVideo = document.createElement('video');
+        this.adVideo.id = 'adVideo';
+        this.adVideo.autoplay = false;
+        this.adVideo.muted = true;
+        this.adVideo.playsInline = true;
+        this.adVideo.preload = 'auto';
+        this.adVideo.style.position = 'absolute';
+        this.adVideo.style.top = '0';
+        this.adVideo.style.left = '0';
+        this.adVideo.style.width = '100%';
+        this.adVideo.style.height = '100%';
+        this.adVideo.style.objectFit = 'cover';
+        this.adVideo.style.zIndex = '100';
+        this.adVideo.style.display = 'none';
+        this.adVideo.style.backgroundColor = '#000';
+        document.querySelector('.remote-video-container').appendChild(this.adVideo);
+    }
+
+    async initializeSocket() {
+        return new Promise((resolve, reject) => {
+            try {
+                this.socket = io({
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 20000
+                });
+
+                this.socket.on('connect', () => {
+                    console.log('Socket connected:', this.socket.id);
+                    this.updateStatus('Connected to server');
+                    resolve();
+                });
+
+                this.socket.on('connect_error', (error) => {
+                    console.error('Socket connection error:', error);
+                    reject(error);
+                });
+
+                this.setupSocketListeners();
+            } catch (error) {
+                reject(error);
+            }
         });
-        let lossRatio = 0;
-        if (outboundVideoReport?.packetsSent > 0) {
-          if (remoteInboundRtp?.packetsLost >= 0) {
-            const lost = remoteInboundRtp.packetsLost;
-            const sent = (remoteInboundRtp.packetsReceived || 0) + lost;
-            lossRatio = sent > 0 ? lost / sent : 0;
-          } else if (outboundVideoReport.packetsLost >= 0) {
-            lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
-          }
+    }
+
+    setupSocketListeners() {
+        // استقبال الشريك
+        this.socket.on('partner-found', async (data) => {
+            console.log('Partner found:', data);
+            await this.handlePartnerFound(data);
+        });
+
+        // إشارات WebRTC
+        this.socket.on('signal', async (data) => {
+            await this.handleSignal(data);
+        });
+
+        // رسائل الدردشة
+        this.socket.on('chat-message', (data) => {
+            this.handleChatMessage(data);
+        });
+
+        // مؤشر الكتابة
+        this.socket.on('typing', () => {
+            this.showTypingIndicator();
+        });
+
+        this.socket.on('stop-typing', () => {
+            this.hideTypingIndicator();
+        });
+
+        // انفصال الشريك
+        this.socket.on('partner-disconnected', () => {
+            this.handlePartnerDisconnected();
+        });
+
+        // الحظر
+        this.socket.on('banned', (data) => {
+            this.handleBanned(data);
+        });
+
+        // رسائل المسؤول
+        this.socket.on('adminMessage', (message) => {
+            this.showAdminMessage(message);
+        });
+
+        // الانتظار
+        this.socket.on('waiting', (message) => {
+            this.updateStatus(message);
+        });
+    }
+
+    async initializeMedia() {
+        try {
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    frameRate: { ideal: 30 }
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+
+            this.elements.localVideo.srcObject = this.localStream;
+            this.updateMicButton();
+            this.hideLocalSpinner();
+            
+            return true;
+        } catch (error) {
+            console.error('Media initialization error:', error);
+            this.showError('Cannot access camera/microphone. Please check permissions.');
+            return false;
         }
-        let rtt = 0;
-        stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
-        if (lossRatio > 0.08 || rtt > 0.5) {
-          await setSenderMaxBitrate(BITRATE_LOW);
-        } else if (lossRatio > 0.03 || rtt > 0.25) {
-          await setSenderMaxBitrate(BITRATE_MEDIUM);
+    }
+
+    setupEventListeners() {
+        // زر الميكروفون
+        this.elements.micBtn.addEventListener('click', () => this.toggleMic());
+
+        // زر التخطي
+        this.elements.skipBtn.addEventListener('click', () => this.skipPartner());
+
+        // زر الإبلاغ
+        this.elements.reportBtn.addEventListener('click', () => this.reportPartner());
+
+        // زر الخروج
+        this.elements.exitBtn.addEventListener('click', () => this.exit());
+
+        // إرسال الرسالة
+        this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.elements.chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.sendMessage();
+        });
+
+        // مؤشر الكتابة
+        this.elements.chatInput.addEventListener('input', () => {
+            if (this.partnerId && !this.isBanned) {
+                this.socket.emit('typing', { to: this.partnerId });
+                clearTimeout(this.typingTimeout);
+                this.typingTimeout = setTimeout(() => {
+                    this.socket.emit('stop-typing', { to: this.partnerId });
+                }, 1500);
+            }
+        });
+
+        // إعادة الاتصال عند فقدان الاتصال
+        window.addEventListener('online', () => {
+            if (!this.isConnected && !this.isBanned) {
+                this.reconnect();
+            }
+        });
+    }
+
+    startApplication() {
+        this.updateStatus('Starting...');
+        this.startSearch();
+    }
+
+    async startSearch() {
+        if (this.isBanned) {
+            this.updateStatus('You are banned');
+            return;
+        }
+
+        if (this.isSearching) return;
+        
+        this.isSearching = true;
+        this.searchStartTime = Date.now();
+        
+        this.cleanupConnection();
+        this.clearChat();
+        this.disableChat();
+        this.showRemoteSpinner();
+        this.updateStatus('Searching for a stranger...');
+
+        this.socket.emit('find-partner');
+
+        // مهلة البحث
+        this.searchTimeout = setTimeout(() => {
+            if (this.isSearching && !this.isConnected) {
+                this.handleSearchTimeout();
+            }
+        }, this.config.searchTimeout);
+    }
+
+    async handlePartnerFound(data) {
+        clearTimeout(this.searchTimeout);
+        this.isSearching = false;
+        
+        const partnerId = data?.id || data?.partnerId;
+        if (!partnerId) {
+            this.updateStatus('Invalid partner data');
+            this.retrySearch();
+            return;
+        }
+
+        this.partnerId = partnerId;
+        this.isInitiator = !!data.initiator;
+        
+        this.updateStatus('Connecting to stranger...');
+        this.hideRemoteSpinner();
+
+        try {
+            await this.createPeerConnection();
+            
+            if (this.isInitiator) {
+                await this.createAndSendOffer();
+            }
+            
+            this.startConnectionTimer();
+        } catch (error) {
+            console.error('Connection failed:', error);
+            this.updateStatus('Connection failed. Retrying...');
+            this.retrySearch();
+        }
+    }
+
+    async createPeerConnection() {
+        // تنظيف الاتصال السابق
+        if (this.peerConnection) {
+            this.peerConnection.close();
+        }
+
+        // إنشاء اتصال جديد
+        this.peerConnection = new RTCPeerConnection({
+            iceServers: this.config.iceServers,
+            iceCandidatePoolSize: 10
+        });
+
+        // إضافة التدفق المحلي
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                this.peerConnection.addTrack(track, this.localStream);
+            });
+        }
+
+        // إعداد معالجات الأحداث
+        this.setupPeerConnectionEvents();
+    }
+
+    setupPeerConnectionEvents() {
+        // عند استقبال التدفق البعيد
+        this.peerConnection.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                this.remoteStream = event.streams[0];
+                this.elements.remoteVideo.srcObject = this.remoteStream;
+                this.onConnectionEstablished();
+            }
+        };
+
+        // مرشحات ICE
+        this.peerConnection.onicecandidate = (event) => {
+            if (event.candidate && this.partnerId) {
+                this.socket.emit('signal', {
+                    to: this.partnerId,
+                    data: { candidate: event.candidate }
+                });
+            }
+        };
+
+        // تغيير حالة الاتصال
+        this.peerConnection.onconnectionstatechange = () => {
+            const state = this.peerConnection.connectionState;
+            console.log('Connection state:', state);
+
+            switch (state) {
+                case 'connected':
+                    this.onConnectionEstablished();
+                    break;
+                case 'disconnected':
+                case 'failed':
+                    this.onConnectionLost();
+                    break;
+                case 'closed':
+                    this.cleanupConnection();
+                    break;
+            }
+        };
+
+        // ICE Gathering state
+        this.peerConnection.onicegatheringstatechange = () => {
+            console.log('ICE gathering state:', this.peerConnection.iceGatheringState);
+        };
+
+        // ICE Connection state
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', this.peerConnection.iceConnectionState);
+        };
+    }
+
+    async createAndSendOffer() {
+        try {
+            const offer = await this.peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+                voiceActivityDetection: true
+            });
+
+            await this.peerConnection.setLocalDescription(offer);
+
+            this.socket.emit('signal', {
+                to: this.partnerId,
+                data: offer
+            });
+        } catch (error) {
+            console.error('Error creating offer:', error);
+            throw error;
+        }
+    }
+
+    async handleSignal(data) {
+        if (!this.peerConnection || !data) return;
+
+        try {
+            if (data.data.type === 'offer') {
+                await this.peerConnection.setRemoteDescription(data.data);
+                const answer = await this.peerConnection.createAnswer();
+                await this.peerConnection.setLocalDescription(answer);
+                
+                this.socket.emit('signal', {
+                    to: data.from,
+                    data: answer
+                });
+            } else if (data.data.type === 'answer') {
+                await this.peerConnection.setRemoteDescription(data.data);
+            } else if (data.data.candidate) {
+                try {
+                    await this.peerConnection.addIceCandidate(data.data.candidate);
+                } catch (error) {
+                    console.warn('Failed to add ICE candidate:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling signal:', error);
+        }
+    }
+
+    onConnectionEstablished() {
+        clearTimeout(this.connectionTimeout);
+        this.isConnected = true;
+        this.isSearching = false;
+        this.connectionStartTime = Date.now();
+        this.reconnectionAttempts = 0;
+
+        this.hideRemoteSpinner();
+        this.enableChat();
+        this.updateStatus('Connected! Say hello! 👋');
+        
+        // بدء مراقبة الاتصال
+        this.startConnectionMonitor();
+    }
+
+    onConnectionLost() {
+        if (this.isConnected) {
+            this.isConnected = false;
+            this.updateStatus('Connection lost. Reconnecting...');
+            
+            if (this.reconnectionAttempts < this.maxReconnectionAttempts) {
+                this.reconnectionAttempts++;
+                setTimeout(() => this.reconnect(), this.config.reconnectDelay * this.reconnectionAttempts);
+            } else {
+                this.handleDisconnection();
+            }
+        }
+    }
+
+    async reconnect() {
+        if (this.partnerId && this.peerConnection) {
+            try {
+                // محاولة إعادة الاتصال مع نفس الشريك
+                this.updateStatus('Reconnecting...');
+                
+                // إنشاء عرض جديد
+                if (this.isInitiator) {
+                    await this.createAndSendOffer();
+                }
+            } catch (error) {
+                console.error('Reconnection failed:', error);
+                this.handleDisconnection();
+            }
         } else {
-          await setSenderMaxBitrate(BITRATE_HIGH);
+            this.handleDisconnection();
         }
-      } catch (e) {
-        console.debug('Stats monitor error:', e);
-      }
-    }, STATS_POLL_MS);
-  }
-  
-  function stopStatsMonitor() {
-    if (statsInterval) {
-      clearInterval(statsInterval);
-      statsInterval = null;
     }
-  }
-  
-  // ---------------------- EXIT ----------------------
-  exitBtn.onclick = () => {
-    cleanupConnection();
-    if (localStream) {
-      localStream.getTracks().forEach(t => t.stop());
+
+    handleDisconnection() {
+        this.cleanupConnection();
+        this.disableChat();
+        this.updateStatus('Disconnected. Searching for new partner...');
+        this.startSearch();
     }
-    location.href = 'index.html';
-  };
-  
-  // ---------------------- MEDIA INIT ----------------------
-  async function initMedia() {
-    if (isBanned) {
-      updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
-      return false;
+
+    handlePartnerDisconnected() {
+        this.updateStatus('Stranger disconnected');
+        this.handleDisconnection();
     }
-    if (localStream) return true;
+
+    handleSearchTimeout() {
+        this.isSearching = false;
+        
+        // عرض إعلان بعد مهلة البحث
+        if (!this.isConnected) {
+            this.showAdvertisement();
+        } else {
+            this.retrySearch();
+        }
+    }
+
+    showAdvertisement() {
+        if (this.adVideos.length === 0) {
+            this.retrySearch();
+            return;
+        }
+
+        this.updateStatus('Playing advertisement...');
+        
+        // اختيار إعلان عشوائي
+        const randomAd = this.adVideos[Math.floor(Math.random() * this.adVideos.length)];
+        this.adVideo.src = randomAd;
+        this.adVideo.style.display = 'block';
+        this.elements.remoteVideo.style.display = 'none';
+
+        this.adVideo.play().catch(error => {
+            console.warn('Ad autoplay failed:', error);
+            // المتابعة حتى لو فشل التشغيل التلقائي
+            this.onAdComplete();
+        });
+
+        // إكمال الإعلان بعد مدة قصيرة أو عند انتهائه
+        this.adVideo.onended = () => this.onAdComplete();
+        setTimeout(() => this.onAdComplete(), 5000);
+    }
+
+    onAdComplete() {
+        this.adVideo.style.display = 'none';
+        this.elements.remoteVideo.style.display = 'block';
+        this.adVideo.src = '';
+        
+        this.retrySearch();
+    }
+
+    retrySearch() {
+        this.updateStatus('Searching again...');
+        setTimeout(() => this.startSearch(), 1000);
+    }
+
+    startConnectionTimer() {
+        this.connectionTimeout = setTimeout(() => {
+            if (!this.isConnected) {
+                this.updateStatus('Connection timeout. Retrying...');
+                this.retrySearch();
+            }
+        }, this.config.connectionTimeout);
+    }
+
+    startConnectionMonitor() {
+        this.connectionMonitor = setInterval(() => {
+            if (this.isConnected && this.peerConnection) {
+                const state = this.peerConnection.iceConnectionState;
+                if (state === 'disconnected' || state === 'failed') {
+                    this.onConnectionLost();
+                }
+            } else {
+                clearInterval(this.connectionMonitor);
+            }
+        }, 3000);
+    }
+
+    // وظائف المساعدة للـ UI
+    updateStatus(message) {
+        if (this.elements.statusMessage) {
+            this.elements.statusMessage.textContent = message;
+        }
+    }
+
+    showError(message) {
+        console.error(message);
+        this.updateStatus(`Error: ${message}`);
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = message;
+        this.elements.chatMessages.appendChild(errorDiv);
+    }
+
+    showRemoteSpinner() {
+        if (this.elements.remoteSpinner) {
+            this.elements.remoteSpinner.style.display = 'block';
+        }
+        if (this.elements.remoteVideo) {
+            this.elements.remoteVideo.style.display = 'none';
+        }
+    }
+
+    hideRemoteSpinner() {
+        if (this.elements.remoteSpinner) {
+            this.elements.remoteSpinner.style.display = 'none';
+        }
+        if (this.elements.remoteVideo) {
+            this.elements.remoteVideo.style.display = 'block';
+        }
+    }
+
+    hideLocalSpinner() {
+        if (this.elements.localSpinner) {
+            this.elements.localSpinner.style.display = 'none';
+        }
+    }
+
+    enableChat() {
+        this.elements.chatInput.disabled = false;
+        this.elements.sendBtn.disabled = false;
+        this.elements.chatInput.focus();
+    }
+
+    disableChat() {
+        this.elements.chatInput.disabled = true;
+        this.elements.sendBtn.disabled = true;
+    }
+
+    clearChat() {
+        this.elements.chatMessages.innerHTML = '';
+        this.createTypingIndicator();
+    }
+
+    showTypingIndicator() {
+        if (this.typingIndicator) {
+            this.typingIndicator.style.display = 'block';
+        }
+    }
+
+    hideTypingIndicator() {
+        if (this.typingIndicator) {
+            this.typingIndicator.style.display = 'none';
+        }
+    }
+
+    // وظائف التفاعل
+    toggleMic() {
+        if (this.localStream) {
+            const audioTracks = this.localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+            });
+            
+            const isMuted = !audioTracks[0]?.enabled;
+            this.elements.micBtn.textContent = isMuted ? '🔇' : '🎤';
+            this.elements.micBtn.title = isMuted ? 'Unmute' : 'Mute';
+        }
+    }
+
+    updateMicButton() {
+        if (this.localStream) {
+            const audioTracks = this.localStream.getAudioTracks();
+            const isMuted = !audioTracks[0]?.enabled;
+            this.elements.micBtn.textContent = isMuted ? '🔇' : '🎤';
+            this.elements.micBtn.disabled = false;
+        } else {
+            this.elements.micBtn.disabled = true;
+        }
+    }
+
+    async sendMessage() {
+        const message = this.elements.chatInput.value.trim();
+        if (!message || !this.partnerId || this.isBanned) return;
+
+        // إضافة الرسالة للدردشة المحلية
+        this.addMessage(message, 'outgoing');
+        this.elements.chatInput.value = '';
+        
+        // إرسال للشريك
+        this.socket.emit('chat-message', {
+            to: this.partnerId,
+            message: message
+        });
+
+        // إخفاء مؤشر الكتابة
+        clearTimeout(this.typingTimeout);
+        this.socket.emit('stop-typing', { to: this.partnerId });
+    }
+
+    handleChatMessage(data) {
+        if (data.message && !this.isBanned) {
+            this.addMessage(data.message, 'incoming');
+        }
+    }
+
+    addMessage(text, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${type}`;
+        messageDiv.textContent = text;
+        
+        this.elements.chatMessages.appendChild(messageDiv);
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    async skipPartner() {
+        if (this.partnerId) {
+            this.socket.emit('skip', { partnerId: this.partnerId });
+        }
+        
+        this.updateStatus('Skipping...');
+        this.handleDisconnection();
+    }
+
+    async reportPartner() {
+        if (!this.partnerId) {
+            this.updateStatus('No user to report');
+            return;
+        }
+
+        this.socket.emit('report', { partnerId: this.partnerId });
+        this.addMessage('User has been reported', 'system');
+        
+        // تخطي المستخدم بعد الإبلاغ
+        this.skipPartner();
+    }
+
+    handleBanned(data) {
+        this.isBanned = true;
+        this.cleanupConnection();
+        this.disableChat();
+        
+        const message = data?.message || 'You have been banned for 24 hours';
+        this.updateStatus(message);
+        this.addMessage(message, 'system');
+        
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+    }
+
+    showAdminMessage(message) {
+        this.addMessage(`Admin: ${message}`, 'system');
+        
+        // إشعار
+        if (this.elements.notifyDot) {
+            this.elements.notifyDot.style.display = 'block';
+        }
+    }
+
+    // التنظيف
+    cleanupConnection() {
+        clearTimeout(this.searchTimeout);
+        clearTimeout(this.connectionTimeout);
+        clearInterval(this.connectionMonitor);
+        clearTimeout(this.typingTimeout);
+
+        if (this.peerConnection) {
+            try {
+                this.peerConnection.close();
+            } catch (error) {
+                console.warn('Error closing peer connection:', error);
+            }
+            this.peerConnection = null;
+        }
+
+        if (this.elements.remoteVideo) {
+            this.elements.remoteVideo.srcObject = null;
+        }
+
+        this.remoteStream = null;
+        this.partnerId = null;
+        this.isInitiator = false;
+        this.isConnected = false;
+        this.isSearching = false;
+    }
+
+    exit() {
+        this.cleanupConnection();
+        
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+        }
+        
+        if (this.socket) {
+            this.socket.disconnect();
+        }
+        
+        window.location.href = 'index.html';
+    }
+}
+
+// تهيئة التطبيق عند تحميل الصفحة
+window.addEventListener('DOMContentLoaded', () => {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-      localVideo.srcObject = localStream;
-      updateMicButton();
-      return true;
-    } catch (e) {
-      console.error('Media initialization error:', e);
-      updateStatusMessage('Camera/Mic access denied. Please check permissions.');
-      localStream = null;
-      updateMicButton();
-      return false;
+        window.videoChatApp = new VideoChatApp();
+    } catch (error) {
+        console.error('Failed to initialize app:', error);
+        document.body.innerHTML = `
+            <div style="text-align: center; padding: 50px; color: white;">
+                <h1>Error Loading Application</h1>
+                <p>Please refresh the page or check your internet connection.</p>
+                <button onclick="location.reload()" style="padding: 10px 20px; margin-top: 20px;">
+                    Refresh Page
+                </button>
+            </div>
+        `;
     }
-  }
-  
-  // ---------------------- AUTO START ----------------------
-  async function initialize() {
-    ensureNotifyEmpty();
-    updateMicButton();
-    try {
-      const fingerprint = await generateFingerprint();
-      safeEmit('identify', { fingerprint });
-    } catch (e) {
-      console.error('Failed to send fingerprint:', e);
-    }
-    startSearch();
-  }
-  
-  initialize();
-  
-  // ---------------------- GLOBAL ERROR HANDLERS ----------------------
-  window.addEventListener('error', (e) => {
-    console.error('Global error:', e.error);
-    updateStatusMessage('An unexpected error occurred. Refreshing...');
-    setSafeTimer(() => location.reload(), 3000);
-  });
-  
-  window.addEventListener('unhandledrejection', (e) => {
-    console.error('Unhandled promise rejection:', e.reason);
-    updateStatusMessage('Connection error detected. Recovering...');
-    setSafeTimer(startSearchLoop, 1000);
-  });
-  
-  window.onbeforeunload = () => {
-    safeEmit('stop');
-    cleanupConnection();
-    if (localStream) {
-      localStream.getTracks().forEach(t => t.stop());
-    }
-  };
 });
+
+// CSS إضافي لتحسين التجربة
+const additionalCSS = `
+    .video-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .remote-video-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: #000;
+    }
+    
+    .status-message {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 20px;
+        z-index: 1000;
+        font-size: 14px;
+        max-width: 80%;
+        text-align: center;
+    }
+    
+    .spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 50px;
+        height: 50px;
+        border: 5px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    
+    .chat-message {
+        margin: 10px;
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    
+    .chat-message.outgoing {
+        background: #0084ff;
+        color: white;
+        margin-left: auto;
+    }
+    
+    .chat-message.incoming {
+        background: #3a3b3c;
+        color: white;
+        margin-right: auto;
+    }
+    
+    .chat-message.system {
+        background: transparent;
+        color: #aaa;
+        font-style: italic;
+        text-align: center;
+        margin: 5px auto;
+        font-size: 12px;
+    }
+    
+    .typing-indicator {
+        color: #aaa;
+        font-style: italic;
+        margin: 10px;
+        font-size: 12px;
+    }
+    
+    .error-message {
+        color: #ff6b6b;
+        padding: 10px;
+        text-align: center;
+        background: rgba(255, 107, 107, 0.1);
+        border-radius: 5px;
+        margin: 10px;
+    }
+    
+    .control-button {
+        transition: all 0.3s ease;
+    }
+    
+    .control-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .control-button:hover:not(:disabled) {
+        transform: scale(1.1);
+    }
+`;
+
+// إضافة الـ CSS للصفحة
+const style = document.createElement('style');
+style.textContent = additionalCSS;
+document.head.appendChild(style);
