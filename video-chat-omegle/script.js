@@ -1,4 +1,4 @@
-window.addEventListener('DOMContentLoaded', () => {
+عدل لي هذا الملف فقط اجعل هذا اكثر استقرا في الاتصال بين المستخدمين لان هناك تاخر في ظهور لغريب احيانا وتظهر شاشه سوداء عند الاتصال بمستخدم وازل رسائل الاخطاء لااريدها ان تظهر للمستخدمين عدل لي هذا واعطني لكود كاملا بلا اي اختصار window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
   // ---------------------- DOM ELEMENTS ----------------------
@@ -18,36 +18,38 @@ window.addEventListener('DOMContentLoaded', () => {
   const exitBtn = document.getElementById('exitBtn');
   // ---------------------- قائمة فيديوهات الإعلانات ----------------------
   const adVideosList = [
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
-    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
-    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
+    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4  ',
+    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p  ,%20h264).mp4',
+    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4  '
   ];
   let currentAdIndex = 0;
   let isAdPlaying = false;
   let adVideo = null;
+  // دالة لإنشاء وإعداد عنصر الفيديو الإعلاني
   function createAdVideoElement() {
-    if (adVideo) adVideo.remove();
+    if (adVideo) {
+      adVideo.remove();
+    }
     adVideo = document.createElement('video');
     adVideo.id = 'adVideo';
     adVideo.autoplay = false;
     adVideo.muted = true;
     adVideo.playsInline = true;
     adVideo.preload = 'auto';
-    Object.assign(adVideo.style, {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-      zIndex: 100,
-      display: 'none',
-      backgroundColor: '#000'
-    });
+    adVideo.style.position = 'absolute';
+    adVideo.style.top = '0';
+    adVideo.style.left = '0';
+    adVideo.style.width = '100%';
+    adVideo.style.height = '100%';
+    adVideo.style.objectFit = 'cover';
+    adVideo.style.zIndex = '100';
+    adVideo.style.display = 'none';
+    adVideo.style.backgroundColor = '#000';
     adVideo.controls = false;
     remoteVideo.parentNode.appendChild(adVideo);
     return adVideo;
   }
+  // إنشاء عنصر الفيديو الإعلاني
   createAdVideoElement();
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
@@ -76,7 +78,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-  // ---------------------- FINGERPRINT ----------------------
+  // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
       const components = [
@@ -93,6 +95,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
       ctx.font = '14px Arial';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = '#f60';
       ctx.fillRect(125, 1, 62, 20);
       ctx.fillStyle = '#069';
@@ -118,7 +121,8 @@ window.addEventListener('DOMContentLoaded', () => {
         return hash.toString(16);
       };
       return hashCode(components.join('||'));
-    } catch {
+    } catch (e) {
+      console.error('Fingerprint generation failed:', e);
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
@@ -150,8 +154,10 @@ window.addEventListener('DOMContentLoaded', () => {
         socket.emit(event, data);
         return true;
       }
+      console.warn(`Socket not connected, cannot emit ${event}`);
       return false;
-    } catch {
+    } catch (e) {
+      console.error(`Error emitting ${event}:`, e);
       return false;
     }
   }
@@ -186,6 +192,22 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
+  function pushAdminNotification(text) {
+    const item = document.createElement('div');
+    item.className = 'notify-item';
+    item.textContent = text;
+    notifyMenu.prepend(item);
+    const empty = notifyMenu.querySelector('.notify-empty');
+    if (empty) empty.remove();
+  }
+  function ensureNotifyEmpty() {
+    if (notifyMenu.children.length === 0) {
+      const d = document.createElement('div');
+      d.textContent = 'No notifications';
+      d.className = 'notify-empty';
+      notifyMenu.appendChild(d);
+    }
+  }
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
@@ -194,7 +216,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const c = bufferedRemoteCandidates.shift();
       try {
         peerConnection.addIceCandidate(c).catch(() => {});
-      } catch {}
+      } catch (e) {}
     }
   }
   async function setSenderMaxBitrate(targetBps) {
@@ -208,9 +230,11 @@ window.addEventListener('DOMContentLoaded', () => {
         params.encodings = params.encodings.map(enc => ({ ...enc, maxBitrate: targetBps }));
         await sender.setParameters(params);
       }
-    } catch {}
+    } catch (e) {
+      console.debug('setSenderMaxBitrate failed', e);
+    }
   }
-  // ---------------------- AD VIDEO ----------------------
+  // ---------------------- دالة عرض الإعلان (المعدلة) ----------------------
   function playAdVideo() {
     if (isAdPlaying || adVideosList.length === 0) {
       consecutiveSearchFails = 0;
@@ -219,6 +243,7 @@ window.addEventListener('DOMContentLoaded', () => {
       startSearchLoop();
       return;
     }
+    // إيقاف أي بحث أو مؤقتات متبقية قبل بدء الإعلان
     clearSafeTimer(searchTimer);
     clearSafeTimer(pauseTimer);
     searchTimer = null;
@@ -228,10 +253,12 @@ window.addEventListener('DOMContentLoaded', () => {
     currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
     updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
     adVideo.onerror = () => {
+      console.error('Error loading ad video:', adUrl);
       hideAdVideo();
     };
     adVideo.oncanplay = () => {
-      adVideo.play().catch(() => {
+      adVideo.play().catch(e => {
+        console.warn('Auto-play prevented:', e);
         document.addEventListener('click', tryPlayAdOnClick, { once: true });
       });
     };
@@ -241,7 +268,7 @@ window.addEventListener('DOMContentLoaded', () => {
     remoteVideo.style.display = 'none';
     const adTimeout = setSafeTimer(hideAdVideo, 5000);
     function tryPlayAdOnClick() {
-      adVideo.play().catch(() => {});
+      adVideo.play().catch(console.warn);
     }
     function hideAdVideo() {
       if (!isAdPlaying) return;
@@ -254,12 +281,14 @@ window.addEventListener('DOMContentLoaded', () => {
       isAdPlaying = false;
       consecutiveSearchFails = 0;
       normalPauseDuration = 3000;
+      // إعادة البدء في البحث فقط بعد انتهاء الإعلان
       updateStatusMessage('Searching...');
       startSearchLoop();
     }
   }
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
+    console.log('Cleaning up connection...');
     clearAllTimers();
     if (peerConnection) {
       try {
@@ -268,10 +297,14 @@ window.addEventListener('DOMContentLoaded', () => {
           keepAliveChannel = null;
         }
         peerConnection.close();
-      } catch {}
+      } catch (e) {
+        console.error('Error closing peer connection:', e);
+      }
       peerConnection = null;
     }
-    if (remoteVideo) remoteVideo.srcObject = null;
+    if (remoteVideo) {
+      remoteVideo.srcObject = null;
+    }
     bufferedRemoteCandidates.length = 0;
     partnerId = null;
     isInitiator = false;
@@ -312,7 +345,7 @@ window.addEventListener('DOMContentLoaded', () => {
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
-  // ---------------------- CHAT ----------------------
+  // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
     const msg = chatInput.value.trim();
@@ -325,7 +358,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
-  // ---------------------- MIC ----------------------
+  // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
     micBtn.disabled = !localStream || isBanned;
@@ -337,8 +370,8 @@ window.addEventListener('DOMContentLoaded', () => {
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
-  // ---------------------- SPINNER ----------------------
-  try { if (localSpinner) localSpinner.style.display = 'none'; } catch {}
+  // ---------------------- SPINNER BEHAVIOR ----------------------
+  try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
@@ -349,12 +382,14 @@ window.addEventListener('DOMContentLoaded', () => {
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-  // ---------------------- SCREENSHOT ----------------------
+  // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
       try {
         const v = remoteVideo;
-        if (!v || !v.srcObject) return reject(new Error('Remote video not available'));
+        if (!v || !v.srcObject) {
+          return reject(new Error('Remote video not available'));
+        }
         const width = v.videoWidth || v.clientWidth || 640;
         const height = v.videoHeight || v.clientHeight || 480;
         if (width === 0 || height === 0) {
@@ -382,7 +417,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  // ---------------------- REPORT ----------------------
+  // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
     reportBtn.onclick = async () => {
@@ -402,7 +437,8 @@ window.addEventListener('DOMContentLoaded', () => {
           const image = await captureRemoteVideoFrame();
           safeEmit("admin-screenshot", { image, partnerId });
           addMessage("📋 A report about this user has been sent ✉️⚠️. Action is being reviewed 🔍⏳.", "system");
-        } catch {
+        } catch (err) {
+          console.error('Screenshot capture failed', err);
           addMessage("Failed to capture screenshot (no remote frame available).", "system");
         }
       }
@@ -432,7 +468,7 @@ window.addEventListener('DOMContentLoaded', () => {
       showRemoteSpinnerOnly(false);
       return;
     }
-    if (partnerId || isAdPlaying) return;
+    if (partnerId || isAdPlaying) return; // لا نبحث إذا كان هناك شريك أو إعلان يعرض
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
@@ -452,7 +488,7 @@ window.addEventListener('DOMContentLoaded', () => {
           startSearchLoop();
         }, normalPauseDuration);
       }
-    }, 1500); // أسرع من 3.5 ثانية
+    }, 3500);
   }
   async function startSearch() {
     if (isBanned) {
@@ -547,6 +583,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     const foundId = data?.id || data?.partnerId;
     if (!foundId) {
+      console.error('Invalid partner data received:', data);
       updateStatusMessage('Invalid partner data. Retrying...');
       setSafeTimer(startSearchLoop, 1000);
       return;
@@ -572,7 +609,8 @@ window.addEventListener('DOMContentLoaded', () => {
         await peerConnection.setLocalDescription(offer);
         safeEmit('signal', { to: partnerId, data: offer });
       }
-    } catch {
+    } catch (e) {
+      console.error('Failed to create peer connection or offer:', e);
       updateStatusMessage('Connection setup failed. Retrying...');
       cleanupConnection();
       setSafeTimer(startSearchLoop, 1000);
@@ -582,12 +620,19 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
-    if (!from || !data) return;
-    if (partnerId && partnerId !== from) return;
+    if (!from || !data) {
+      console.error('Invalid signal data:', { from, data });
+      return;
+    }
+    if (partnerId && partnerId !== from) {
+      console.warn('Signal from unexpected partner:', from, 'expected:', partnerId);
+      return;
+    }
     if (!peerConnection) {
       try {
         createPeerConnection();
-      } catch {
+      } catch (e) {
+        console.error('Failed to create peer connection for signal:', e);
         return;
       }
     }
@@ -609,14 +654,15 @@ window.addEventListener('DOMContentLoaded', () => {
       } else if (data.candidate) {
         await peerConnection.addIceCandidate(data.candidate);
       }
-    } catch {
+    } catch (e) {
+      console.error('Signal handling error:', e);
       updateStatusMessage('Signal processing failed.');
     }
   });
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
-      try { peerConnection.close(); } catch {}
+      try { peerConnection.close(); } catch (e) {}
       peerConnection = null;
     }
     try {
@@ -630,7 +676,8 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
           keepAliveChannel = peerConnection.createDataChannel('keepAlive', { ordered: true });
           setupKeepAliveChannel(keepAliveChannel);
-        } catch {
+        } catch (e) {
+          console.error('Failed to create data channel:', e);
           keepAliveChannel = null;
         }
       } else {
@@ -640,7 +687,10 @@ window.addEventListener('DOMContentLoaded', () => {
         };
       }
       peerConnection.ontrack = e => {
-        if (!e.streams || e.streams.length === 0) return;
+        if (!e.streams || e.streams.length === 0) {
+          console.error('No streams in ontrack event');
+          return;
+        }
         remoteVideo.srcObject = e.streams[0];
         enableChat();
         updateStatusMessage('Connected');
@@ -658,6 +708,7 @@ window.addEventListener('DOMContentLoaded', () => {
       peerConnection.onconnectionstatechange = () => {
         if (!peerConnection) return;
         const s = peerConnection.connectionState;
+        console.debug('connectionState:', s);
         if (s === 'connected') {
           updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
           consecutiveSearchFails = 0;
@@ -681,12 +732,15 @@ window.addEventListener('DOMContentLoaded', () => {
           const offer = await peerConnection.createOffer();
           await peerConnection.setLocalDescription(offer);
           safeEmit('signal', { to: partnerId, data: offer });
-        } catch {} finally {
+        } catch (e) {
+          console.error('Negotiation error:', e);
+        } finally {
           makingOffer = false;
         }
       };
-    } catch {
-      throw new Error('Failed to create peer connection');
+    } catch (e) {
+      console.error('Failed to create peer connection:', e);
+      throw e;
     }
   }
   // ---------------------- KEEPALIVE ----------------------
@@ -706,10 +760,17 @@ window.addEventListener('DOMContentLoaded', () => {
         } else if (msg.type === 'pong') {
           lastPong = Date.now();
         }
-      } catch {}
+      } catch (e) {
+        console.error('KeepAlive message parse error:', e);
+      }
     };
-    dc.onclose = () => stopPingLoop();
-    dc.onerror = () => stopPingLoop();
+    dc.onclose = () => {
+      console.debug('keepAlive channel closed');
+      stopPingLoop();
+    };
+    dc.onerror = (err) => {
+      console.error('keepAlive channel error:', err);
+    };
   }
   function startPingLoop() {
     stopPingLoop();
@@ -720,10 +781,12 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       try {
         keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
-      } catch {
+      } catch (e) {
+        console.error('Ping send error:', e);
         stopPingLoop();
       }
       if (Date.now() - lastPong > PONG_TIMEOUT) {
+        console.warn('PONG timeout -> treating as disconnect');
         stopPingLoop();
         cleanupConnection();
         clearSafeTimer(searchTimer);
@@ -779,7 +842,9 @@ window.addEventListener('DOMContentLoaded', () => {
         } else {
           await setSenderMaxBitrate(BITRATE_HIGH);
         }
-      } catch {}
+      } catch (e) {
+        console.debug('Stats monitor error:', e);
+      }
     }, STATS_POLL_MS);
   }
   function stopStatsMonitor() {
@@ -791,7 +856,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
     location.href = 'index.html';
   };
   // ---------------------- MEDIA INIT ----------------------
@@ -802,11 +869,15 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     if (localStream) return true;
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
       localVideo.srcObject = localStream;
       updateMicButton();
       return true;
-    } catch {
+    } catch (e) {
+      console.error('Media initialization error:', e);
       updateStatusMessage('Camera/Mic access denied. Please check permissions.');
       localStream = null;
       updateMicButton();
@@ -820,22 +891,28 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const fingerprint = await generateFingerprint();
       safeEmit('identify', { fingerprint });
-    } catch {}
+    } catch (e) {
+      console.error('Failed to send fingerprint:', e);
+    }
     startSearch();
   }
   initialize();
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
-  window.addEventListener('error', () => {
+  window.addEventListener('error', (e) => {
+    console.error('Global error:', e.error);
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
-  window.addEventListener('unhandledrejection', () => {
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+    }
   };
 });
