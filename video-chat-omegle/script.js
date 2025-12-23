@@ -1,6 +1,7 @@
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
+
   // ---------------------- DOM ELEMENTS ----------------------
   const notifyBell = document.getElementById('notifyIcon');
   const notifyDot = document.getElementById('notifyDot');
@@ -16,24 +17,24 @@ window.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const skipBtn = document.getElementById('skipBtn');
   const exitBtn = document.getElementById('exitBtn');
-  
+
   // ---------------------- قائمة فيديوهات الإعلانات ----------------------
- const adVideosList = [
-  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4 ',
-  'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p ,%20h264).mp4',
-  'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4 '
-];
-  
+  const adVideosList = [
+    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
+    'https://raw.githubusercontent.com/azerty197358/myads/main/Single%20girl%20video%20chat%20-%20Video%20Calls%20Apps%20(360p,%20h264).mp4',
+    'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4'
+  ];
+
   let currentAdIndex = 0;
   let isAdPlaying = false;
   let adVideo = null;
-  
+
   // دالة لإنشاء وإعداد عنصر الفيديو الإعلاني
   function createAdVideoElement() {
     if (adVideo) {
       adVideo.remove();
     }
-    
+
     adVideo = document.createElement('video');
     adVideo.id = 'adVideo';
     adVideo.autoplay = false;
@@ -49,17 +50,16 @@ window.addEventListener('DOMContentLoaded', () => {
     adVideo.style.zIndex = '100';
     adVideo.style.display = 'none';
     adVideo.style.backgroundColor = '#000';
-    
-    // إضافة عناصر تحكم للفيديو للتصحيح
+
     adVideo.controls = false;
-    
+
     remoteVideo.parentNode.appendChild(adVideo);
     return adVideo;
   }
-  
+
   // إنشاء عنصر الفيديو الإعلاني
   createAdVideoElement();
-  
+
   // ---------------------- GLOBAL STATE ----------------------
   let localStream = null;
   let peerConnection = null;
@@ -87,7 +87,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const BITRATE_HIGH = 800_000;
   const BITRATE_MEDIUM = 400_000;
   const BITRATE_LOW = 160_000;
-  
+
   // ---------------------- FINGERPRINT GENERATION ----------------------
   async function generateFingerprint() {
     try {
@@ -136,7 +136,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return 'default-fp-' + Math.random().toString(36).substr(2, 9);
     }
   }
-  
+
   // ---------------------- TIMER MANAGEMENT ----------------------
   function setSafeTimer(callback, delay) {
     const timerId = setTimeout(() => {
@@ -146,21 +146,21 @@ window.addEventListener('DOMContentLoaded', () => {
     activeTimers.add(timerId);
     return timerId;
   }
-  
+
   function clearSafeTimer(timerId) {
     if (timerId) {
       clearTimeout(timerId);
       activeTimers.delete(timerId);
     }
   }
-  
+
   function clearAllTimers() {
     activeTimers.forEach(timerId => clearTimeout(timerId));
     activeTimers.clear();
     if (statsInterval) clearInterval(statsInterval);
     if (pingTimer) clearInterval(pingTimer);
   }
-  
+
   // ---------------------- SAFE EMIT ----------------------
   function safeEmit(event, data) {
     try {
@@ -175,7 +175,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
-  
+
   // ---------------------- HELPERS ----------------------
   function addMessage(msg, type = 'system') {
     const d = document.createElement('div');
@@ -189,7 +189,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-  
+
   function updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
     if (statusMsg) {
@@ -208,7 +208,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
-  
+
   function pushAdminNotification(text) {
     const item = document.createElement('div');
     item.className = 'notify-item';
@@ -217,7 +217,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = notifyMenu.querySelector('.notify-empty');
     if (empty) empty.remove();
   }
-  
+
   function ensureNotifyEmpty() {
     if (notifyMenu.children.length === 0) {
       const d = document.createElement('div');
@@ -226,11 +226,11 @@ window.addEventListener('DOMContentLoaded', () => {
       notifyMenu.appendChild(d);
     }
   }
-  
+
   function bufferRemoteCandidate(candidateObj) {
     bufferedRemoteCandidates.push(candidateObj);
   }
-  
+
   function flushBufferedCandidates() {
     while (bufferedRemoteCandidates.length && peerConnection) {
       const c = bufferedRemoteCandidates.shift();
@@ -239,7 +239,7 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
   }
-  
+
   async function setSenderMaxBitrate(targetBps) {
     if (!peerConnection) return;
     try {
@@ -255,8 +255,8 @@ window.addEventListener('DOMContentLoaded', () => {
       console.debug('setSenderMaxBitrate failed', e);
     }
   }
-  
-  // ---------------------- دالة عرض الإعلان ----------------------
+
+  // ---------------------- دالة عرض الإعلان (المعدلة) ----------------------
   function playAdVideo() {
     if (isAdPlaying || adVideosList.length === 0) {
       consecutiveSearchFails = 0;
@@ -265,65 +265,65 @@ window.addEventListener('DOMContentLoaded', () => {
       startSearchLoop();
       return;
     }
-    
+
+    // إيقاف أي بحث أو مؤقتات متبقية قبل بدء الإعلان
+    clearSafeTimer(searchTimer);
+    clearSafeTimer(pauseTimer);
+    searchTimer = null;
+    pauseTimer = null;
+
     isAdPlaying = true;
-    
-    // تحديث مؤشر الفيديو الحالي
+
     const adUrl = adVideosList[currentAdIndex];
     currentAdIndex = (currentAdIndex + 1) % adVideosList.length;
-    
-    // عرض الرسالة المطلوبة
+
     updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-    
-    // إعداد معالجات الأحداث للفيديو
+
     adVideo.onerror = () => {
       console.error('Error loading ad video:', adUrl);
       hideAdVideo();
     };
-    
+
     adVideo.oncanplay = () => {
       adVideo.play().catch(e => {
         console.warn('Auto-play prevented:', e);
-        // محاولة التشغيل بالتفاعل مع المستخدم
         document.addEventListener('click', tryPlayAdOnClick, { once: true });
       });
     };
-    
+
     adVideo.onended = hideAdVideo;
-    
-    // ضبط المصدر وعرض الفيديو
+
     adVideo.src = adUrl;
     adVideo.style.display = 'block';
     remoteVideo.style.display = 'none';
-    
-    // إخفاء الإعلان بعد 5 ثواني في حالة عدم اكتمال التشغيل
+
     const adTimeout = setSafeTimer(hideAdVideo, 5000);
-    
-    // دالة محاولة التشغيل عند النقر
+
     function tryPlayAdOnClick() {
       adVideo.play().catch(console.warn);
     }
-    
-    // دالة إخفاء الفيديو
+
     function hideAdVideo() {
       if (!isAdPlaying) return;
-      
+
       clearSafeTimer(adTimeout);
       document.removeEventListener('click', tryPlayAdOnClick);
-      
+
       adVideo.pause();
       adVideo.style.display = 'none';
       remoteVideo.style.display = 'block';
       adVideo.src = '';
-      
+
       isAdPlaying = false;
       consecutiveSearchFails = 0;
       normalPauseDuration = 3000;
+
+      // إعادة البدء في البحث فقط بعد انتهاء الإعلان
       updateStatusMessage('Searching...');
       startSearchLoop();
     }
   }
-  
+
   // ---------------------- CONNECTION CLEANUP ----------------------
   function cleanupConnection() {
     console.log('Cleaning up connection...');
@@ -349,7 +349,7 @@ window.addEventListener('DOMContentLoaded', () => {
     makingOffer = false;
     ignoreOffer = false;
   }
-  
+
   // ---------------------- NOTIFICATION MENU ----------------------
   notifyBell.onclick = (e) => {
     e.stopPropagation();
@@ -357,10 +357,10 @@ window.addEventListener('DOMContentLoaded', () => {
     notifyBell.classList.remove('shake');
     notifyMenu.style.display = notifyMenu.style.display === 'block' ? 'none' : 'block';
   };
-  
+
   document.onclick = () => { notifyMenu.style.display = 'none'; };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') notifyMenu.style.display = 'none'; });
-  
+
   // ---------------------- TYPING INDICATOR ----------------------
   const typingIndicator = document.createElement('div');
   typingIndicator.className = 'msg system';
@@ -368,11 +368,11 @@ window.addEventListener('DOMContentLoaded', () => {
   typingIndicator.style.fontStyle = 'italic';
   typingIndicator.textContent = 'Stranger is typing...';
   chatMessages.appendChild(typingIndicator);
-  
+
   let typing = false;
   let typingTimer = null;
   const TYPING_PAUSE = 1500;
-  
+
   function sendTyping() {
     if (!partnerId || isBanned) return;
     if (!typing) {
@@ -385,11 +385,11 @@ window.addEventListener('DOMContentLoaded', () => {
       safeEmit('stop-typing', { to: partnerId });
     }, TYPING_PAUSE);
   }
-  
+
   chatInput.oninput = () => {
     if (!chatInput.disabled && !isBanned) sendTyping();
   };
-  
+
   // ---------------------- SEND CHAT ----------------------
   function sendMessage() {
     if (isBanned) return;
@@ -401,39 +401,39 @@ window.addEventListener('DOMContentLoaded', () => {
     typing = false;
     safeEmit('stop-typing', { to: partnerId });
   }
-  
+
   sendBtn.onclick = sendMessage;
   chatInput.onkeypress = e => { if (e.key === 'Enter' && !isBanned) sendMessage(); };
-  
+
   // ---------------------- MIC CONTROL ----------------------
   function updateMicButton() {
     micBtn.textContent = micEnabled ? '🎤' : '🔇';
     micBtn.disabled = !localStream || isBanned;
     micBtn.style.opacity = (localStream && !isBanned) ? '1' : '0.8';
   }
-  
+
   micBtn.onclick = () => {
     if (!localStream || isBanned) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     updateMicButton();
   };
-  
+
   // ---------------------- SPINNER BEHAVIOR ----------------------
   try { if (localSpinner) localSpinner.style.display = 'none'; } catch(e) {}
-  
+
   function showRemoteSpinnerOnly(show) {
     if (remoteSpinner) remoteSpinner.style.display = show ? 'block' : 'none';
     if (remoteVideo) remoteVideo.style.display = show ? 'none' : 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-  
+
   function hideAllSpinners() {
     if (remoteSpinner) remoteSpinner.style.display = 'none';
     if (remoteVideo) remoteVideo.style.display = 'block';
     if (localVideo) localVideo.style.display = 'block';
   }
-  
+
   // ---------------------- SCREENSHOT UTIL ----------------------
   function captureRemoteVideoFrame() {
     return new Promise((resolve, reject) => {
@@ -469,7 +469,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  
+
   // ---------------------- REPORT BUTTON ----------------------
   if (reportBtn) {
     reportBtn.style.display = 'flex';
@@ -505,18 +505,18 @@ window.addEventListener('DOMContentLoaded', () => {
       startSearchLoop();
     };
   }
-  
+
   // ---------------------- UI CONTROLS ----------------------
   function enableChat() {
     chatInput.disabled = isBanned;
     sendBtn.disabled = isBanned;
   }
-  
+
   function disableChat() {
     chatInput.disabled = true;
     sendBtn.disabled = true;
   }
-  
+
   // ---------------------- MATCHMAKING ----------------------
   function startSearchLoop() {
     if (isBanned) {
@@ -524,24 +524,20 @@ window.addEventListener('DOMContentLoaded', () => {
       showRemoteSpinnerOnly(false);
       return;
     }
-    if (partnerId) return;
+    if (partnerId || isAdPlaying) return; // لا نبحث إذا كان هناك شريك أو إعلان يعرض
     showRemoteSpinnerOnly(true);
     updateStatusMessage('Searching...');
     safeEmit('find-partner');
     clearSafeTimer(searchTimer);
     searchTimer = setSafeTimer(() => {
-      if (!partnerId) {
+      if (!partnerId && !isAdPlaying) {
         safeEmit('stop');
         showRemoteSpinnerOnly(false);
         consecutiveSearchFails++;
-        
-        // بعد 3 محاولات فاشلة متتالية → عرض إعلان
         if (consecutiveSearchFails >= 3) {
           playAdVideo();
           return;
         }
-        
-        // pause عادي
         clearSafeTimer(pauseTimer);
         pauseTimer = setSafeTimer(() => {
           if (normalPauseDuration !== 3000) normalPauseDuration = 3000;
@@ -550,7 +546,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, 3500);
   }
-  
+
   async function startSearch() {
     if (isBanned) {
       updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
@@ -571,7 +567,7 @@ window.addEventListener('DOMContentLoaded', () => {
     normalPauseDuration = 3000;
     startSearchLoop();
   }
-  
+
   skipBtn.onclick = () => {
     if (isBanned) return;
     safeEmit('skip');
@@ -584,34 +580,34 @@ window.addEventListener('DOMContentLoaded', () => {
     normalPauseDuration = 3000;
     startSearchLoop();
   };
-  
+
   // ---------------------- SOCKET EVENTS ----------------------
   socket.on('waiting', msg => {
     if (!isBanned) updateStatusMessage(msg);
   });
-  
+
   socket.on('chat-message', ({ message }) => {
     if (!isBanned) addMessage(message, 'them');
   });
-  
+
   socket.on('typing', () => {
     if (!isBanned) {
       typingIndicator.style.display = 'block';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
-  
+
   socket.on('stop-typing', () => {
     if (!isBanned) typingIndicator.style.display = 'none';
   });
-  
+
   socket.on('adminMessage', msg => {
     if (notifyDot) notifyDot.style.display = 'block';
     notifyBell.classList.add('shake');
     pushAdminNotification('📢 ' + msg);
     addMessage('📢 Admin: ' + msg, 'system');
   });
-  
+
   socket.on('banned', ({ message }) => {
     isBanned = true;
     addMessage(message || 'You are banned.', 'system');
@@ -626,14 +622,14 @@ window.addEventListener('DOMContentLoaded', () => {
     if (localVideo) localVideo.srcObject = null;
     updateMicButton();
   });
-  
+
   socket.on('unbanned', ({ message }) => {
     isBanned = false;
     addMessage(message || 'You have been unbanned.', 'system');
     updateStatusMessage('You have been unbanned.');
     startSearch();
   });
-  
+
   socket.on('partner-disconnected', () => {
     if (!isBanned) {
       updateStatusMessage('Partner disconnected.');
@@ -646,7 +642,7 @@ window.addEventListener('DOMContentLoaded', () => {
       setSafeTimer(startSearchLoop, 500);
     }
   });
-  
+
   socket.on('partner-found', async data => {
     if (isBanned) {
       safeEmit('skip');
@@ -689,7 +685,7 @@ window.addEventListener('DOMContentLoaded', () => {
       makingOffer = false;
     }
   });
-  
+
   socket.on('signal', async ({ from, data }) => {
     if (isBanned) return;
     if (!from || !data) {
@@ -731,7 +727,7 @@ window.addEventListener('DOMContentLoaded', () => {
       updateStatusMessage('Signal processing failed.');
     }
   });
-  
+
   // ---------------------- WEBRTC ----------------------
   function createPeerConnection() {
     if (peerConnection) {
@@ -816,7 +812,7 @@ window.addEventListener('DOMContentLoaded', () => {
       throw e;
     }
   }
-  
+
   // ---------------------- KEEPALIVE ----------------------
   let pingTimer = null;
   function setupKeepAliveChannel(dc) {
@@ -846,7 +842,7 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('keepAlive channel error:', err);
     };
   }
-  
+
   function startPingLoop() {
     stopPingLoop();
     pingTimer = setInterval(() => {
@@ -872,14 +868,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, PING_INTERVAL);
   }
-  
+
   function stopPingLoop() {
     if (pingTimer) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
   }
-  
+
   // ---------------------- STATS MONITOR ----------------------
   function startStatsMonitor() {
     stopStatsMonitor();
@@ -924,14 +920,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, STATS_POLL_MS);
   }
-  
+
   function stopStatsMonitor() {
     if (statsInterval) {
       clearInterval(statsInterval);
       statsInterval = null;
     }
   }
-  
+
   // ---------------------- EXIT ----------------------
   exitBtn.onclick = () => {
     cleanupConnection();
@@ -940,7 +936,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     location.href = 'index.html';
   };
-  
+
   // ---------------------- MEDIA INIT ----------------------
   async function initMedia() {
     if (isBanned) {
@@ -964,7 +960,7 @@ window.addEventListener('DOMContentLoaded', () => {
       return false;
     }
   }
-  
+
   // ---------------------- AUTO START ----------------------
   async function initialize() {
     ensureNotifyEmpty();
@@ -977,22 +973,22 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     startSearch();
   }
-  
+
   initialize();
-  
+
   // ---------------------- GLOBAL ERROR HANDLERS ----------------------
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
     updateStatusMessage('An unexpected error occurred. Refreshing...');
     setSafeTimer(() => location.reload(), 3000);
   });
-  
+
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     updateStatusMessage('Connection error detected. Recovering...');
     setSafeTimer(startSearchLoop, 1000);
   });
-  
+
   window.onbeforeunload = () => {
     safeEmit('stop');
     cleanupConnection();
