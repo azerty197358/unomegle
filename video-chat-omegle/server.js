@@ -3,21 +3,47 @@ const path = require("path");
 const basicAuth = require("express-basic-auth");
 const geoip = require("geoip-lite");
 const Database = require("better-sqlite3");
+const http = require("http");
+const socketIo = require("socket.io");
+
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
+
+/* ====== نظام الحماية security.js ====== */
+const ALLOWED_IPS = ['197.205.96.254'];        // عدّلها لاحقاً
+function realIP(req){
+  return (req.headers['cf-connecting-ip']   ||
+          req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+          req.headers['x-real-ip']          ||
+          req.connection.remoteAddress);
+}
+function ipFilter(req,res,next){
+  if(!ALLOWED_IPS.includes(realIP(req))) return res.status(403).send('Forbidden');
+  next();
+}
+
+/* ====== Basic Auth ====== */
+const ADMIN_USERS = { admin: 'admin' };        // عدّل الباسورد
+const adminAuth = basicAuth({ 
+  users: ADMIN_USERS, 
+  challenge: true, 
+  realm: 'Admin Area' 
+});
+
+/* ====== دمج الحماية في ملف واحد ====== */
+function applySecurity(app){
+  app.use(ipFilter);           // يُطبق على كل المسارات تلقائياً
+  return { adminAuth };        // تُستخدم يدوياً على المسارات التي تريدها
+}
+
+// تطبيق نظام الحماية
+applySecurity(app);
+
 app.set("trust proxy", true);
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// بيانات اعتماد الأدمن
-const ADMIN_USERS = { admin: "admin" };
-const adminAuth = basicAuth({
-  users: ADMIN_USERS,
-  challenge: true,
-  realm: "Admin Area",
-});
 
 // ============== قاعدة البيانات المحسنة ==============
 const dbFile = path.join(__dirname, "stats.db");
@@ -704,7 +730,7 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log("Server listening on port " + PORT);
   console.log("Admin panel: http://localhost:" + PORT + "/admin");
 });
