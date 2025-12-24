@@ -17,7 +17,7 @@ class ChatApp {
       MAX_CONSECUTIVE_FAILS: 3,
       NORMAL_PAUSE_DURATION: 3000
     };
-   
+  
     this.state = {
       localStream: null,
       peerConnection: null,
@@ -39,13 +39,13 @@ class ChatApp {
     this.searchTimer = null;
     this.pauseTimer = null;
     this.typingTimer = null;
-   
+  
     this.bufferedRemoteCandidates = [];
     this.reportedIds = new Set();
     this.reportCounts = new Map();
-   
+  
     this.servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
-   
+  
     this.adVideosList = [
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251224_122947959.mp4',
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
@@ -53,12 +53,12 @@ class ChatApp {
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4',
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251224_123428027.mp4'
     ];
-   
+  
     this.adVideo = null;
     this.keepAliveChannel = null;
     this.lastPong = Date.now();
     this.typing = false;
-   
+  
     this.init();
   }
   // =====================================================
@@ -71,14 +71,14 @@ class ChatApp {
     this.createAdVideoElement();
     this.ensureNotifyEmpty();
     this.updateMicButton();
-   
+  
     try {
       const fingerprint = await this.generateFingerprint();
       this.safeEmit('identify', { fingerprint });
     } catch (e) {
       console.error('Failed to send fingerprint:', e);
     }
-   
+  
     this.startSearch();
   }
   setupDOMElements() {
@@ -150,7 +150,7 @@ class ChatApp {
         new Date().getTimezoneOffset(),
         Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
-     
+    
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -163,7 +163,7 @@ class ChatApp {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
-     
+    
       try {
         const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
         const oscillator = audioCtx.createOscillator();
@@ -176,7 +176,7 @@ class ChatApp {
       } catch (e) {
         components.push('audio-unsupported');
       }
-     
+    
       const hashCode = (str) => {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -186,7 +186,7 @@ class ChatApp {
         }
         return hash.toString(16);
       };
-     
+    
       return hashCode(components.join('||'));
     } catch (e) {
       console.error('Fingerprint generation failed:', e);
@@ -286,7 +286,7 @@ class ChatApp {
     this.adVideo.style.objectFit = 'cover';
     this.adVideo.style.zIndex = '100';
     this.adVideo.style.display = 'none';
-    this.adVideo.style.backgroundColor = '#000';
+    this.adVideo.style.backgroundColor = '#808080';  // تم التعديل هنا: رمادي متوسط (مثل شاشة الانتظار/الـ pause في Omegle)
     this.adVideo.controls = false;
     this.elements.remoteVideo.parentNode.appendChild(this.adVideo);
   }
@@ -298,37 +298,37 @@ class ChatApp {
       this.startSearchLoop();
       return;
     }
-   
+  
     this.clearSafeTimer(this.searchTimer);
     this.clearSafeTimer(this.pauseTimer);
     this.searchTimer = null;
     this.pauseTimer = null;
     this.state.isAdPlaying = true;
-   
+  
     const adUrl = this.adVideosList[this.state.currentAdIndex];
     this.state.currentAdIndex = (this.state.currentAdIndex + 1) % this.adVideosList.length;
-   
+  
     this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-   
+  
     this.adVideo.onerror = () => {
       console.error('Error loading ad video:', adUrl);
       this.hideAdVideo();
     };
-   
+  
     this.adVideo.oncanplay = () => {
       this.adVideo.play().catch(e => {
         console.warn('Auto-play prevented:', e);
         document.addEventListener('click', this.tryPlayAdOnClick.bind(this), { once: true });
       });
     };
-   
+  
     this.adVideo.onended = this.hideAdVideo.bind(this);
     this.adVideo.src = adUrl;
     this.adVideo.style.display = 'block';
     this.elements.remoteVideo.style.display = 'none';
-   
+  
     const adTimeout = this.setSafeTimer(this.hideAdVideo.bind(this), this.config.AD_TIMEOUT);
-   
+  
     this.adTimeout = adTimeout;
   }
   tryPlayAdOnClick() {
@@ -336,7 +336,7 @@ class ChatApp {
   }
   hideAdVideo() {
     if (!this.state.isAdPlaying) return;
-   
+  
     this.clearSafeTimer(this.adTimeout);
     document.removeEventListener('click', this.tryPlayAdOnClick.bind(this));
     this.adVideo.pause();
@@ -355,7 +355,7 @@ class ChatApp {
   cleanupConnection() {
     console.log('Cleaning up connection...');
     this.clearAllTimers();
-   
+  
     if (this.state.peerConnection) {
       try {
         if (this.keepAliveChannel) {
@@ -368,11 +368,11 @@ class ChatApp {
       }
       this.state.peerConnection = null;
     }
-   
+  
     if (this.elements.remoteVideo) {
       this.elements.remoteVideo.srcObject = null;
     }
-   
+  
     this.bufferedRemoteCandidates.length = 0;
     this.state.partnerId = null;
     this.state.isInitiator = false;
@@ -395,25 +395,25 @@ class ChatApp {
       this.showRemoteSpinnerOnly(false);
       return;
     }
-   
+  
     if (this.state.partnerId || this.state.isAdPlaying) return;
-   
+  
     this.showRemoteSpinnerOnly(true);
     this.updateStatusMessage('Searching...');
     this.safeEmit('find-partner');
-   
+  
     this.clearSafeTimer(this.searchTimer);
     this.searchTimer = this.setSafeTimer(() => {
       if (!this.state.partnerId && !this.state.isAdPlaying) {
         this.safeEmit('stop');
         this.showRemoteSpinnerOnly(false);
         this.state.consecutiveSearchFails++;
-       
+      
         if (this.state.consecutiveSearchFails >= this.config.MAX_CONSECUTIVE_FAILS) {
           this.playAdVideo();
           return;
         }
-       
+      
         this.clearSafeTimer(this.pauseTimer);
         this.pauseTimer = this.setSafeTimer(() => {
           if (this.config.NORMAL_PAUSE_DURATION !== 3000) {
@@ -430,10 +430,10 @@ class ChatApp {
       this.showRemoteSpinnerOnly(false);
       return;
     }
-   
+  
     const mediaReady = await this.initMedia();
     if (!mediaReady) return;
-   
+  
     this.cleanupConnection();
     this.elements.chatMessages.innerHTML = '';
     this.elements.chatMessages.appendChild(this.typingIndicator);
@@ -451,9 +451,9 @@ class ChatApp {
       this.updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
       return false;
     }
-   
+  
     if (this.state.localStream) return true;
-   
+  
     const attempt = async () => {
       try {
         this.state.localStream = await navigator.mediaDevices.getUserMedia({
@@ -461,12 +461,12 @@ class ChatApp {
           audio: true
         });
         this.elements.localVideo.srcObject = this.state.localStream;
-        
+       
         // إزالة المؤشر الدائري من شاشة المستخدم المحلي
         if (this.elements.localSpinner) {
           this.elements.localSpinner.style.display = 'none';
         }
-        
+       
         this.updateMicButton();
         this.updateStatusMessage('Media access granted. Starting search...');
         return true;
@@ -477,7 +477,7 @@ class ChatApp {
         return false;
       }
     };
-   
+  
     return await attempt();
   }
   // =====================================================
@@ -488,18 +488,18 @@ class ChatApp {
       try { this.state.peerConnection.close(); } catch (e) {}
       this.state.peerConnection = null;
     }
-   
+  
     try {
       this.state.peerConnection = new RTCPeerConnection(this.servers);
       this.state.makingOffer = false;
       this.state.ignoreOffer = false;
-     
+    
       if (this.state.localStream) {
         this.state.localStream.getTracks().forEach(t => {
           this.state.peerConnection.addTrack(t, this.state.localStream);
         });
       }
-     
+    
       if (this.state.isInitiator) {
         try {
           this.keepAliveChannel = this.state.peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -514,12 +514,12 @@ class ChatApp {
           this.setupKeepAliveChannel(this.keepAliveChannel);
         };
       }
-     
+    
       this.state.peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) return;
         this.elements.remoteVideo.srcObject = e.streams[0];
         this.sendLocalVideoReady();
-       
+      
         if (this.state.partnerVideoReady) {
           this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
           this.hideAllSpinners();
@@ -527,17 +527,17 @@ class ChatApp {
           this.startStatsMonitor();
         }
       };
-     
+    
       this.state.peerConnection.onicecandidate = e => {
         if (e.candidate && this.state.partnerId) {
           this.safeEmit('signal', { to: this.state.partnerId, data: { candidate: e.candidate } });
         }
       };
-     
+    
       this.state.peerConnection.onconnectionstatechange = () => {
         if (!this.state.peerConnection) return;
         const s = this.state.peerConnection.connectionState;
-       
+      
         if (s === 'connected') {
           // Connection established
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
@@ -553,10 +553,10 @@ class ChatApp {
           }
         }
       };
-     
+    
       this.state.peerConnection.onnegotiationneeded = async () => {
         if (!this.state.peerConnection || this.state.makingOffer || !this.state.partnerId) return;
-       
+      
         try {
           this.state.makingOffer = true;
           const offer = await this.state.peerConnection.createOffer();
@@ -575,12 +575,12 @@ class ChatApp {
   }
   setupKeepAliveChannel(dc) {
     if (!dc) return;
-   
+  
     dc.onopen = () => {
       this.lastPong = Date.now();
       this.startPingLoop();
     };
-   
+  
     dc.onmessage = (ev) => {
       if (!ev.data) return;
       try {
@@ -592,7 +592,7 @@ class ChatApp {
         }
       } catch (e) {}
     };
-   
+  
     dc.onclose = () => this.stopPingLoop();
     dc.onerror = (err) => console.error('keepAlive error:', err);
   }
@@ -603,13 +603,13 @@ class ChatApp {
         this.stopPingLoop();
         return;
       }
-     
+    
       try {
         this.keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {
         this.stopPingLoop();
       }
-     
+    
       if (Date.now() - this.lastPong > this.config.PONG_TIMEOUT) {
         this.stopPingLoop();
         this.cleanupConnection();
@@ -629,7 +629,7 @@ class ChatApp {
   }
   async setSenderMaxBitrate(targetBps) {
     if (!this.state.peerConnection) return;
-   
+  
     try {
       const senders = this.state.peerConnection.getSenders();
       for (const sender of senders) {
@@ -650,17 +650,17 @@ class ChatApp {
         this.stopStatsMonitor();
         return;
       }
-     
+    
       try {
         const stats = await this.state.peerConnection.getStats(null);
         let outboundVideoReport = null;
         let remoteInboundRtp = null;
-       
+      
         stats.forEach(report => {
           if (report.type === 'outbound-rtp' && report.kind === 'video') outboundVideoReport = report;
           if (report.type === 'remote-inbound-rtp' && report.kind === 'video') remoteInboundRtp = report;
         });
-       
+      
         let lossRatio = 0;
         if (outboundVideoReport?.packetsSent > 0) {
           if (remoteInboundRtp?.packetsLost >= 0) {
@@ -671,10 +671,10 @@ class ChatApp {
             lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
           }
         }
-       
+      
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
-       
+      
         if (lossRatio > 0.08 || rtt > 0.5) {
           await this.setSenderMaxBitrate(this.config.BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
@@ -717,10 +717,10 @@ class ChatApp {
         if (!v || !v.srcObject) {
           return reject(new Error('Remote video not available'));
         }
-       
+      
         const width = v.videoWidth || v.clientWidth || 640;
         const height = v.videoHeight || v.clientHeight || 480;
-       
+      
         if (width === 0 || height === 0) {
           setTimeout(() => {
             const w2 = v.videoWidth || v.clientWidth || 640;
@@ -735,7 +735,7 @@ class ChatApp {
           }, 250);
           return;
         }
-       
+      
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -758,10 +758,10 @@ class ChatApp {
       this.elements.notifyBell.classList.remove('shake');
       this.elements.notifyMenu.style.display = this.elements.notifyMenu.style.display === 'block' ? 'none' : 'block';
     };
-   
+  
     document.onclick = () => { this.elements.notifyMenu.style.display = 'none'; };
     document.addEventListener('keydown', e => { if (e.key === 'Escape') this.elements.notifyMenu.style.display = 'none'; });
-   
+  
     // Skip button
     this.elements.skipBtn.onclick = () => {
       if (this.state.isBanned) return;
@@ -775,7 +775,7 @@ class ChatApp {
       this.config.NORMAL_PAUSE_DURATION = 3000;
       this.startSearchLoop();
     };
-   
+  
     // Exit button
     this.elements.exitBtn.onclick = () => {
       this.cleanupConnection();
@@ -784,7 +784,7 @@ class ChatApp {
       }
       location.href = 'index.html';
     };
-   
+  
     // Mic button
     this.elements.micBtn.onclick = () => {
       if (!this.state.localStream || this.state.isBanned) return;
@@ -792,7 +792,7 @@ class ChatApp {
       this.state.localStream.getAudioTracks().forEach(t => t.enabled = this.state.micEnabled);
       this.updateMicButton();
     };
-   
+  
     // Report button
     if (this.elements.reportBtn) {
       this.elements.reportBtn.style.display = 'flex';
@@ -801,15 +801,15 @@ class ChatApp {
           this.updateStatusMessage("No user to report.");
           return;
         }
-       
+      
         const prev = this.reportCounts.get(this.state.partnerId) || 0;
         const now = prev + 1;
         this.reportCounts.set(this.state.partnerId, now);
         this.reportedIds.add(this.state.partnerId);
-       
+      
         this.safeEmit("report", { partnerId: this.state.partnerId });
         this.safeEmit("skip");
-       
+      
         if (now === 1) {
           try {
             this.addMessage("Capturing screenshot for admin review...", "system");
@@ -821,7 +821,7 @@ class ChatApp {
             this.addMessage("Failed to capture screenshot (no remote frame available).", "system");
           }
         }
-       
+      
         this.cleanupConnection();
         this.disableChat();
         this.updateStatusMessage('You reported the user — skipping...');
@@ -840,7 +840,7 @@ class ChatApp {
     this.typingIndicator.style.fontStyle = 'italic';
     this.typingIndicator.textContent = 'Stranger is typing...';
     this.elements.chatMessages.appendChild(this.typingIndicator);
-   
+  
     const sendTyping = () => {
       if (!this.state.partnerId || this.state.isBanned) return;
       if (!this.typing) {
@@ -853,11 +853,11 @@ class ChatApp {
         this.safeEmit('stop-typing', { to: this.state.partnerId });
       }, this.config.TYPING_PAUSE);
     };
-   
+  
     this.elements.chatInput.oninput = () => {
       if (!this.elements.chatInput.disabled && !this.state.isBanned) sendTyping();
     };
-   
+  
     const sendMessage = () => {
       if (this.state.isBanned) return;
       const msg = this.elements.chatInput.value.trim();
@@ -868,7 +868,7 @@ class ChatApp {
       this.typing = false;
       this.safeEmit('stop-typing', { to: this.state.partnerId });
     };
-   
+  
     this.elements.sendBtn.onclick = sendMessage;
     this.elements.chatInput.onkeypress = e => { if (e.key === 'Enter' && !this.state.isBanned) sendMessage(); };
   }
@@ -879,29 +879,29 @@ class ChatApp {
     this.socket.on('waiting', msg => {
       if (!this.state.isBanned) this.updateStatusMessage(msg);
     });
-   
+  
     this.socket.on('chat-message', ({ message }) => {
       if (!this.state.isBanned) this.addMessage(message, 'them');
     });
-   
+  
     this.socket.on('typing', () => {
       if (!this.state.isBanned) {
         this.typingIndicator.style.display = 'block';
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
       }
     });
-   
+  
     this.socket.on('stop-typing', () => {
       if (!this.state.isBanned) this.typingIndicator.style.display = 'none';
     });
-   
+  
     this.socket.on('adminMessage', msg => {
       if (this.elements.notifyDot) this.elements.notifyDot.style.display = 'block';
       this.elements.notifyBell.classList.add('shake');
       this.pushAdminNotification('📢 ' + msg);
       this.addMessage('📢 Admin: ' + msg, 'system');
     });
-   
+  
     this.socket.on('banned', ({ message }) => {
       this.state.isBanned = true;
       this.addMessage(message || 'You are banned.', 'system');
@@ -916,14 +916,14 @@ class ChatApp {
       if (this.elements.localVideo) this.elements.localVideo.srcObject = null;
       this.updateMicButton();
     });
-   
+  
     this.socket.on('unbanned', ({ message }) => {
       this.state.isBanned = false;
       this.addMessage(message || 'You have been unbanned.', 'system');
       this.updateStatusMessage('You have been unbanned.');
       this.startSearch();
     });
-   
+  
     this.socket.on('partner-disconnected', () => {
       if (!this.state.isBanned) {
         this.updateStatusMessage('Partner disconnected.');
@@ -936,7 +936,7 @@ class ChatApp {
         this.setSafeTimer(() => this.startSearchLoop(), 500);
       }
     });
-   
+  
     this.socket.on('video-ready', ({ from }) => {
       if (this.state.partnerId && from === this.state.partnerId) {
         this.state.partnerVideoReady = true;
@@ -948,13 +948,13 @@ class ChatApp {
         }
       }
     });
-   
+  
     this.socket.on('partner-found', async data => {
       if (this.state.isBanned) {
         this.safeEmit('skip');
         return;
       }
-     
+    
       const foundId = data?.id || data?.partnerId;
       if (!foundId) {
         console.error('Invalid partner data received:', data);
@@ -962,7 +962,7 @@ class ChatApp {
         this.setSafeTimer(() => this.startSearchLoop(), 1000);
         return;
       }
-     
+    
       if (this.reportedIds.has(foundId)) {
         this.safeEmit('skip');
         this.updateStatusMessage('Found reported user — skipping...');
@@ -970,17 +970,17 @@ class ChatApp {
         this.setSafeTimer(() => this.startSearchLoop(), 200);
         return;
       }
-     
+    
       this.state.partnerId = foundId;
       this.state.isInitiator = !!data.initiator;
       this.state.partnerVideoReady = false;
       this.state.localVideoReadySent = false;
-     
+    
       this.hideAllSpinners();
       this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
       this.state.consecutiveSearchFails = 0;
       this.config.NORMAL_PAUSE_DURATION = 3000;
-     
+    
       try {
         this.createPeerConnection();
         if (this.state.isInitiator) {
@@ -998,19 +998,19 @@ class ChatApp {
         this.state.makingOffer = false;
       }
     });
-   
+  
     this.socket.on('signal', async ({ from, data }) => {
       if (this.state.isBanned) return;
       if (!from || !data) {
         console.error('Invalid signal data:', { from, data });
         return;
       }
-     
+    
       if (this.state.partnerId && this.state.partnerId !== from) {
         console.warn('Signal from unexpected partner:', from, 'expected:', this.state.partnerId);
         return;
       }
-     
+    
       if (!this.state.peerConnection) {
         try {
           this.createPeerConnection();
@@ -1019,18 +1019,18 @@ class ChatApp {
           return;
         }
       }
-     
+    
       if (data.candidate && !this.state.peerConnection.remoteDescription) {
         this.bufferRemoteCandidate(data.candidate);
         return;
       }
-     
+    
       try {
         if (data.type === 'offer') {
           const offerCollision = (this.state.makingOffer || this.state.peerConnection.signalingState !== 'stable');
           this.state.ignoreOffer = !this.state.isInitiator && offerCollision;
           if (this.state.ignoreOffer) return;
-         
+        
           await this.state.peerConnection.setRemoteDescription(data);
           const answer = await this.state.peerConnection.createAnswer();
           await this.state.peerConnection.setLocalDescription(answer);
@@ -1055,10 +1055,8 @@ class ChatApp {
 // =====================================================
 window.addEventListener('DOMContentLoaded', () => {
   const app = new ChatApp();
- 
   // إعداد مستمعي Socket بعد إنشاء التطبيق
   app.setupSocketListeners();
- 
   // معالجة الأخطاء العالمية
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
@@ -1066,14 +1064,12 @@ window.addEventListener('DOMContentLoaded', () => {
     app.cleanupConnection();
     app.setSafeTimer(() => app.startSearchLoop(), 2000);
   });
- 
   window.addEventListener('unhandledrejection', (e) => {
     console.error('Unhandled promise rejection:', e.reason);
     app.updateStatusMessage('Connection error detected. Recovering...');
     app.cleanupConnection();
     app.setSafeTimer(() => app.startSearchLoop(), 1000);
   });
- 
   window.onbeforeunload = () => {
     app.safeEmit('stop');
     app.cleanupConnection();
