@@ -88,8 +88,7 @@ class ChatApp {
       notifyMenu: document.getElementById('notifyMenu'),
       localVideo: document.getElementById('localVideo'),
       remoteVideo: document.getElementById('remoteVideo'),
-      // تم إزالة المؤشرات الدوارة (spinners) تمامًا من الشاشة المحلية
-      // localSpinner: document.getElementById('localSpinner'),   // ← محذوف
+      localSpinner: document.getElementById('localSpinner'),
       remoteSpinner: document.getElementById('remoteSpinner'),
       reportBtn: document.getElementById('reportBtn'),
       micBtn: document.getElementById('micBtn'),
@@ -256,19 +255,15 @@ class ChatApp {
     this.elements.micBtn.disabled = !this.state.localStream || this.state.isBanned;
     this.elements.micBtn.style.opacity = (this.state.localStream && !this.state.isBanned) ? '1' : '0.8';
   }
-  // تم تعديل هذه الدالة لتعرض فقط spinner الطرف الآخر (remote) وعدم إظهار أي شيء على الفيديو المحلي
   showRemoteSpinnerOnly(show) {
     if (this.elements.remoteSpinner) this.elements.remoteSpinner.style.display = show ? 'block' : 'none';
     if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = show ? 'none' : 'block';
-    // لا نُخفي أو نُظهر الفيديو المحلي أبدًا هنا – يبقى دائمًا مرئيًا
     if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
   }
-  // تم تعديل هذه الدالة أيضًا لعدم إخفاء الفيديو المحلي
   hideAllSpinners() {
     if (this.elements.remoteSpinner) this.elements.remoteSpinner.style.display = 'none';
     if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = 'block';
-    // الفيديو المحلي يبقى مرئيًا دائمًا
-    if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
+    if (this.elements.localVideo) this.elements.localVideo.style.display = 'none';
   }
   // =====================================================
   // إدارة الإعلانات
@@ -466,6 +461,12 @@ class ChatApp {
           audio: true
         });
         this.elements.localVideo.srcObject = this.state.localStream;
+        
+        // إزالة المؤشر الدائري من شاشة المستخدم المحلي
+        if (this.elements.localSpinner) {
+          this.elements.localSpinner.style.display = 'none';
+        }
+        
         this.updateMicButton();
         this.updateStatusMessage('Media access granted. Starting search...');
         return true;
