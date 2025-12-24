@@ -1,441 +1,193 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تسجيل الدخول - لوحة الأدمن</title>
+    <title>تسجيل الدخول - لوحة الإدارة</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-        }
-
-        body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             padding: 20px;
         }
-
+        
         .login-container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
             padding: 40px;
             text-align: center;
         }
-
+        
         .login-header {
             margin-bottom: 30px;
         }
-
+        
         .login-header h1 {
             color: #333;
             font-size: 28px;
             margin-bottom: 10px;
         }
-
+        
         .login-header p {
             color: #666;
             font-size: 16px;
         }
-
+        
+        .login-form {
+            margin-bottom: 30px;
+        }
+        
         .form-group {
             margin-bottom: 25px;
-            text-align: left;
+            text-align: right;
         }
-
+        
         .form-group label {
             display: block;
+            color: #555;
             margin-bottom: 8px;
-            color: #333;
             font-weight: 600;
-            font-size: 14px;
         }
-
+        
         .form-group input {
             width: 100%;
             padding: 15px;
             border: 2px solid #e1e5e9;
             border-radius: 10px;
             font-size: 16px;
-            transition: all 0.3s ease;
-            background: #f8f9fa;
+            transition: border-color 0.3s;
         }
-
+        
         .form-group input:focus {
             outline: none;
             border-color: #667eea;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-
-        .form-group input.error {
-            border-color: #e74c3c;
-            background: #fdf2f2;
-        }
-
-        .error-message {
-            color: #e74c3c;
-            font-size: 13px;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .login-button {
-            width: 100%;
-            padding: 15px;
+        
+        .login-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
+            padding: 16px 40px;
             border-radius: 10px;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
         }
-
-        .login-button:hover {
+        
+        .login-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
-
-        .login-button:active {
+        
+        .login-btn:active {
             transform: translateY(0);
         }
-
-        .login-button:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .loading-spinner {
+        
+        .error-message {
+            color: #e74c3c;
+            background: #fee;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
             display: none;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
         }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .forgot-password {
-            color: #667eea;
-            text-decoration: none;
+        
+        .security-notice {
+            color: #7f8c8d;
             font-size: 14px;
-            transition: color 0.3s ease;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
         }
-
-        .forgot-password:hover {
-            color: #764ba2;
-            text-decoration: underline;
-        }
-
-        .security-info {
-            margin-top: 30px;
-            padding: 15px;
-            background: #f0f4ff;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
-        }
-
-        .security-info p {
-            color: #4a5568;
-            font-size: 13px;
-            margin: 0;
-            text-align: right;
-        }
-
+        
         .logo {
             width: 80px;
             height: 80px;
+            margin: 0 auto 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
-            margin: 0 auto 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
             color: white;
-        }
-
-        /* رسائل التنبيه */
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            text-align: center;
-            display: none;
-        }
-
-        .alert.error {
-            background: #fdf2f2;
-            color: #c53030;
-            border: 1px solid #fed7d7;
-        }
-
-        .alert.success {
-            background: #f0fff4;
-            color: #38a169;
-            border: 1px solid #c6f6d5;
-        }
-
-        /* Responsive */
-        @media (max-width: 480px) {
-            .login-container {
-                padding: 30px 20px;
-                margin: 10px;
-            }
-
-            .login-header h1 {
-                font-size: 24px;
-            }
-
-            .form-group input {
-                padding: 12px;
-                font-size: 14px;
-            }
-
-            .login-button {
-                padding: 12px;
-                font-size: 14px;
-            }
+            font-size: 32px;
+            font-weight: bold;
         }
     </style>
-<base target="_blank">
 </head>
 <body>
     <div class="login-container">
-        <div class="logo">🔐</div>
-        
+        <div class="logo">A</div>
         <div class="login-header">
-            <h1>تسجيل الدخول</h1>
-            <p>لوحة تحكم الأدمن</p>
+            <h1>لوحة التحكم</h1>
+            <p>الرجاء إدخال كلمة المرور للوصول إلى لوحة الإدارة</p>
         </div>
-
-        <!-- رسائل التنبيه -->
-        <div id="alert" class="alert"></div>
-
-        <form id="loginForm">
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <form class="login-form" id="loginForm">
             <div class="form-group">
-                <label for="username">اسم المستخدم</label>
-                <input type="text" id="username" name="username" required autocomplete="username">
-                <div class="error-message" id="username-error">يرجى إدخال اسم المستخدم</div>
+                <label for="password">كلمة المرور:</label>
+                <input type="password" id="password" placeholder="أدخل كلمة المرور" required>
             </div>
-
-            <div class="form-group">
-                <label for="password">كلمة المرور</label>
-                <input type="password" id="password" name="password" required autocomplete="current-password">
-                <div class="error-message" id="password-error">يرجى إدخال كلمة المرور</div>
-            </div>
-
-            <button type="submit" class="login-button" id="loginButton">
-                <span id="buttonText">تسجيل الدخول</span>
-                <div class="loading-spinner" id="loadingSpinner"></div>
-            </button>
+            
+            <button type="submit" class="login-btn">تسجيل الدخول</button>
         </form>
-
-        <a href="#" class="forgot-password">نسيت كلمة المرور؟</a>
-
-        <div class="security-info">
-            <p>🔒 هذه المنطقة محمية. يرجى استخدام بيانات اعتماد صالحة للوصول إلى لوحة التحكم.</p>
+        
+        <div class="security-notice">
+            <p>ⓘ هذه الصفحة آمنة ومحمية. يتم التحقق من كلمة المرور وIP الخاص بك.</p>
         </div>
     </div>
 
     <script>
-        class AdminLogin {
-            constructor() {
-                this.form = document.getElementById('loginForm');
-                this.usernameInput = document.getElementById('username');
-                this.passwordInput = document.getElementById('password');
-                this.loginButton = document.getElementById('loginButton');
-                this.buttonText = document.getElementById('buttonText');
-                this.loadingSpinner = document.getElementById('loadingSpinner');
-                this.alert = document.getElementById('alert');
-
-                this.init();
-            }
-
-            init() {
-                // منع الإرسال التلقائي للنموذج
-                this.form.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.handleLogin();
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const password = document.getElementById('password').value;
+            const errorElement = document.getElementById('errorMessage');
+            
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
                 });
-
-                // التحقق من صحة الإدخال في الوقت الحقيقي
-                this.usernameInput.addEventListener('input', () => this.validateUsername());
-                this.passwordInput.addEventListener('input', () => this.validatePassword());
-
-                // إزالة الخطأ عند التركيز
-                this.usernameInput.addEventListener('focus', () => this.clearError('username'));
-                this.passwordInput.addEventListener('focus', () => this.clearError('password'));
-
-                // دعم Enter للدخول
-                document.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        this.handleLogin();
-                    }
-                });
-            }
-
-            validateUsername() {
-                const value = this.usernameInput.value.trim();
-                const errorElement = document.getElementById('username-error');
                 
-                if (value.length === 0) {
-                    this.showError('username', 'يرجى إدخال اسم المستخدم');
-                    return false;
-                } else if (value.length < 3) {
-                    this.showError('username', 'اسم المستخدم يجب أن يحتوي على 3 أحرف على الأقل');
-                    return false;
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = '/admin';
                 } else {
-                    this.clearError('username');
-                    return true;
+                    errorElement.textContent = data.error || 'كلمة المرور غير صحيحة';
+                    errorElement.style.display = 'block';
                 }
-            }
-
-            validatePassword() {
-                const value = this.passwordInput.value;
-                const errorElement = document.getElementById('password-error');
-                
-                if (value.length === 0) {
-                    this.showError('password', 'يرجى إدخال كلمة المرور');
-                    return false;
-                } else if (value.length < 6) {
-                    this.showError('password', 'كلمة المرور يجب أن تحتوي على 6 أحرف على الأقل');
-                    return false;
-                } else {
-                    this.clearError('password');
-                    return true;
-                }
-            }
-
-            showError(field, message) {
-                const input = field === 'username' ? this.usernameInput : this.passwordInput;
-                const errorElement = document.getElementById(field + '-error');
-                
-                input.classList.add('error');
-                errorElement.textContent = message;
+            } catch (error) {
+                errorElement.textContent = 'حدث خطأ في الاتصال. الرجاء المحاولة لاحقاً.';
                 errorElement.style.display = 'block';
             }
-
-            clearError(field) {
-                const input = field === 'username' ? this.usernameInput : this.passwordInput;
-                const errorElement = document.getElementById(field + '-error');
-                
-                input.classList.remove('error');
-                errorElement.style.display = 'none';
-            }
-
-            showAlert(message, type = 'error') {
-                this.alert.textContent = message;
-                this.alert.className = `alert ${type}`;
-                this.alert.style.display = 'block';
-                
-                // إخفاء الرسالة بعد 5 ثواني
-                setTimeout(() => {
-                    this.alert.style.display = 'none';
-                }, 5000);
-            }
-
-            setLoading(loading) {
-                if (loading) {
-                    this.loginButton.disabled = true;
-                    this.buttonText.style.display = 'none';
-                    this.loadingSpinner.style.display = 'block';
-                } else {
-                    this.loginButton.disabled = false;
-                    this.buttonText.style.display = 'block';
-                    this.loadingSpinner.style.display = 'none';
-                }
-            }
-
-            async handleLogin() {
-                // إخفاء الرسائل السابقة
-                this.alert.style.display = 'none';
-
-                // التحقق من صحة البيانات
-                const isUsernameValid = this.validateUsername();
-                const isPasswordValid = this.validatePassword();
-
-                if (!isUsernameValid || !isPasswordValid) {
-                    return;
-                }
-
-                // بدء التحميل
-                this.setLoading(true);
-
-                try {
-                    const response = await fetch('/api/admin/login', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            username: this.usernameInput.value.trim(),
-                            password: this.passwordInput.value
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok && data.success) {
-                        this.showAlert('تم تسجيل الدخول بنجاح! جاري التحويل...', 'success');
-                        
-                        // حفظ التوكن في localStorage
-                        if (data.token) {
-                            localStorage.setItem('adminToken', data.token);
-                        }
-
-                        // التحويل إلى لوحة التحكم بعد ثانية
-                        setTimeout(() => {
-                            window.location.href = '/admin-panel.html';
-                        }, 1000);
-                    } else {
-                        this.showAlert(data.message || 'فشل تسجيل الدخول. يرجى التحقق من البيانات.');
-                    }
-                } catch (error) {
-                    console.error('Login error:', error);
-                    this.showAlert('حدث خطأ في الشبكة. يرجى المحاولة مرة أخرى.');
-                } finally {
-                    this.setLoading(false);
-                }
-            }
-        }
-
-        // تهيئة صفحة تسجيل الدخول
-        document.addEventListener('DOMContentLoaded', () => {
-            new AdminLogin();
-            
-            // التحقق من وجود توكن محفوظ
-            const savedToken = localStorage.getItem('adminToken');
-            if (savedToken) {
-                // يمكنك إضافة منطق للتحقق من صحة التوكن هنا
-                console.log('Found saved token');
-            }
         });
-
-        // وظيفة تسجيل الخروج
-        function logout() {
-            localStorage.removeItem('adminToken');
-            window.location.href = '/admin-login.html';
-        }
+        
+        // مسح رسالة الخطأ عند البدء بالكتابة
+        document.getElementById('password').addEventListener('input', function() {
+            document.getElementById('errorMessage').style.display = 'none';
+        });
     </script>
 </body>
 </html>
