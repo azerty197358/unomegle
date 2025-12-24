@@ -937,17 +937,24 @@ hideAllSpinners() {
       }
     });
   
-    this.socket.on('video-ready', ({ from }) => {
-      if (this.state.partnerId && from === this.state.partnerId) {
-        this.state.partnerVideoReady = true;
-        if (this.state.localVideoReadySent) {
-          this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-          this.hideAllSpinners();
-          this.enableChat();
-          this.startStatsMonitor();
-        }
-      }
-    });
+   this.socket.on('video-ready', ({ from }) => {
+  if (this.state.partnerId && from === this.state.partnerId) {
+    this.state.partnerVideoReady = true;
+
+    // إخفاء السبينر وإظهار الفيديو البعيد فور وصول إشارة أن الطرف الآخر جاهز
+    // (حتى لو لم نكن قد أرسلنا localVideoReadySent بعد)
+    this.hideAllSpinners();
+
+    // إذا كنا قد أرسلنا إشارة localVideoReadySent بالفعل
+    // (أي أن كلا الطرفين أصبحا جاهزين بالفيديو)
+    if (this.state.localVideoReadySent) {
+      this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
+      this.startStatsMonitor();
+    }
+    // ملاحظة: لا نحتاج إلى استدعاء enableChat() هنا مرة أخرى
+    // لأننا سنستدعيه في partner-found مباشرة (كما اتفقنا سابقًا)
+  }
+});
   
     this.socket.on('partner-found', async data => {
       if (this.state.isBanned) {
@@ -978,6 +985,7 @@ hideAllSpinners() {
     
       this.hideAllSpinners();
       this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
+      this.enableChat();  // ← هنا بالضبط
       this.state.consecutiveSearchFails = 0;
       this.config.NORMAL_PAUSE_DURATION = 3000;
     
