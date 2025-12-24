@@ -1,30 +1,5 @@
 <?php
-// قائمة الـ IP المسموح لها بالدخول إلى لوحة الإدارة
-$allowed_ips = array('197.205.96.254'); // أضف الـ IP الخاص بك هنا
-
-// الحصول على عنوان IP الحقيقي للزائر (يدعم Cloudflare و Proxy)
-function getRealIP() {
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        return $_SERVER['HTTP_CLIENT_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        // في حالة وجود عدة IPs (مثل Cloudflare)، نأخذ الأول (الأصلي)
-        $ip_list = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-        return trim($ip_list[0]);
-    } elseif (!empty($_SERVER['HTTP_X_REAL_IP'])) {
-        return $_SERVER['HTTP_X_REAL_IP'];
-    } else {
-        return $_SERVER['REMOTE_ADDR'];
-    }
-}
-
-$visitor_ip = getRealIP();
-
-// التحقق من أن الـ IP موجود في القائمة المسموح بها
-if (!in_array($visitor_ip, $allowed_ips)) {
-    // يمكنك تغيير الرسالة أو التوجيه حسب رغبتك
-    http_response_code(403);
-    die('<h1>403 Forbidden</h1><p>الوصول إلى لوحة الإدارة ممنوع من عنوان IP هذا.</p><p>الـ IP المسموح به فقط: ' . implode(', ', $allowed_ips) . '</p>');
-}
+require_once __DIR__.'/auth.php';
 ?>
 <!DOCTYPE html>
 <html>
