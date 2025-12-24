@@ -281,7 +281,7 @@ class ChatApp {
   hideAllSpinners() {
     if (this.elements.remoteSpinner) this.elements.remoteSpinner.style.display = 'none';
     if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = 'block';
-    if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
+    if (this.elements.localVideo) this.elements.localVideo.style.display = 'none';
   }
 
   // =====================================================
