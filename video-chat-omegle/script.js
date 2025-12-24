@@ -1,4 +1,3 @@
-<script>
 window.addEventListener('DOMContentLoaded', () => {
   // ---------------------- SOCKET ----------------------
   const socket = io();
@@ -717,4 +716,4 @@ window.addEventListener('DOMContentLoaded', () => {
     cleanupConnection(false);
   };
 });
-</script>
+
