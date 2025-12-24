@@ -286,7 +286,7 @@ class ChatApp {
     this.adVideo.style.objectFit = 'cover';
     this.adVideo.style.zIndex = '100';
     this.adVideo.style.display = 'none';
-    this.adVideo.style.backgroundColor = '#808080';  // تم التعديل هنا: رمادي متوسط (مثل شاشة الانتظار/الـ pause في Omegle)
+    this.adVideo.style.backgroundColor = '#000';
     this.adVideo.controls = false;
     this.elements.remoteVideo.parentNode.appendChild(this.adVideo);
   }
