@@ -1,3 +1,6 @@
+// Load environment variables first
+require('dotenv').config();
+
 const express = require("express");
 const path = require("path");
 const basicAuth = require("express-basic-auth");
@@ -10,47 +13,64 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-/* ====== نظام الحماية security.js ====== */
-const ALLOWED_IPS = ['197.205.96.254'];        // عدّلها لاحقاً
-function realIP(req){
-  return (req.headers['cf-connecting-ip']   ||
-          req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-          req.headers['x-real-ip']          ||
-          req.connection.remoteAddress);
+// ====== Security Configuration from Environment ======
+const ALLOWED_IPS = (process.env.ALLOWED_IPS || '197.205.96.254').split(',').map(ip => ip.trim());
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const PORT = process.env.PORT || 3000;
+
+function realIP(req) {
+  return (
+    req.headers['cf-connecting-ip'] ||
+    req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+    req.headers['x-real-ip'] ||
+    req.connection.remoteAddress
+  );
 }
-function ipFilter(req,res,next){
-  if(!ALLOWED_IPS.includes(realIP(req))) return res.status(403).send('Forbidden');
+
+function ipFilter(req, res, next) {
+  const clientIP = realIP(req);
+  if (!ALLOWED_IPS.includes(clientIP)) {
+    console.log(`Access denied for IP: ${clientIP}`);
+    return res.status(403).send('Forbidden');
+  }
   next();
 }
 
-/* ====== دمج الحماية في ملف واحد ====== */
-function applySecurity(app){
-  app.use(ipFilter);           // يُطبق على كل المسارات تلقائياً
+// Enhanced security middleware
+function applySecurity(app) {
+  // Apply IP filtering only to admin routes
+  app.use('/admin*', ipFilter);
   
-  // تعريف adminAuth هنا بدلاً من تكراره
-  const adminAuth = basicAuth({ 
-    users: { admin: process.env.ADMIN_PASSWORD || 'admin123' }, 
-    challenge: true, 
-    realm: 'Admin Area' 
+  const adminAuth = basicAuth({
+    users: { admin: ADMIN_PASSWORD },
+    challenge: true,
+    realm: 'Admin Area',
+    unauthorizedResponse: 'Unauthorized Access'
   });
   
-  return { adminAuth };        // تُستخدم يدوياً على المسارات التي تريدها
+  return { adminAuth };
 }
 
-// تطبيق نظام الحماية والحصول على adminAuth
 const { adminAuth } = applySecurity(app);
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
 app.set("trust proxy", true);
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// ============== قاعدة البيانات المحسنة ==============
+// ============== Database Setup ==============
 const dbFile = path.join(__dirname, "stats.db");
 const db = new Database(dbFile);
 
-// إنشاء الجداول المحسنة مع تخزين دائم
 db.exec(`
--- الزوار (تخزين دائم)
 CREATE TABLE IF NOT EXISTS visitors(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ip TEXT NOT NULL,
@@ -60,7 +80,6 @@ CREATE TABLE IF NOT EXISTS visitors(
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- الإحصائيات اليومية (تخزين دائم)
 CREATE TABLE IF NOT EXISTS daily_stats(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date DATE UNIQUE NOT NULL,
@@ -69,7 +88,6 @@ CREATE TABLE IF NOT EXISTS daily_stats(
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- سجل الحظر الدائم
 CREATE TABLE IF NOT EXISTS bans_history(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL,
@@ -81,7 +99,6 @@ CREATE TABLE IF NOT EXISTS bans_history(
   unbanned_at DATETIME
 );
 
--- سجل البلاغات الدائم
 CREATE TABLE IF NOT EXISTS reports_history(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   target TEXT NOT NULL,
@@ -91,7 +108,6 @@ CREATE TABLE IF NOT EXISTS reports_history(
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- الحظر الفعال الحالي
 CREATE TABLE IF NOT EXISTS active_bans(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL,
@@ -100,7 +116,6 @@ CREATE TABLE IF NOT EXISTS active_bans(
   UNIQUE(type,value)
 );
 
--- البلاغات الحالية
 CREATE TABLE IF NOT EXISTS active_reports(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   targetId TEXT NOT NULL,
@@ -109,14 +124,12 @@ CREATE TABLE IF NOT EXISTS active_reports(
   ts INTEGER NOT NULL
 );
 
--- الدول المحظورة
 CREATE TABLE IF NOT EXISTS banned_countries(
   code TEXT PRIMARY KEY,
   blocked_by TEXT DEFAULT 'admin',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- إنشاء فهارس للأداء
 CREATE INDEX IF NOT EXISTS idx_visitors_created ON visitors(created_at);
 CREATE INDEX IF NOT EXISTS idx_visitors_country ON visitors(country);
 CREATE INDEX IF NOT EXISTS idx_visitors_ip_fp ON visitors(ip, fp);
@@ -127,7 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_history_created ON reports_history(create
 CREATE INDEX IF NOT EXISTS idx_reports_history_target ON reports_history(target);
 `);
 
-// الاستعلامات المعدلة
+// Prepared statements
 const stmtInsertVisitor = db.prepare("INSERT INTO visitors(ip,fp,country,user_agent) VALUES(?,?,?,?)");
 const stmtUniqueVisitors24h = db.prepare(`
   SELECT COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt 
@@ -154,7 +167,6 @@ const stmtDeleteBannedCountry = db.prepare("DELETE FROM banned_countries WHERE c
 const stmtClearBannedCountries = db.prepare("DELETE FROM banned_countries");
 const stmtGetBannedCountries = db.prepare("SELECT code FROM banned_countries");
 
-// دوال جديدة للتعامل مع التخزين الدائم
 const stmtInsertDailyStats = db.prepare(`
   INSERT OR REPLACE INTO daily_stats(date, visitor_count, unique_visitors) 
   VALUES(?, COALESCE((SELECT visitor_count FROM daily_stats WHERE date = ?) + 1, 1), 
@@ -180,7 +192,7 @@ const stmtInsertReportHistory = db.prepare(`
   VALUES(?, ?, ?)
 `);
 
-// قائمة الدول
+// Countries list
 const COUNTRIES = {
   "AF":"Afghanistan","AL":"Albania","DZ":"Algeria","AS":"American Samoa","AD":"Andorra","AO":"Angola","AI":"Anguilla",
   "AQ":"Antarctica","AG":"Antigua and Barbuda","AR":"Argentina","AM":"Armenia","AW":"Aruba","AU":"Australia","AT":"Austria",
@@ -215,14 +227,14 @@ const COUNTRIES = {
   "VE":"Venezuela","VN":"Vietnam","VI":"U.S. Virgin Islands","WF":"Wallis & Futuna","EH":"Western Sahara","YE":"Yemen","ZM":"Zambia","ZW":"Zimbabwe"
 };
 
-// المتغيرات الأساسية
+// Core variables
 const waitingQueue = [];
 const partners = new Map();
 const userFingerprint = new Map();
 const userIp = new Map();
 const BAN_DURATION = 24 * 60 * 60 * 1000;
 
-// ======== دوال المساعدة المحسنة ========
+// ======== Helper Functions ========
 function emitAdminUpdate() {
   io.emit("adminUpdate", getAdminSnapshot());
 }
@@ -230,7 +242,6 @@ function emitAdminUpdate() {
 function banUser(ip, fp, reason = "Manual ban by admin") {
   const expiry = Date.now() + BAN_DURATION;
   
-  // تخزين في الحظر الفعال
   if (ip) {
     stmtInsertActiveBan.run("ip", ip, expiry);
     stmtInsertBanHistory.run("ip", ip, reason, new Date(expiry).toISOString());
@@ -244,7 +255,6 @@ function banUser(ip, fp, reason = "Manual ban by admin") {
 }
 
 function unbanUser(ip, fp) {
-  // إزالة من الحظر الفعال
   if (ip) {
     stmtDeleteActiveBan.run("ip", ip);
     stmtUpdateBanUnbanned.run("ip", ip);
@@ -258,7 +268,6 @@ function unbanUser(ip, fp) {
 }
 
 function storeVisitor(ip, country, fingerprint, userAgent) {
-  // أولاً، التحقق إذا كان هذا الزائر جديداً (مميز فريد)
   const today = new Date().toISOString().split('T')[0];
   
   const existingVisitor = db.prepare(`
@@ -266,11 +275,9 @@ function storeVisitor(ip, country, fingerprint, userAgent) {
   `).get(ip, fingerprint, ip, fingerprint);
   
   if (!existingVisitor) {
-    // زائر فريد جديد
     stmtInsertVisitor.run(ip, fingerprint, country, userAgent);
     stmtInsertDailyStats.run(today, today, today);
   } else {
-    // زائر متكرر - تحديث الإحصائيات فقط
     stmtUpdateDailyUnique.run(today);
   }
 }
@@ -278,16 +285,13 @@ function storeVisitor(ip, country, fingerprint, userAgent) {
 function getAdminSnapshot() {
   const now = Date.now();
   
-  // الإحصائيات الحية
   const unique24h = stmtUniqueVisitors24h.get().cnt;
   const byCountry24h = stmtVisitorsByCountry24h.all();
   
-  // الحظر الفعال
   const activeBans = stmtGetActiveBans.all(now);
   const activeIpBans = activeBans.filter(r => r.type === "ip").map(r => ({ ip: r.value, expires: r.expiry }));
   const activeFpBans = activeBans.filter(r => r.type === "fp").map(r => ({ fp: r.value, expires: r.expiry }));
   
-  // البلاغات الفعالة
   const dbReports = stmtGetActiveReports.all();
   const reportsMap = new Map();
   for (const row of dbReports) {
@@ -304,7 +308,6 @@ function getAdminSnapshot() {
     screenshot: obj.screenshot
   }));
   
-  // آخر 50 زائر فريد (بناءً على IP)
   const recentVisitors = db.prepare(`
     SELECT DISTINCT ip, fp, country, created_at as ts
     FROM visitors
@@ -317,10 +320,8 @@ function getAdminSnapshot() {
     LIMIT 50
   `).all();
   
-  // الدول المحظورة
   const bannedCountries = stmtGetBannedCountries.all().map(r => r.code);
   
-  // إحصائيات إضافية من قاعدة البيانات
   const totalVisitors = db.prepare("SELECT COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt FROM visitors").get().cnt;
   const totalDailyStats = db.prepare("SELECT COUNT(*) as cnt FROM daily_stats").get().cnt;
   const totalBansHistory = db.prepare("SELECT COUNT(*) as cnt FROM bans_history").get().cnt;
@@ -344,104 +345,12 @@ function getAdminSnapshot() {
       totalVisitors,
       dailyStats: totalDailyStats,
       bansHistory: totalBansHistory,
-      reportsHistory: totalReportsHistory,
-      lastBackup: db.prepare("SELECT MAX(created_at) as last FROM bans_history").get().last
+      reportsHistory: totalReportsHistory
     }
   };
 }
 
-// ======== مسارات جديدة لإدارة قاعدة البيانات ========
-
-// إحصائيات قاعدة البيانات
-app.get("/admin/database-stats", adminAuth, (req, res) => {
-  try {
-    const stats = getAdminSnapshot().databaseStats;
-    
-    // الحصول على حجم قاعدة البيانات
-    const dbSize = db.prepare("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()").get();
-    
-    res.json({
-      ...stats,
-      dbSize: dbSize ? dbSize.size : 0
-    });
-  } catch (error) {
-    console.error("Error getting database stats:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// تصدير البيانات
-app.get("/admin/export-data", adminAuth, (req, res) => {
-  const { type } = req.query;
-  const exportDate = new Date().toISOString();
-  
-  try {
-    switch(type) {
-      case 'visitors':
-        const visitors = db.prepare("SELECT * FROM visitors ORDER BY created_at DESC").all();
-        res.json({
-          type: 'visitors',
-          count: visitors.length,
-          exported_at: exportDate,
-          data: visitors
-        });
-        break;
-        
-      case 'statistics':
-        const stats = db.prepare("SELECT * FROM daily_stats ORDER BY date DESC").all();
-        res.json({
-          type: 'daily_statistics',
-          count: stats.length,
-          exported_at: exportDate,
-          data: stats
-        });
-        break;
-        
-      case 'bans':
-        const bans = db.prepare("SELECT * FROM bans_history ORDER BY created_at DESC").all();
-        res.json({
-          type: 'bans_history',
-          count: bans.length,
-          exported_at: exportDate,
-          data: bans
-        });
-        break;
-        
-      case 'reports':
-        const reports = db.prepare("SELECT * FROM reports_history ORDER BY created_at DESC").all();
-        res.json({
-          type: 'reports_history',
-          count: reports.length,
-          exported_at: exportDate,
-          data: reports
-        });
-        break;
-        
-      default: // full backup
-        const backup = {
-          visitors: db.prepare("SELECT * FROM visitors ORDER BY created_at DESC").all(),
-          daily_stats: db.prepare("SELECT * FROM daily_stats ORDER BY date DESC").all(),
-          bans_history: db.prepare("SELECT * FROM bans_history ORDER BY created_at DESC").all(),
-          reports_history: db.prepare("SELECT * FROM reports_history ORDER BY created_at DESC").all(),
-          active_bans: db.prepare("SELECT * FROM active_bans").all(),
-          active_reports: db.prepare("SELECT * FROM active_reports").all(),
-          banned_countries: db.prepare("SELECT * FROM banned_countries").all()
-        };
-        
-        res.json({
-          type: 'full_backup',
-          exported_at: exportDate,
-          database_version: '2.0',
-          ...backup
-        });
-    }
-  } catch (error) {
-    console.error("Error exporting data:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// ======== المسارات الحالية المعدلة ========
+// ======== Routes ========
 app.get("/admin", adminAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "admin-panel.html"));
 });
@@ -470,7 +379,6 @@ app.post("/admin/clear-blocked", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
-// بيانات المخطط البياني مع تحسينات
 app.get("/admin/stats-data", adminAuth, (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
@@ -488,10 +396,8 @@ app.get("/admin/stats-data", adminAuth, (req, res) => {
     params.push(to.toISOString().split('T')[0]);
   }
   
-  // الإحصائيات اليومية
   const daily = db.prepare(`SELECT date, visitor_count as count FROM daily_stats ${where} ORDER BY date`).all(params);
   
-  // الدول مع عدد الزوار
   let countryQuery = `
     SELECT country, COUNT(DISTINCT ip||'|'||COALESCE(fp,'')) as cnt 
     FROM visitors 
@@ -560,7 +466,90 @@ app.post("/remove-report", adminAuth, (req, res) => {
   res.send({ ok: true });
 });
 
-// ======== Socket.io Logic المعدلة ========
+app.get("/admin/database-stats", adminAuth, (req, res) => {
+  try {
+    const stats = getAdminSnapshot().databaseStats;
+    const dbSize = db.prepare("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()").get();
+    
+    res.json({
+      ...stats,
+      dbSize: dbSize ? dbSize.size : 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/admin/export-data", adminAuth, (req, res) => {
+  const { type } = req.query;
+  const exportDate = new Date().toISOString();
+  
+  try {
+    switch(type) {
+      case 'visitors':
+        const visitors = db.prepare("SELECT * FROM visitors ORDER BY created_at DESC").all();
+        res.json({
+          type: 'visitors',
+          count: visitors.length,
+          exported_at: exportDate,
+          data: visitors
+        });
+        break;
+        
+      case 'statistics':
+        const stats = db.prepare("SELECT * FROM daily_stats ORDER BY date DESC").all();
+        res.json({
+          type: 'daily_statistics',
+          count: stats.length,
+          exported_at: exportDate,
+          data: stats
+        });
+        break;
+        
+      case 'bans':
+        const bans = db.prepare("SELECT * FROM bans_history ORDER BY created_at DESC").all();
+        res.json({
+          type: 'bans_history',
+          count: bans.length,
+          exported_at: exportDate,
+          data: bans
+        });
+        break;
+        
+      case 'reports':
+        const reports = db.prepare("SELECT * FROM reports_history ORDER BY created_at DESC").all();
+        res.json({
+          type: 'reports_history',
+          count: reports.length,
+          exported_at: exportDate,
+          data: reports
+        });
+        break;
+        
+      default:
+        const backup = {
+          visitors: db.prepare("SELECT * FROM visitors ORDER BY created_at DESC").all(),
+          daily_stats: db.prepare("SELECT * FROM daily_stats ORDER BY date DESC").all(),
+          bans_history: db.prepare("SELECT * FROM bans_history ORDER BY created_at DESC").all(),
+          reports_history: db.prepare("SELECT * FROM reports_history ORDER BY created_at DESC").all(),
+          active_bans: db.prepare("SELECT * FROM active_bans").all(),
+          active_reports: db.prepare("SELECT * FROM active_reports").all(),
+          banned_countries: db.prepare("SELECT * FROM banned_countries").all()
+        };
+        
+        res.json({
+          type: 'full_backup',
+          exported_at: exportDate,
+          database_version: '2.0',
+          ...backup
+        });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ======== Socket.io Logic ========
 io.on("connection", (socket) => {
   const ip = socket.handshake.headers["cf-connecting-ip"] || socket.handshake.address || "unknown";
   const userAgent = socket.handshake.headers["user-agent"] || "unknown";
@@ -577,10 +566,8 @@ io.on("connection", (socket) => {
     } catch (e) { country = null; }
   }
   
-  // تخزين الزائر في قاعدة البيانات
   storeVisitor(ip, country, null, userAgent);
   
-  // التحقق من الحظر
   const ipBan = stmtGetActiveBans.all(Date.now()).find(r => r.type === "ip" && r.value === ip);
   if (ipBan) {
     socket.emit("banned", { message: "You are banned (IP)." });
@@ -600,7 +587,6 @@ io.on("connection", (socket) => {
     if (fingerprint) {
       userFingerprint.set(socket.id, fingerprint);
       
-      // تحديث الزائر بالمميز الفريد
       db.prepare("UPDATE visitors SET fp=? WHERE ip=? AND fp IS NULL LIMIT 1").run(fingerprint, ip);
       
       const fpBan = stmtGetActiveBans.all(Date.now()).find(r => r.type === "fp" && r.value === fingerprint);
@@ -728,11 +714,6 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("Server listening on port " + PORT);
-  console.log("Admin panel: http://localhost:" + PORT + "/admin");
-  console.log("يجب أن يكون IP الخاص بك في قائمة ALLOWED_IPS للوصول");
-  console.log("IP الحالي المسموح به: 197.205.96.254");
-  console.log("يمكنك تغييره في متغير ALLOWED_IPS في الكود");
+  console.log(`Server listening on port ${PORT}`);
 });
