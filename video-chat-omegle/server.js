@@ -24,22 +24,24 @@ function ipFilter(req,res,next){
 }
 
 /* ====== Basic Auth ====== */
-const ADMIN_USERS = { admin: 'admin' };        // عدّل الباسورد
-const adminAuth = basicAuth({ 
-  users: ADMIN_USERS, 
-  challenge: true, 
-  realm: 'Admin Area' 
-});
+const ADMIN_USERS = { omegoo: 'omegoo' };        // عدّل الباسورد هنا
 
 /* ====== دمج الحماية في ملف واحد ====== */
 function applySecurity(app){
   app.use(ipFilter);           // يُطبق على كل المسارات تلقائياً
+  
+  // تعريف adminAuth هنا بدلاً من تكراره
+  const adminAuth = basicAuth({ 
+    users: ADMIN_USERS, 
+    challenge: true, 
+    realm: 'Admin Area' 
+  });
+  
   return { adminAuth };        // تُستخدم يدوياً على المسارات التي تريدها
 }
 
-// تطبيق نظام الحماية
-applySecurity(app);
-
+// تطبيق نظام الحماية والحصول على adminAuth
+const { adminAuth } = applySecurity(app);
 app.set("trust proxy", true);
 app.use(express.static(__dirname));
 app.use(express.urlencoded({ extended: true }));
@@ -734,3 +736,4 @@ server.listen(PORT, () => {
   console.log("Server listening on port " + PORT);
   console.log("Admin panel: http://localhost:" + PORT + "/admin");
 });
+
