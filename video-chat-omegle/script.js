@@ -675,7 +675,7 @@ window.addEventListener('DOMContentLoaded', () => {
     localVideoReadySent = false;
 
     hideAllSpinners();
-    updateStatusMessage('Connecting...');
+    updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
     consecutiveSearchFails = 0;
     normalPauseDuration = 3000;
 
