@@ -35,7 +35,7 @@
     }
     *{margin:0;padding:0;box-sizing:border-box;}
     html, body{height:100%;overflow:hidden;font-family:Arial, sans-serif;background:var(--bg);color:var(--text)}
-  
+ 
     .logo{
       font-size:48px;
       font-weight:bold;
@@ -51,7 +51,7 @@
       color:#ff9a00;
       position:relative;
     }
-  
+ 
     /* تأثير الانتفاخ والانفجار للحرف الأول فقط */
     @keyframes puff-explode {
       0% { transform: scale(1); }
@@ -61,11 +61,11 @@
       80% { transform: scale(2); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
     }
-  
+ 
     .puff{
       animation: puff-explode 1s ease-in-out;
     }
-  
+ 
     .topbar{
       height:60px;display:flex;justify-content:space-between;align-items:center;
       padding:0 12px;border-bottom:1px solid #ddd;background:var(--bg);
@@ -88,7 +88,7 @@
     }
     .notify-item{padding:10px;border-bottom:1px solid #ddd;font-size:14px;}
     .notify-empty{padding:10px;text-align:center;color:#777;}
-  
+ 
     .stage{
       position:absolute;top:60px;bottom:0;left:0;right:0;
       display:flex;gap:var(--gap);padding:12px;overflow:hidden;
@@ -154,7 +154,7 @@
       flex:1;padding:12px;overflow-y:auto;
       display:flex;flex-direction:column;gap:8px;
     }
-  
+ 
     /* رسائل مع تباين عالي في كلا الوضعين */
     .msg{
       padding:12px 16px;max-width:75%;border-radius:12px;font-size:14px;
@@ -188,7 +188,7 @@
       font-size:13px;
       padding:8px 16px;
     }
-  
+ 
     .chat-input-row{
       display:flex;flex-direction:column;gap:8px;padding:10px;
       background:var(--bg);
@@ -242,7 +242,7 @@
       background:var(--bg);
       color:var(--text);
     }
-  
+ 
     @media (max-width: 768px){
       #exitBtn { display:none !important; }
       .stage{
@@ -304,7 +304,7 @@
     }
   </style>
 </head>
-<body>
+<body class="dark">  <!-- تم إضافة class="dark" هنا لجعل الوضع الليلي افتراضيًا -->
   <div class="topbar">
     <div class="logo" id="logo"></div>
     <div style="display:flex;gap:14px;align-items:center;">
@@ -315,7 +315,7 @@
           <div class="notify-empty">No notifications</div>
         </div>
       </div>
-      <button id="darkToggle">🌙</button>
+      <button id="darkToggle">☀️</button>  <!-- تم تغيير الرمز الافتراضي إلى شمس لأن الوضع الليلي مفعّل -->
       <button id="exitBtn">Exit</button>
     </div>
   </div>
@@ -346,7 +346,7 @@
           <span class="typing-dot"></span>
           <span id="typingText">Stranger is typing...</span>
         </div>
-      
+     
         <div class="input-container">
           <button id="skipBtn">Skip</button>
           <input id="chatInput" placeholder="Type..." disabled />
@@ -361,7 +361,7 @@
     /* إنشاء اللوغو بحروف صغيرة (lowercase) */
     const logoText = "sparkchat";
     const logoContainer = document.getElementById("logo");
-  
+ 
     logoText.split("").forEach((letter, i) => {
       const span = document.createElement("span");
       if (i === 0) {
@@ -373,7 +373,7 @@
       span.textContent = letter;
       logoContainer.appendChild(span);
     });
-  
+ 
     /* تأثير الانتفاخ والانفجار للحرف الأول (s) فقط كل 5 ثوانٍ */
     const firstLetter = logoContainer.querySelector(".first-letter");
     setInterval(() => {
@@ -382,14 +382,17 @@
         firstLetter.classList.remove("puff");
       }, 1000);
     }, 3000);
-  
+ 
     /* Dark mode toggle */
-    document.getElementById("darkToggle").onclick = () => {
+    const darkToggleBtn = document.getElementById("darkToggle");
+    darkToggleBtn.onclick = () => {
       document.body.classList.toggle("dark");
-      document.getElementById("darkToggle").innerText =
-        document.body.classList.contains("dark") ? "☀️" : "🌙";
+      darkToggleBtn.innerText = document.body.classList.contains("dark") ? "☀️" : "🌙";
     };
-  
+ 
+    /* تحديث رمز الزر عند التحميل ليتناسب مع الوضع الافتراضي (ليلي) */
+    darkToggleBtn.innerText = "☀️";
+ 
     /* Toggle messages on mobile */
     const toggleMessagesBtn = document.getElementById("toggleMessagesBtn");
     toggleMessagesBtn.onclick = () => {
@@ -397,14 +400,14 @@
       toggleMessagesBtn.innerText =
         document.body.classList.contains("messages-hidden") ? "▲" : "▼";
     };
-  
+ 
     /* Report button */
     document.getElementById("reportBtn").onclick = () => {
       if(confirm("هل تريد الإبلاغ عن المستخدم فعلاً؟")) {
         alert("تم إرسال البلاغ بنجاح.");
       }
     };
-  
+ 
     /* دوال مؤشر الكتابة */
     function showTypingIndicator() {
       document.getElementById('typingIndicator').classList.add('active');
@@ -412,7 +415,7 @@
     function hideTypingIndicator() {
       document.getElementById('typingIndicator').classList.remove('active');
     }
-  
+ 
     let typingTimeout;
     const chatInput = document.getElementById('chatInput');
     chatInput.addEventListener('input', () => {
@@ -420,7 +423,7 @@
         console.log('Sending typing event...');
       }
     });
-  
+ 
     function simulatePartnerTyping() {
       showTypingIndicator();
       clearTimeout(typingTimeout);
@@ -428,7 +431,7 @@
         hideTypingIndicator();
       }, 3000);
     }
-  
+ 
     chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && e.shiftKey) {
         simulatePartnerTyping();
