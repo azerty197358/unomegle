@@ -17,7 +17,7 @@ class ChatApp {
       MAX_CONSECUTIVE_FAILS: 3,
       NORMAL_PAUSE_DURATION: 3000
     };
-  
+ 
     this.state = {
       localStream: null,
       peerConnection: null,
@@ -39,13 +39,13 @@ class ChatApp {
     this.searchTimer = null;
     this.pauseTimer = null;
     this.typingTimer = null;
-  
+ 
     this.bufferedRemoteCandidates = [];
     this.reportedIds = new Set();
     this.reportCounts = new Map();
-  
+ 
     this.servers = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] };
-  
+ 
     this.adVideosList = [
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251224_122947959.mp4',
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_081055765.mp4',
@@ -53,12 +53,12 @@ class ChatApp {
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251221_153328953.mp4',
       'https://raw.githubusercontent.com/azerty197358/myads/main/YouCut_20251224_123428027.mp4'
     ];
-  
+ 
     this.adVideo = null;
     this.keepAliveChannel = null;
     this.lastPong = Date.now();
     this.typing = false;
-  
+ 
     this.init();
   }
   // =====================================================
@@ -71,14 +71,15 @@ class ChatApp {
     this.createAdVideoElement();
     this.ensureNotifyEmpty();
     this.updateMicButton();
-  
+    this.setupChatScrollEffect(); // إعداد تأثير التمرير الجديد
+
     try {
       const fingerprint = await this.generateFingerprint();
       this.safeEmit('identify', { fingerprint });
     } catch (e) {
       console.error('Failed to send fingerprint:', e);
     }
-  
+ 
     this.startSearch();
   }
   setupDOMElements() {
@@ -99,6 +100,50 @@ class ChatApp {
       exitBtn: document.getElementById('exitBtn')
     };
   }
+
+  // =====================================================
+  // تأثير التمرير: إخفاء الرسائل القديمة تدريجياً عند التمرير لأسفل
+  // =====================================================
+  setupChatScrollEffect() {
+    const chat = this.elements.chatMessages;
+    if (!chat) return;
+
+    const updateMessagesOpacity = () => {
+      const scrollTop = chat.scrollTop;
+      const scrollHeight = chat.scrollHeight;
+      const clientHeight = chat.clientHeight;
+
+      // المسافة من الأسفل
+      const distanceFromBottom = scrollHeight - clientHeight - scrollTop;
+
+      // إذا كان المستخدم قريبًا من الأسفل (أقل من 600px)، نُظهر كل الرسائل بوضوح
+      // كلما ابتعد لأعلى، تتلاشى الرسائل القديمة
+      const fadeStart = 600; // ابدأ التلاشي بعد 600px من الأسفل
+
+      const messages = chat.querySelectorAll('.msg');
+      messages.forEach(msg => {
+        const rect = msg.getBoundingClientRect();
+        const chatRect = chat.getBoundingClientRect();
+        const msgTopRelativeToChat = rect.top - chatRect.top + scrollTop;
+
+        // إذا كانت الرسالة في أعلى الشات (قديمة) وابتعدنا عن الأسفل
+        if (distanceFromBottom > fadeStart) {
+          const fadeFactor = Math.min(1, (distanceFromBottom - fadeStart) / 1000);
+          const opacity = Math.max(0.2, 1 - fadeFactor);
+          msg.style.opacity = opacity;
+          msg.style.transition = 'opacity 0.4s ease';
+        } else {
+          msg.style.opacity = '1';
+        }
+      });
+    };
+
+    chat.addEventListener('scroll', updateMessagesOpacity);
+
+    // تحديث عند إضافة رسائل جديدة أيضًا
+    this.updateMessagesOpacity = updateMessagesOpacity;
+  }
+
   // =====================================================
   // إدارة المؤقتات
   // =====================================================
@@ -150,7 +195,7 @@ class ChatApp {
         new Date().getTimezoneOffset(),
         Intl.DateTimeFormat().resolvedOptions().timeZone || ''
       ];
-    
+   
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
@@ -163,7 +208,7 @@ class ChatApp {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.fillText('fingerprint', 4, 17);
       components.push(canvas.toDataURL());
-    
+   
       try {
         const audioCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
         const oscillator = audioCtx.createOscillator();
@@ -176,7 +221,7 @@ class ChatApp {
       } catch (e) {
         components.push('audio-unsupported');
       }
-    
+   
       const hashCode = (str) => {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -186,7 +231,7 @@ class ChatApp {
         }
         return hash.toString(16);
       };
-    
+   
       return hashCode(components.join('||'));
     } catch (e) {
       console.error('Fingerprint generation failed:', e);
@@ -200,13 +245,23 @@ class ChatApp {
     const d = document.createElement('div');
     d.className = `msg ${type}`;
     d.textContent = msg;
+    d.style.opacity = '1'; // تأكيد أن الرسالة الجديدة تظهر بوضوح
+    d.style.transition = 'opacity 0.4s ease';
+
     const typing = document.querySelector('.msg.system[style*="italic"]');
     if (typing && typing.parentNode === this.elements.chatMessages) {
       this.elements.chatMessages.insertBefore(d, typing);
     } else {
       this.elements.chatMessages.appendChild(d);
     }
+
+    // التمرير دائمًا إلى الأسفل عند إضافة رسالة جديدة
     this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+
+    // تحديث تأثير التلاشي بعد إضافة الرسالة
+    if (this.updateMessagesOpacity) {
+      requestAnimationFrame(() => this.updateMessagesOpacity());
+    }
   }
   updateStatusMessage(msg) {
     let statusMsg = document.getElementById('statusMessage');
@@ -225,6 +280,9 @@ class ChatApp {
       }
     }
     this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    if (this.updateMessagesOpacity) {
+      requestAnimationFrame(() => this.updateMessagesOpacity());
+    }
   }
   pushAdminNotification(text) {
     const item = document.createElement('div');
@@ -260,12 +318,13 @@ class ChatApp {
     if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = show ? 'none' : 'block';
     if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
   }
-hideAllSpinners() {
-  if (this.elements.remoteSpinner) this.elements.remoteSpinner.style.display = 'none';
-  if (this.elements.localSpinner) this.elements.localSpinner.style.display = 'none';
-  if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = 'block';
-  if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
-}  // =====================================================
+  hideAllSpinners() {
+    if (this.elements.remoteSpinner) this.elements.remoteSpinner.style.display = 'none';
+    if (this.elements.localSpinner) this.elements.localSpinner.style.display = 'none';
+    if (this.elements.remoteVideo) this.elements.remoteVideo.style.display = 'block';
+    if (this.elements.localVideo) this.elements.localVideo.style.display = 'block';
+  }
+  // =====================================================
   // إدارة الإعلانات
   // =====================================================
   createAdVideoElement() {
@@ -298,37 +357,37 @@ hideAllSpinners() {
       this.startSearchLoop();
       return;
     }
-  
+ 
     this.clearSafeTimer(this.searchTimer);
     this.clearSafeTimer(this.pauseTimer);
     this.searchTimer = null;
     this.pauseTimer = null;
     this.state.isAdPlaying = true;
-  
+ 
     const adUrl = this.adVideosList[this.state.currentAdIndex];
     this.state.currentAdIndex = (this.state.currentAdIndex + 1) % this.adVideosList.length;
-  
+ 
     this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-  
+ 
     this.adVideo.onerror = () => {
       console.error('Error loading ad video:', adUrl);
       this.hideAdVideo();
     };
-  
+ 
     this.adVideo.oncanplay = () => {
       this.adVideo.play().catch(e => {
         console.warn('Auto-play prevented:', e);
         document.addEventListener('click', this.tryPlayAdOnClick.bind(this), { once: true });
       });
     };
-  
+ 
     this.adVideo.onended = this.hideAdVideo.bind(this);
     this.adVideo.src = adUrl;
     this.adVideo.style.display = 'block';
     this.elements.remoteVideo.style.display = 'none';
-  
+ 
     const adTimeout = this.setSafeTimer(this.hideAdVideo.bind(this), this.config.AD_TIMEOUT);
-  
+ 
     this.adTimeout = adTimeout;
   }
   tryPlayAdOnClick() {
@@ -336,7 +395,7 @@ hideAllSpinners() {
   }
   hideAdVideo() {
     if (!this.state.isAdPlaying) return;
-  
+ 
     this.clearSafeTimer(this.adTimeout);
     document.removeEventListener('click', this.tryPlayAdOnClick.bind(this));
     this.adVideo.pause();
@@ -355,7 +414,7 @@ hideAllSpinners() {
   cleanupConnection() {
     console.log('Cleaning up connection...');
     this.clearAllTimers();
-  
+ 
     if (this.state.peerConnection) {
       try {
         if (this.keepAliveChannel) {
@@ -368,11 +427,11 @@ hideAllSpinners() {
       }
       this.state.peerConnection = null;
     }
-  
+ 
     if (this.elements.remoteVideo) {
       this.elements.remoteVideo.srcObject = null;
     }
-  
+ 
     this.bufferedRemoteCandidates.length = 0;
     this.state.partnerId = null;
     this.state.isInitiator = false;
@@ -395,25 +454,25 @@ hideAllSpinners() {
       this.showRemoteSpinnerOnly(false);
       return;
     }
-  
+ 
     if (this.state.partnerId || this.state.isAdPlaying) return;
-  
+ 
     this.showRemoteSpinnerOnly(true);
     this.updateStatusMessage('Searching...');
     this.safeEmit('find-partner');
-  
+ 
     this.clearSafeTimer(this.searchTimer);
     this.searchTimer = this.setSafeTimer(() => {
       if (!this.state.partnerId && !this.state.isAdPlaying) {
         this.safeEmit('stop');
         this.showRemoteSpinnerOnly(false);
         this.state.consecutiveSearchFails++;
-      
+     
         if (this.state.consecutiveSearchFails >= this.config.MAX_CONSECUTIVE_FAILS) {
           this.playAdVideo();
           return;
         }
-      
+     
         this.clearSafeTimer(this.pauseTimer);
         this.pauseTimer = this.setSafeTimer(() => {
           if (this.config.NORMAL_PAUSE_DURATION !== 3000) {
@@ -430,10 +489,10 @@ hideAllSpinners() {
       this.showRemoteSpinnerOnly(false);
       return;
     }
-  
+ 
     const mediaReady = await this.initMedia();
     if (!mediaReady) return;
-  
+ 
     this.cleanupConnection();
     this.elements.chatMessages.innerHTML = '';
     this.elements.chatMessages.appendChild(this.typingIndicator);
@@ -451,9 +510,9 @@ hideAllSpinners() {
       this.updateStatusMessage('⛔ You have been banned for 24 hours 🕐 for engaging in inappropriate behavior 🚫 and violating our policy terms 📜. ⚠️');
       return false;
     }
-  
+ 
     if (this.state.localStream) return true;
-  
+ 
     const attempt = async () => {
       try {
         this.state.localStream = await navigator.mediaDevices.getUserMedia({
@@ -461,12 +520,11 @@ hideAllSpinners() {
           audio: true
         });
         this.elements.localVideo.srcObject = this.state.localStream;
-       
-        // إزالة المؤشر الدائري من شاشة المستخدم المحلي
+      
         if (this.elements.localSpinner) {
           this.elements.localSpinner.style.display = 'none';
         }
-       
+      
         this.updateMicButton();
         this.updateStatusMessage('Media access granted. Starting search...');
         return true;
@@ -477,7 +535,7 @@ hideAllSpinners() {
         return false;
       }
     };
-  
+ 
     return await attempt();
   }
   // =====================================================
@@ -488,18 +546,18 @@ hideAllSpinners() {
       try { this.state.peerConnection.close(); } catch (e) {}
       this.state.peerConnection = null;
     }
-  
+ 
     try {
       this.state.peerConnection = new RTCPeerConnection(this.servers);
       this.state.makingOffer = false;
       this.state.ignoreOffer = false;
-    
+   
       if (this.state.localStream) {
         this.state.localStream.getTracks().forEach(t => {
           this.state.peerConnection.addTrack(t, this.state.localStream);
         });
       }
-    
+   
       if (this.state.isInitiator) {
         try {
           this.keepAliveChannel = this.state.peerConnection.createDataChannel('keepAlive', { ordered: true });
@@ -514,12 +572,12 @@ hideAllSpinners() {
           this.setupKeepAliveChannel(this.keepAliveChannel);
         };
       }
-    
+   
       this.state.peerConnection.ontrack = e => {
         if (!e.streams || e.streams.length === 0) return;
         this.elements.remoteVideo.srcObject = e.streams[0];
         this.sendLocalVideoReady();
-      
+     
         if (this.state.partnerVideoReady) {
           this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
           this.hideAllSpinners();
@@ -527,17 +585,17 @@ hideAllSpinners() {
           this.startStatsMonitor();
         }
       };
-    
+   
       this.state.peerConnection.onicecandidate = e => {
         if (e.candidate && this.state.partnerId) {
           this.safeEmit('signal', { to: this.state.partnerId, data: { candidate: e.candidate } });
         }
       };
-    
+   
       this.state.peerConnection.onconnectionstatechange = () => {
         if (!this.state.peerConnection) return;
         const s = this.state.peerConnection.connectionState;
-      
+     
         if (s === 'connected') {
           // Connection established
         } else if (['disconnected', 'failed', 'closed'].includes(s)) {
@@ -553,10 +611,10 @@ hideAllSpinners() {
           }
         }
       };
-    
+   
       this.state.peerConnection.onnegotiationneeded = async () => {
         if (!this.state.peerConnection || this.state.makingOffer || !this.state.partnerId) return;
-      
+     
         try {
           this.state.makingOffer = true;
           const offer = await this.state.peerConnection.createOffer();
@@ -575,12 +633,12 @@ hideAllSpinners() {
   }
   setupKeepAliveChannel(dc) {
     if (!dc) return;
-  
+ 
     dc.onopen = () => {
       this.lastPong = Date.now();
       this.startPingLoop();
     };
-  
+ 
     dc.onmessage = (ev) => {
       if (!ev.data) return;
       try {
@@ -592,7 +650,7 @@ hideAllSpinners() {
         }
       } catch (e) {}
     };
-  
+ 
     dc.onclose = () => this.stopPingLoop();
     dc.onerror = (err) => console.error('keepAlive error:', err);
   }
@@ -603,13 +661,13 @@ hideAllSpinners() {
         this.stopPingLoop();
         return;
       }
-    
+   
       try {
         this.keepAliveChannel.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
       } catch (e) {
         this.stopPingLoop();
       }
-    
+   
       if (Date.now() - this.lastPong > this.config.PONG_TIMEOUT) {
         this.stopPingLoop();
         this.cleanupConnection();
@@ -629,7 +687,7 @@ hideAllSpinners() {
   }
   async setSenderMaxBitrate(targetBps) {
     if (!this.state.peerConnection) return;
-  
+ 
     try {
       const senders = this.state.peerConnection.getSenders();
       for (const sender of senders) {
@@ -650,17 +708,17 @@ hideAllSpinners() {
         this.stopStatsMonitor();
         return;
       }
-    
+   
       try {
         const stats = await this.state.peerConnection.getStats(null);
         let outboundVideoReport = null;
         let remoteInboundRtp = null;
-      
+     
         stats.forEach(report => {
           if (report.type === 'outbound-rtp' && report.kind === 'video') outboundVideoReport = report;
           if (report.type === 'remote-inbound-rtp' && report.kind === 'video') remoteInboundRtp = report;
         });
-      
+     
         let lossRatio = 0;
         if (outboundVideoReport?.packetsSent > 0) {
           if (remoteInboundRtp?.packetsLost >= 0) {
@@ -671,10 +729,10 @@ hideAllSpinners() {
             lossRatio = outboundVideoReport.packetsLost / Math.max(1, outboundVideoReport.packetsSent);
           }
         }
-      
+     
         let rtt = 0;
         stats.forEach(r => { if (r.type === 'candidate-pair' && r.currentRtt) rtt = r.currentRtt; });
-      
+     
         if (lossRatio > 0.08 || rtt > 0.5) {
           await this.setSenderMaxBitrate(this.config.BITRATE_LOW);
         } else if (lossRatio > 0.03 || rtt > 0.25) {
@@ -717,10 +775,10 @@ hideAllSpinners() {
         if (!v || !v.srcObject) {
           return reject(new Error('Remote video not available'));
         }
-      
+     
         const width = v.videoWidth || v.clientWidth || 640;
         const height = v.videoHeight || v.clientHeight || 480;
-      
+     
         if (width === 0 || height === 0) {
           setTimeout(() => {
             const w2 = v.videoWidth || v.clientWidth || 640;
@@ -735,7 +793,7 @@ hideAllSpinners() {
           }, 250);
           return;
         }
-      
+     
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -758,10 +816,10 @@ hideAllSpinners() {
       this.elements.notifyBell.classList.remove('shake');
       this.elements.notifyMenu.style.display = this.elements.notifyMenu.style.display === 'block' ? 'none' : 'block';
     };
-  
+ 
     document.onclick = () => { this.elements.notifyMenu.style.display = 'none'; };
     document.addEventListener('keydown', e => { if (e.key === 'Escape') this.elements.notifyMenu.style.display = 'none'; });
-  
+ 
     // Skip button
     this.elements.skipBtn.onclick = () => {
       if (this.state.isBanned) return;
@@ -775,7 +833,7 @@ hideAllSpinners() {
       this.config.NORMAL_PAUSE_DURATION = 3000;
       this.startSearchLoop();
     };
-  
+ 
     // Exit button
     this.elements.exitBtn.onclick = () => {
       this.cleanupConnection();
@@ -784,7 +842,7 @@ hideAllSpinners() {
       }
       location.href = 'index.html';
     };
-  
+ 
     // Mic button
     this.elements.micBtn.onclick = () => {
       if (!this.state.localStream || this.state.isBanned) return;
@@ -792,7 +850,7 @@ hideAllSpinners() {
       this.state.localStream.getAudioTracks().forEach(t => t.enabled = this.state.micEnabled);
       this.updateMicButton();
     };
-  
+ 
     // Report button
     if (this.elements.reportBtn) {
       this.elements.reportBtn.style.display = 'flex';
@@ -801,15 +859,15 @@ hideAllSpinners() {
           this.updateStatusMessage("No user to report.");
           return;
         }
-      
+     
         const prev = this.reportCounts.get(this.state.partnerId) || 0;
         const now = prev + 1;
         this.reportCounts.set(this.state.partnerId, now);
         this.reportedIds.add(this.state.partnerId);
-      
+     
         this.safeEmit("report", { partnerId: this.state.partnerId });
         this.safeEmit("skip");
-      
+     
         if (now === 1) {
           try {
             this.addMessage("Capturing screenshot for admin review...", "system");
@@ -821,7 +879,7 @@ hideAllSpinners() {
             this.addMessage("Failed to capture screenshot (no remote frame available).", "system");
           }
         }
-      
+     
         this.cleanupConnection();
         this.disableChat();
         this.updateStatusMessage('You reported the user — skipping...');
@@ -840,7 +898,7 @@ hideAllSpinners() {
     this.typingIndicator.style.fontStyle = 'italic';
     this.typingIndicator.textContent = 'Stranger is typing...';
     this.elements.chatMessages.appendChild(this.typingIndicator);
-  
+ 
     const sendTyping = () => {
       if (!this.state.partnerId || this.state.isBanned) return;
       if (!this.typing) {
@@ -853,11 +911,11 @@ hideAllSpinners() {
         this.safeEmit('stop-typing', { to: this.state.partnerId });
       }, this.config.TYPING_PAUSE);
     };
-  
+ 
     this.elements.chatInput.oninput = () => {
       if (!this.elements.chatInput.disabled && !this.state.isBanned) sendTyping();
     };
-  
+ 
     const sendMessage = () => {
       if (this.state.isBanned) return;
       const msg = this.elements.chatInput.value.trim();
@@ -868,7 +926,7 @@ hideAllSpinners() {
       this.typing = false;
       this.safeEmit('stop-typing', { to: this.state.partnerId });
     };
-  
+ 
     this.elements.sendBtn.onclick = sendMessage;
     this.elements.chatInput.onkeypress = e => { if (e.key === 'Enter' && !this.state.isBanned) sendMessage(); };
   }
@@ -879,29 +937,29 @@ hideAllSpinners() {
     this.socket.on('waiting', msg => {
       if (!this.state.isBanned) this.updateStatusMessage(msg);
     });
-  
+ 
     this.socket.on('chat-message', ({ message }) => {
       if (!this.state.isBanned) this.addMessage(message, 'them');
     });
-  
+ 
     this.socket.on('typing', () => {
       if (!this.state.isBanned) {
         this.typingIndicator.style.display = 'block';
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
       }
     });
-  
+ 
     this.socket.on('stop-typing', () => {
       if (!this.state.isBanned) this.typingIndicator.style.display = 'none';
     });
-  
+ 
     this.socket.on('adminMessage', msg => {
       if (this.elements.notifyDot) this.elements.notifyDot.style.display = 'block';
       this.elements.notifyBell.classList.add('shake');
       this.pushAdminNotification('📢 ' + msg);
       this.addMessage('📢 Admin: ' + msg, 'system');
     });
-  
+ 
     this.socket.on('banned', ({ message }) => {
       this.state.isBanned = true;
       this.addMessage(message || 'You are banned.', 'system');
@@ -916,14 +974,14 @@ hideAllSpinners() {
       if (this.elements.localVideo) this.elements.localVideo.srcObject = null;
       this.updateMicButton();
     });
-  
+ 
     this.socket.on('unbanned', ({ message }) => {
       this.state.isBanned = false;
       this.addMessage(message || 'You have been unbanned.', 'system');
       this.updateStatusMessage('You have been unbanned.');
       this.startSearch();
     });
-  
+ 
     this.socket.on('partner-disconnected', () => {
       if (!this.state.isBanned) {
         this.updateStatusMessage('Partner disconnected.');
@@ -936,32 +994,24 @@ hideAllSpinners() {
         this.setSafeTimer(() => this.startSearchLoop(), 500);
       }
     });
-  
+ 
    this.socket.on('video-ready', ({ from }) => {
   if (this.state.partnerId && from === this.state.partnerId) {
     this.state.partnerVideoReady = true;
-
-    // إخفاء السبينر وإظهار الفيديو البعيد فور وصول إشارة أن الطرف الآخر جاهز
-    // (حتى لو لم نكن قد أرسلنا localVideoReadySent بعد)
     this.hideAllSpinners();
-
-    // إذا كنا قد أرسلنا إشارة localVideoReadySent بالفعل
-    // (أي أن كلا الطرفين أصبحا جاهزين بالفيديو)
     if (this.state.localVideoReadySent) {
       this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
       this.startStatsMonitor();
     }
-    // ملاحظة: لا نحتاج إلى استدعاء enableChat() هنا مرة أخرى
-    // لأننا سنستدعيه في partner-found مباشرة (كما اتفقنا سابقًا)
   }
 });
-  
+ 
     this.socket.on('partner-found', async data => {
       if (this.state.isBanned) {
         this.safeEmit('skip');
         return;
       }
-    
+   
       const foundId = data?.id || data?.partnerId;
       if (!foundId) {
         console.error('Invalid partner data received:', data);
@@ -969,7 +1019,7 @@ hideAllSpinners() {
         this.setSafeTimer(() => this.startSearchLoop(), 1000);
         return;
       }
-    
+   
       if (this.reportedIds.has(foundId)) {
         this.safeEmit('skip');
         this.updateStatusMessage('Found reported user — skipping...');
@@ -977,18 +1027,18 @@ hideAllSpinners() {
         this.setSafeTimer(() => this.startSearchLoop(), 200);
         return;
       }
-    
+   
       this.state.partnerId = foundId;
       this.state.isInitiator = !!data.initiator;
       this.state.partnerVideoReady = false;
       this.state.localVideoReadySent = false;
-    
+   
       this.hideAllSpinners();
       this.updateStatusMessage('Hello 👋 You\'ve been contacted by a stranger Say hello 😊🤝');
-      this.enableChat();  // ← هنا بالضبط
+      this.enableChat();
       this.state.consecutiveSearchFails = 0;
       this.config.NORMAL_PAUSE_DURATION = 3000;
-    
+   
       try {
         this.createPeerConnection();
         if (this.state.isInitiator) {
@@ -1006,19 +1056,19 @@ hideAllSpinners() {
         this.state.makingOffer = false;
       }
     });
-  
+ 
     this.socket.on('signal', async ({ from, data }) => {
       if (this.state.isBanned) return;
       if (!from || !data) {
         console.error('Invalid signal data:', { from, data });
         return;
       }
-    
+   
       if (this.state.partnerId && this.state.partnerId !== from) {
         console.warn('Signal from unexpected partner:', from, 'expected:', this.state.partnerId);
         return;
       }
-    
+   
       if (!this.state.peerConnection) {
         try {
           this.createPeerConnection();
@@ -1027,18 +1077,18 @@ hideAllSpinners() {
           return;
         }
       }
-    
+   
       if (data.candidate && !this.state.peerConnection.remoteDescription) {
         this.bufferRemoteCandidate(data.candidate);
         return;
       }
-    
+   
       try {
         if (data.type === 'offer') {
           const offerCollision = (this.state.makingOffer || this.state.peerConnection.signalingState !== 'stable');
           this.state.ignoreOffer = !this.state.isInitiator && offerCollision;
           if (this.state.ignoreOffer) return;
-        
+       
           await this.state.peerConnection.setRemoteDescription(data);
           const answer = await this.state.peerConnection.createAnswer();
           await this.state.peerConnection.setLocalDescription(answer);
@@ -1063,9 +1113,7 @@ hideAllSpinners() {
 // =====================================================
 window.addEventListener('DOMContentLoaded', () => {
   const app = new ChatApp();
-  // إعداد مستمعي Socket بعد إنشاء التطبيق
   app.setupSocketListeners();
-  // معالجة الأخطاء العالمية
   window.addEventListener('error', (e) => {
     console.error('Global error:', e.error);
     app.updateStatusMessage('An unexpected error occurred. Recovering...');
